@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block titulo %}Métricas{% endblock %}
+{% block conteudo %}
+<h1>Métricas por requisição</h1>
+<p><a href="/metricas/exportar.csv">Exportar tudo em CSV</a></p>
+{% if not metricas %}
+<p class="discreto">Nenhuma requisição registrada ainda.</p>
+{% else %}
+<table>
+  <tr>
+    <th>#</th><th>Quando (UTC)</th><th>Modelo</th><th>Prompt</th>
+    <th>Entrada</th><th>Saída</th><th>Custo (US$)</th><th>Latência (ms)</th><th>Resultado</th>
+  </tr>
+  {% for m in metricas %}
+  <tr>
+    <td>{{ m.id }}</td>
+    <td>{{ m.criado_em.strftime("%d/%m %H:%M:%S") if m.criado_em }}</td>
+    <td>{{ m.modelo or m.modelo_solicitado }}</td>
+    <td>{{ m.prompt_versao }}</td>
+    <td>{{ m.tokens_entrada if m.tokens_entrada is not none }}</td>
+    <td>{{ m.tokens_saida if m.tokens_saida is not none }}</td>
+    <td>{{ "%.6f"|format(m.custo_usd) if m.custo_usd is not none }}</td>
+    <td>{{ "%.0f"|format(m.latencia_ms) }}</td>
+    <td>{% if m.sucesso %}sucesso{% else %}<span class="falha">falha: {{ m.motivo_falha }}</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% endblock %}

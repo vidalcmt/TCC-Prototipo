@@ -1,0 +1,25 @@
+# Tabela de preços usada para calcular o custo de cada requisição.
+# Valores em dólares por milhão de tokens, processamento padrão, contexto curto.
+# Ao atualizar um valor, atualize também data_acesso: a seção de Materiais e
+# Métodos cita a fonte com essa data.
+
+fonte = "https://developers.openai.com/api/docs/pricing"
+data_acesso = "2026-10-15"
+
+[modelos."gpt-6.1-sol"]
+entrada = 2.00
+entrada_cache = 0.10
+escrita_cache = 2.50
+saida = 10.00
+
+[modelos."gpt-6-luna"]
+entrada = 0.10
+entrada_cache = 0.01
+escrita_cache = 0.125
+saida = 0.50
+
+[modelos."gpt-6-astra"]
+entrada = 10.00
+entrada_cache = 1.00
+escrita_cache = 12.50
+saida = 50.00
