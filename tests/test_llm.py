@@ -85,6 +85,16 @@ def test_resposta_sem_saida_estruturada_e_registrada_como_falha(sessao, prompt):
     assert m.tokens_entrada == 1200 and m.custo_usd is not None
 
 
+def test_cliente_padrao_nao_repete_tentativas_sozinho(monkeypatch):
+    from app.correcao import llm
+
+    monkeypatch.setattr(llm, "_cliente", None)
+    monkeypatch.setattr(llm.config, "openai_api_key", "sk-teste")
+    cliente = llm.cliente_padrao()
+    assert cliente.max_retries == 0
+    assert cliente.timeout == llm.TEMPO_LIMITE_S
+
+
 def test_erro_de_rede_e_registrado_com_motivo(sessao, prompt):
     cliente = ClienteFalso(erro=ConnectionError("sem internet"))
     resultado = chamar_modelo(sessao, prompt, Eco, {"frase": "x"}, cliente=cliente)

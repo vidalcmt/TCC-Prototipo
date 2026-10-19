@@ -26,13 +26,27 @@ Formato = TypeVar("Formato", bound=BaseModel)
 
 _cliente: OpenAI | None = None
 
+# Tempo máximo de espera por uma resposta, em segundos.
+TEMPO_LIMITE_S = 120.0
+
 
 def cliente_padrao() -> OpenAI:
+    """Cria o cliente da OpenAI uma única vez e o reaproveita.
+
+    max_retries=0 desliga as novas tentativas automáticas da biblioteca (por
+    padrão ela tenta de novo até duas vezes, sem avisar). Com elas ligadas, a
+    latência medida somaria várias tentativas e uma falha intermediária não
+    seria registrada. Sem elas, cada linha de metrica_requisicao corresponde a
+    exatamente uma tentativa; quem quiser tentar de novo chama outra vez, e a
+    nova tentativa vira outra linha.
+    """
     global _cliente
     if _cliente is None:
         if not config.openai_api_key:
             raise RuntimeError("OPENAI_API_KEY não definida. Copie .env.example para .env.")
-        _cliente = OpenAI(api_key=config.openai_api_key)
+        _cliente = OpenAI(
+            api_key=config.openai_api_key, max_retries=0, timeout=TEMPO_LIMITE_S
+        )
     return _cliente
 
 
