@@ -41,6 +41,23 @@ def test_paginacao_percorre_todas_as_paginas():
     assert len(buscar_questoes(2023, cliente, espera=0)) == 5
 
 
+def test_recusas_seguidas_param_o_script_em_vez_de_repetir_para_sempre():
+    import pytest
+
+    from scripts.importar_enem import MAX_TENTATIVAS_429, LimiteDaApiExcedido
+
+    chamadas = []
+
+    def sempre_recusa(request):
+        chamadas.append(request)
+        return httpx.Response(429, headers={"Retry-After": "0"})
+
+    cliente = httpx.Client(base_url="https://api.teste/v1", transport=httpx.MockTransport(sempre_recusa))
+    with pytest.raises(LimiteDaApiExcedido):
+        buscar_questoes(2023, cliente, espera=0)
+    assert len(chamadas) == MAX_TENTATIVAS_429 + 1
+
+
 def test_filtro_mantem_so_a_area_e_so_texto():
     assert [q["index"] for q in filtrar(PROVA, "ciencias-humanas")] == [46]
     assert [q["index"] for q in filtrar(PROVA, "ciencias-humanas", exigir_texto=False)] == [46, 47, 48, 49]

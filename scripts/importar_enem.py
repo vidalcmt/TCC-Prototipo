@@ -29,19 +29,35 @@ AREAS = ["ciencias-humanas", "ciencias-natureza", "linguagens", "matematica"]
 PASTA_SAIDA = RAIZ / "dados" / "enem"
 TAMANHO_PAGINA = 50
 ESPERA_SEGUNDOS = 1.1
+MAX_TENTATIVAS_429 = 5
+
+
+class LimiteDaApiExcedido(RuntimeError):
+    pass
 
 
 def buscar_questoes(ano: int, cliente: httpx.Client, espera: float = ESPERA_SEGUNDOS) -> list[dict]:
-    """Percorre todas as páginas da prova do ano, respeitando o limite da API."""
-    questoes, offset = [], 0
+    """Percorre todas as páginas da prova do ano, respeitando o limite da API.
+
+    Se a API recusar por excesso de requisições (código 429) mais de
+    MAX_TENTATIVAS_429 vezes seguidas, o script para com uma mensagem clara em
+    vez de ficar tentando para sempre.
+    """
+    questoes, offset, recusas = [], 0, 0
     while True:
         resposta = cliente.get(
             f"/exams/{ano}/questions", params={"limit": TAMANHO_PAGINA, "offset": offset}
         )
         if resposta.status_code == 429:
+            recusas += 1
+            if recusas > MAX_TENTATIVAS_429:
+                raise LimiteDaApiExcedido(
+                    f"A API recusou {recusas} vezes seguidas. Espere alguns minutos e rode de novo."
+                )
             # Retry-After vem em milissegundos, segundo a documentação da API.
-            time.sleep(int(resposta.headers.get("Retry-After", "2000")) / 1000)
+            time.sleep(int(resposta.headers.get("Retry-After", "2000")) / 1000 if espera else 0)
             continue
+        recusas = 0
         resposta.raise_for_status()
         dados = resposta.json()
         questoes.extend(dados["questions"])
