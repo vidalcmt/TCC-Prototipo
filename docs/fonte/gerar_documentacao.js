@@ -106,7 +106,7 @@ function tabela(cabecalho, linhas, proporcoes) {
 // =====================================================================
 // CAPA
 // =====================================================================
-const VERSAO = "0.2";
+const VERSAO = "0.3";
 const DATA = "19/10/2026";
 
 conteudo.push(new Paragraph({ spacing: { before: 2400 }, children: [] }));
@@ -177,7 +177,7 @@ tabela(
   ["Etapa", "Conteúdo", "Situação"],
   [
     ["1", "Esqueleto, banco de dados e medição", "Concluída em 16/10/2026"],
-    ["2", "Módulo objetivo", "Em andamento: importador de questões do ENEM pronto"],
+    ["2", "Módulo objetivo", "Implementada em 19/10/2026; falta o teste com a chave real"],
     ["3", "Módulo discursivo", "Pendente"],
     ["4", "Tela de aceite do professor", "Pendente"],
     ["5", "Execução em lote e baseline", "Pendente"],
@@ -225,9 +225,10 @@ tabela(
     ["`app/config.py`", "Leitura das configurações do arquivo .env"],
     ["`app/database.py`", "Conexão com o banco e abertura de sessões"],
     ["`app/models.py`", "Definição das oito tabelas do banco"],
-    ["`app/correcao/`", "Chamada ao modelo (`llm.py`) e carregamento de prompts (`prompts.py`)"],
+    ["`app/correcao/`", "Chamada ao modelo (`llm.py`), prompts (`prompts.py`), contratos de saída (`contratos.py`) e explicação de objetivas (`objetiva.py`)"],
     ["`app/metricas/`", "Cálculo de custo (`precos.py`), página e exportação de métricas (`router.py`)"],
-    ["`app/questoes/`, `app/revisao/`", "Reservadas para as etapas 2 a 4"],
+    ["`app/questoes/`", "Páginas de questões: lista, cadastro, detalhe e geração da explicação"],
+    ["`app/revisao/`", "Reservada para a tela de aceite (etapa 4)"],
     ["`app/templates/`", "Páginas HTML"],
     ["`config/precos.toml`", "Preços por modelo, com fonte e data de acesso"],
     ["`prompts/`", "Prompts versionados e registro de mudanças"],
@@ -387,7 +388,54 @@ tabela(["Parâmetro", "Significado"], [
 h3("Por que as novas tentativas automáticas estão desligadas");
 p("Por padrão, a biblioteca da OpenAI repete uma chamada que falhou até duas vezes, sem avisar. Com isso, a latência medida somaria várias tentativas e uma falha intermediária desapareceria dos dados. Com `max_retries=0`, cada linha de `metrica_requisicao` corresponde a exatamente uma tentativa. Quando for preciso tentar de novo, como na execução em lote, o código chama outra vez e a nova tentativa vira outra linha.");
 
-h2("4.5 Custo: app/metricas/precos.py");
+h2("4.5 Contrato de saída objetivo: app/correcao/contratos.py");
+p("Define, em Pydantic, o formato que a API é obrigada a seguir na resposta, conforme a seção \"Contrato de saída da IA\" da especificação. As descrições dos campos são enviadas junto com o formato e orientam o modelo.");
+tabela(["Elemento", "O que faz"], [
+  ["`ExplicacaoAlternativa`", "Uma alternativa: `letra`, `correta`, `por_que` e `conceito_envolvido`"],
+  ["`CorrecaoObjetiva`", "A resposta completa: `questao_id`, `alternativa_correta`, lista de `explicacoes`, `explicacao_correta` e `nivel_dificuldade_estimado` (baixo, medio ou alto)"],
+  ["`problemas_de_consistencia(...)`", "Confere a resposta com a questão cadastrada e devolve a lista de problemas; lista vazia significa resposta consistente"],
+], [4, 6]);
+p("O formato já é garantido pela API. A conferência verifica o conteúdo: a resposta precisa repetir o identificador da questão, concordar com o gabarito do professor, explicar cada alternativa exatamente uma vez e marcar como correta apenas a alternativa do gabarito.");
+p("O campo `conceito_envolvido` existe por razão metodológica: permite agrupar os erros por conceito na análise dos resultados.");
+
+h2("4.6 Explicação de questões objetivas: app/correcao/objetiva.py");
+tabela(["Elemento", "O que faz"], [
+  ["`PROMPT_OBJETIVA`", "Prompt usado: `objetiva`, versão 1"],
+  ["`gabarito_da(questao)`", "Devolve a letra correta; recusa questão sem gabarito ou com mais de um"],
+  ["`campos_do_prompt(questao)`", "Prepara identificador, enunciado, alternativas no formato `A) texto` e gabarito"],
+  ["`gerar_explicacao(sessao, questao)`", "Chama o modelo, confere a resposta e grava a correção"],
+  ["`ResultadoExplicacao`", "Agrupa a correção gravada (ou nada, na falha) e a métrica da chamada"],
+], [4, 6]);
+h3("Passos de gerar_explicacao");
+numerada([
+  "Carrega o prompt `objetiva_v1` e chama `chamar_modelo` com o formato `CorrecaoObjetiva`.",
+  "Se a chamada falhou, devolve a falha; a métrica já foi gravada por `chamar_modelo`.",
+  "Se a resposta veio, confere a consistência com a questão.",
+  "Se houver problema, não grava a correção, marca a métrica como falha e registra o motivo, por exemplo `saida inconsistente: alternativa_correta B diferente do gabarito D`.",
+  "Se estiver tudo certo, grava a correção em `correcao` e liga a métrica a ela pelo campo `correcao_id`.",
+]);
+p("A explicação de uma objetiva pertence à questão, e não à resposta de um aluno. Por isso, nessas correções, o campo `submissao_id` fica vazio.");
+h3("Prompt objetiva_v1");
+p("O texto fica em `prompts/objetiva/v1.md`. Em resumo, ele instrui o modelo a:");
+marcadores([
+  "nunca questionar ou alterar o gabarito informado pelo professor;",
+  "para cada alternativa incorreta, identificar o erro de raciocínio plausível que levaria um estudante a escolhê-la e explicar por que ele não se sustenta (RF02 e RF03);",
+  "para a correta, apontar os elementos do enunciado que a sustentam, e descrever em passos o caminho até a resposta;",
+  "não inventar dados, autores ou citações fora do enunciado;",
+  "escrever em português do Brasil, dirigido ao estudante, sem expressões como \"obviamente\".",
+]);
+
+h2("4.7 Páginas de questões: app/questoes/router.py");
+tabela(["Rota", "O que faz"], [
+  ["`GET /questoes`", "Lista as questões objetivas, com origem, área, início do enunciado e número de explicações geradas"],
+  ["`GET /questoes/nova`", "Formulário de cadastro manual (RF01)"],
+  ["`POST /questoes`", "Valida e grava a questão: enunciado, as cinco alternativas e exatamente uma correta. Com erro, devolve o formulário preenchido e a lista de problemas"],
+  ["`GET /questoes/{id}`", "Enunciado, alternativas com o gabarito destacado e, se existir, a explicação mais recente com modelo, prompt, tempo e custo"],
+  ["`POST /questoes/{id}/explicar`", "Gera uma nova explicação e volta para a página da questão; na falha, a página mostra o motivo e o número da métrica"],
+], [4, 6]);
+p("A função `obter_cliente_llm` fornece o cliente do modelo às rotas. Nos testes, ela é trocada por um cliente falso, o que permite testar as páginas sem gastar crédito.");
+
+h2("4.8 Custo: app/metricas/precos.py");
 tabela(["Elemento", "O que faz"], [
   ["`Preco`", "Preços de um modelo: entrada, entrada em cache, gravação em cache e saída"],
   ["`carregar_tabela()`", "Lê `config/precos.toml` uma vez e guarda em memória"],
@@ -395,22 +443,22 @@ tabela(["Elemento", "O que faz"], [
   ["`calcular_custo(...)`", "Aplica a fórmula da seção 5.2; devolve vazio para modelo sem preço, em vez de inventar um valor"],
 ], [4, 6]);
 
-h2("4.6 Métricas na web: app/metricas/router.py");
+h2("4.9 Métricas na web: app/metricas/router.py");
 tabela(["Rota", "O que faz"], [
   ["`GET /metricas`", "Página com as 200 requisições mais recentes"],
   ["`GET /metricas/exportar.csv`", "Arquivo CSV com todas as requisições e todos os campos, para análise (RF14)"],
 ], [4, 6]);
 
-h2("4.7 Aplicação: app/main.py");
+h2("4.10 Aplicação: app/main.py");
 tabela(["Rota", "O que faz"], [
   ["`GET /`", "Página inicial, com o modelo configurado"],
   ["`GET /saude`", "Verificação rápida de que o servidor está no ar"],
 ], [4, 6]);
 
-h2("4.8 Requisição de teste: scripts/teste_requisicao.py");
+h2("4.11 Requisição de teste: scripts/teste_requisicao.py");
 p("Faz uma chamada real ao modelo com o prompt `teste_v1` e mostra no terminal os números gravados. É o critério de pronto da etapa 1. Resultado da primeira execução, em 16/10/2026: sucesso, 77 tokens de entrada, 14 de saída, custo de US$ 0,000294 e latência de 3.587 ms.");
 
-h2("4.9 Importador do ENEM: scripts/importar_enem.py");
+h2("4.12 Importador do ENEM: scripts/importar_enem.py");
 p("Baixa questões da API comunitária enem.dev, que cobre as provas de 2009 a 2023, e grava uma cópia congelada em `dados/enem/` com a data de acesso. A API é mantida por voluntários e pode mudar ou sair do ar; a cópia garante que a pesquisa saiba exatamente quais questões usou.");
 tabela(["Elemento", "O que faz"], [
   ["`buscar_questoes(ano, cliente)`", "Percorre todas as páginas da prova, respeitando o limite de uma requisição por segundo; para após cinco recusas seguidas"],
@@ -467,7 +515,7 @@ tabela(["Comando", "Para que serve"], [
   ["`git pull`", "Trazer as mudanças mais recentes do GitHub"],
   ["`pip install -r requirements.txt`", "Instalar dependências novas, quando o arquivo mudar"],
   ["`alembic upgrade head`", "Aplicar mudanças novas na estrutura do banco"],
-  ["`uvicorn app.main:app --reload`", "Subir o sistema em http://localhost:8000"],
+  ["`uvicorn app.main:app --reload`", "Subir o sistema em http://localhost:8000; as questões ficam em /questoes"],
   ["`pytest`", "Rodar os testes automatizados"],
   ["`python -m scripts.importar_enem --ano 2023 --area ciencias-humanas`", "Listar questões do ENEM em texto e congelar a cópia"],
   ["o mesmo comando com `--importar` no final", "Gravar também as questões no banco"],
@@ -475,11 +523,12 @@ tabela(["Comando", "Para que serve"], [
 
 // ---------------------------------------------------------------------
 h1("6. Testes automatizados");
-p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 15 testes.");
+p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 28 testes.");
 tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_precos.py`", "Custo correto para o modelo em uso; preço de cache aplicado; nome com sufixo de versão; modelo desconhecido não gera custo inventado"],
   ["`tests/test_llm.py`", "Sucesso grava tokens, custo, latência, modelo e prompt; resposta sem formato válido vira falha com tokens; erro de rede vira falha com motivo; cliente sem novas tentativas automáticas"],
   ["`tests/test_app.py`", "Rota de verificação; página de métricas e exportação em CSV"],
+  ["`tests/test_objetiva.py`", "Prompt montado com enunciado, alternativas e gabarito; correção gravada e ligada à métrica; quatro tipos de resposta inconsistente viram falha sem correção; resposta malformada; lista, detalhe e página inexistente; cadastro válido e inválido; geração pela página; falha exibida com o motivo"],
   ["`tests/test_importar_enem.py`", "Paginação; parada após recusas seguidas; filtro de área e de imagens; montagem do enunciado; importação com gabarito e sem duplicar"],
 ], [3, 7]);
 
@@ -519,6 +568,8 @@ tabela(["Decisão", "Motivo"], [
   ["Questões do ENEM só em texto", "Evita uma variável (interpretação de imagem) fora do objetivo"],
   ["Cópia congelada das questões", "A fonte comunitária pode mudar; a pesquisa precisa ser reproduzível"],
   ["SQLite em vez de um servidor de banco", "Um usuário por vez; menos instalação e manutenção"],
+  ["Resposta que contradiz o gabarito conta como falha", "Uma explicação incompatível com a decisão do professor é inutilizável, e a taxa de falha precisa refletir isso"],
+  ["Explicação de objetiva ligada à questão, não a um aluno", "O RF02 pede a explicação de cada alternativa, que não depende de quem respondeu"],
 ], [4, 6]);
 
 h2("8.2 Limitações e pontos de atenção");
@@ -528,6 +579,8 @@ marcadores([
   "**Gabarito de fonte comunitária:** o gabarito das questões escolhidas deve ser conferido com o gabarito oficial do INEP, que é a fonte primária citada no artigo.",
   "**Tokens gravados em cache:** o cálculo supõe que esses tokens já estão incluídos no total de entrada, como acontece com os tokens lidos do cache. A suposição ainda deve ser confirmada na documentação da OpenAI; ela só afeta requisições que usam cache.",
   "**Revisão duplicada:** a tabela `revisao_professor` ainda permite mais de uma revisão para a mesma correção. A restrição será incluída na etapa 4.",
+  "**Geração na própria requisição da página:** o navegador espera a resposta do modelo, o que leva alguns segundos. É adequado para um usuário por vez; a execução em lote da etapa 5 roda por linha de comando.",
+  "**Explicações anteriores:** a página mostra só a explicação mais recente. As anteriores continuam no banco e entram na análise.",
   "**Latência e rede:** a latência inclui o tempo de rede do computador onde o sistema roda. Medições comparadas entre si devem vir da mesma máquina e conexão.",
 ]);
 
@@ -548,6 +601,7 @@ tabela(["Termo", "Significado"], [
   ["Latência", "Tempo entre o envio da requisição e a chegada da resposta completa"],
   ["Migração", "Arquivo que descreve uma mudança na estrutura do banco e permite aplicá-la de forma repetível"],
   ["Prompt", "Texto de instrução enviado ao modelo de linguagem"],
+  ["Rota", "Endereço da aplicação web associado a uma ação, como `GET /questoes`, que lista as questões"],
   ["Pull request", "Pedido para incorporar uma branch à principal, com espaço para revisão e comentários"],
   ["Pydantic", "Biblioteca que valida se dados têm os campos e tipos esperados"],
   ["Saída estruturada", "Recurso da API que obriga o modelo a responder em JSON com um formato definido"],
@@ -559,6 +613,7 @@ tabela(["Termo", "Significado"], [
 // ---------------------------------------------------------------------
 h1("10. Histórico de versões");
 tabela(["Data", "Versão", "Referência", "Mudança"], [
+  ["19/10/2026", "0.3", "pull request da etapa 2", "Módulo objetivo: contrato de saída, conferência com o gabarito, prompt objetiva_v1, páginas de lista, cadastro, detalhe e geração da explicação"],
   ["19/10/2026", "0.2", "pull request de revisão", "Novas tentativas automáticas desligadas; caminho do banco sem dependência da pasta; limite de tentativas no importador; primeira versão desta documentação"],
   ["16/10/2026", "0.1.1", "commit 18da774", "Importador de questões do ENEM"],
   ["16/10/2026", "0.1", "commit 374eeba", "Etapa 1: esqueleto, banco de dados e medição"],

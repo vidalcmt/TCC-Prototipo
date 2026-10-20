@@ -5,18 +5,36 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block titulo %}Protótipo TCC{% endblock %}</title>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 1100px; margin: 0 auto; padding: 16px; color: #1f2328; }
-    nav a { margin-right: 16px; }
+    :root { --texto: #1f2328; --discreto: #59636e; --borda: #d0d7de; --fundo-claro: #f6f8fa;
+            --destaque: #1a7f37; --destaque-fundo: #e6f4ea; --erro: #b42318; --erro-fundo: #fdecea; --acao: #0b5cad; }
+    body { font-family: system-ui, sans-serif; max-width: 1000px; margin: 0 auto; padding: 16px; color: var(--texto); line-height: 1.5; }
+    nav { border-bottom: 1px solid var(--borda); padding-bottom: 8px; margin-bottom: 16px; }
+    nav a { margin-right: 16px; color: var(--acao); text-decoration: none; font-weight: 600; }
+    a { color: var(--acao); }
     table { border-collapse: collapse; width: 100%; font-size: 14px; }
-    th, td { border-bottom: 1px solid #d0d7de; padding: 6px 8px; text-align: left; vertical-align: top; }
-    th { background: #f6f8fa; }
-    .falha { color: #b42318; }
-    .discreto { color: #59636e; }
+    th, td { border-bottom: 1px solid var(--borda); padding: 6px 8px; text-align: left; vertical-align: top; }
+    th { background: var(--fundo-claro); }
+    .falha { color: var(--erro); }
+    .discreto { color: var(--discreto); font-size: 14px; }
+    .aviso-erro { background: var(--erro-fundo); border: 1px solid var(--erro); padding: 8px 12px; border-radius: 6px; margin: 12px 0; }
+    .enunciado { white-space: pre-wrap; background: var(--fundo-claro); padding: 12px; border-radius: 6px; }
+    .alternativa { border: 1px solid var(--borda); border-radius: 6px; padding: 10px 12px; margin: 8px 0; }
+    .alternativa.correta { border-color: var(--destaque); background: var(--destaque-fundo); }
+    .selo { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 10px; background: var(--destaque); color: #fff; margin-left: 6px; }
+    .conceito { font-size: 13px; color: var(--discreto); }
+    .explicacao { margin-top: 6px; }
+    button, .botao { background: var(--acao); color: #fff; border: 0; border-radius: 6px; padding: 8px 14px; font-size: 15px; cursor: pointer; text-decoration: none; display: inline-block; }
+    button:disabled { opacity: 0.6; cursor: wait; }
+    label { font-weight: 600; display: block; margin-top: 12px; }
+    input[type=text], textarea { width: 100%; box-sizing: border-box; padding: 6px 8px; font: inherit; border: 1px solid var(--borda); border-radius: 6px; }
+    .linha-alternativa { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+    .linha-alternativa input[type=text] { flex: 1; }
   </style>
 </head>
 <body>
   <nav>
     <a href="/">Início</a>
+    <a href="/questoes">Questões</a>
     <a href="/metricas">Métricas</a>
   </nav>
   <main>{% block conteudo %}{% endblock %}</main>
