@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block titulo %}Questão {{ questao.id }}{% endblock %}
+{% block conteudo %}
+<p><a href="/questoes">&larr; Voltar para a lista</a></p>
+<h1>Questão {{ questao.id }}</h1>
+<p class="discreto">{{ questao.fonte or "" }}{% if questao.area %} · {{ questao.area }}{% endif %}</p>
+
+<div class="enunciado">{{ questao.enunciado }}</div>
+
+{% if falha %}
+<div class="aviso-erro">
+  <strong>Não foi possível gerar a explicação.</strong>
+  <div class="discreto">{{ falha.motivo_falha }}</div>
+  <div class="discreto">A tentativa foi registrada nas métricas (#{{ falha.id }}).</div>
+</div>
+{% endif %}
+
+<h2>Alternativas</h2>
+{% for a in questao.alternativas %}
+<div class="alternativa {% if a.correta %}correta{% endif %}">
+  <strong>{{ a.letra }})</strong> {{ a.texto }}{% if a.correta %}<span class="selo">Gabarito</span>{% endif %}
+  {% set e = por_letra.get(a.letra) %}
+  {% if e %}
+  <div class="explicacao">{{ e.por_que }}</div>
+  <div class="conceito">Conceito envolvido: {{ e.conceito_envolvido }}</div>
+  {% endif %}
+</div>
+{% endfor %}
+
+{% if explicacao %}
+<h2>Caminho até a resposta</h2>
+<p style="white-space: pre-wrap">{{ explicacao.explicacao_correta }}</p>
+<p class="discreto">
+  Dificuldade estimada pelo modelo: {{ {"baixo": "baixa", "medio": "média", "alto": "alta"}[explicacao.nivel_dificuldade_estimado] }}.
+  {% if metrica %}
+  Gerada por {{ metrica.modelo or metrica.modelo_solicitado }} com o prompt {{ metrica.prompt_versao }},
+  em {{ "%.1f"|format(metrica.latencia_ms / 1000) }} s, custo de US$ {{ "%.6f"|format(metrica.custo_usd) if metrica.custo_usd is not none else "?" }}.
+  {% endif %}
+  {% if total_explicacoes > 1 %}Esta é a mais recente de {{ total_explicacoes }} explicações geradas.{% endif %}
+</p>
+{% endif %}
+
+<form method="post" action="/questoes/{{ questao.id }}/explicar"
+      onsubmit="this.querySelector('button').disabled = true; this.querySelector('button').textContent = 'Gerando, aguarde...';">
+  <button type="submit">{% if explicacao %}Gerar nova explicação{% else %}Gerar explicação{% endif %}</button>
+  <span class="discreto">A chamada ao modelo leva alguns segundos.</span>
+</form>
+{% endblock %}

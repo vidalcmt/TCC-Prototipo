@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block titulo %}Cadastrar questão{% endblock %}
+{% block conteudo %}
+<h1>Cadastrar questão objetiva</h1>
+{% if erros %}
+<div class="aviso-erro">{% for e in erros %}<div>{{ e }}</div>{% endfor %}</div>
+{% endif %}
+<form method="post" action="/questoes">
+  <label for="enunciado">Enunciado</label>
+  <textarea id="enunciado" name="enunciado" rows="8">{{ dados.get("enunciado", "") }}</textarea>
+
+  <label>Alternativas (marque a correta)</label>
+  {% for l in letras %}
+  <div class="linha-alternativa">
+    <input type="radio" name="correta" value="{{ l }}" id="correta_{{ l }}" {% if dados.get("correta") == l %}checked{% endif %}>
+    <label for="correta_{{ l }}" style="margin: 0">{{ l }})</label>
+    <input type="text" name="alternativa_{{ l }}" value="{{ dados.get('alternativa_' ~ l, '') }}" aria-label="Alternativa {{ l }}">
+  </div>
+  {% endfor %}
+
+  <label for="area">Área do conhecimento (opcional)</label>
+  <input type="text" id="area" name="area" value="{{ dados.get('area', '') }}" placeholder="ciencias-humanas">
+
+  <label for="fonte">Origem (opcional)</label>
+  <input type="text" id="fonte" name="fonte" value="{{ dados.get('fonte', '') }}" placeholder="Ex.: Vestibular UEL 2022, questão 12">
+
+  <label for="ano">Ano (opcional)</label>
+  <input type="text" id="ano" name="ano" value="{{ dados.get('ano', '') }}" inputmode="numeric">
+
+  <p><button type="submit">Salvar questão</button></p>
+</form>
+{% endblock %}
