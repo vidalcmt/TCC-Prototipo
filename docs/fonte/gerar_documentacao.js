@@ -106,8 +106,8 @@ function tabela(cabecalho, linhas, proporcoes) {
 // =====================================================================
 // CAPA
 // =====================================================================
-const VERSAO = "0.3";
-const DATA = "19/10/2026";
+const VERSAO = "0.4";
+const DATA = "20/10/2026";
 
 conteudo.push(new Paragraph({ spacing: { before: 2400 }, children: [] }));
 conteudo.push(new Paragraph({
@@ -177,7 +177,7 @@ tabela(
   ["Etapa", "Conteúdo", "Situação"],
   [
     ["1", "Esqueleto, banco de dados e medição", "Concluída em 16/10/2026"],
-    ["2", "Módulo objetivo", "Implementada em 19/10/2026; falta o teste com a chave real"],
+    ["2", "Módulo objetivo", "Concluída em 19/10/2026; explicação v2 (tipo de erro) em revisão em 20/10/2026"],
     ["3", "Módulo discursivo", "Pendente"],
     ["4", "Tela de aceite do professor", "Pendente"],
     ["5", "Execução em lote e baseline", "Pendente"],
@@ -389,18 +389,42 @@ h3("Por que as novas tentativas automáticas estão desligadas");
 p("Por padrão, a biblioteca da OpenAI repete uma chamada que falhou até duas vezes, sem avisar. Com isso, a latência medida somaria várias tentativas e uma falha intermediária desapareceria dos dados. Com `max_retries=0`, cada linha de `metrica_requisicao` corresponde a exatamente uma tentativa. Quando for preciso tentar de novo, como na execução em lote, o código chama outra vez e a nova tentativa vira outra linha.");
 
 h2("4.5 Contrato de saída objetivo: app/correcao/contratos.py");
-p("Define, em Pydantic, o formato que a API é obrigada a seguir na resposta, conforme a seção \"Contrato de saída da IA\" da especificação. As descrições dos campos são enviadas junto com o formato e orientam o modelo.");
+p("Define, em Pydantic, o formato que a API é obrigada a seguir na resposta, conforme a seção \"Contrato de saída da IA\" da especificação. As descrições dos campos são enviadas junto com o formato e orientam o modelo. Cada versão de prompt tem o seu contrato, registrado em `CONTRATO_POR_PROMPT`; as versões antigas permanecem no código para que as correções já gravadas continuem legíveis.");
 tabela(["Elemento", "O que faz"], [
-  ["`ExplicacaoAlternativa`", "Uma alternativa: `letra`, `correta`, `por_que` e `conceito_envolvido`"],
-  ["`CorrecaoObjetiva`", "A resposta completa: `questao_id`, `alternativa_correta`, lista de `explicacoes`, `explicacao_correta` e `nivel_dificuldade_estimado` (baixo, medio ou alto)"],
+  ["`ExplicacaoAlternativa`, `CorrecaoObjetiva`", "Versão 1 (prompt `objetiva_v1`): por alternativa, `letra`, `correta`, `por_que` e `conceito_envolvido`"],
+  ["`ExplicacaoAlternativaV2`, `CorrecaoObjetivaV2`", "Versão 2 (prompt `objetiva_v2`, em uso): acrescenta `tipo_de_erro`, `elemento_incorreto` e `como_verificar` a cada alternativa"],
+  ["Campos comuns da resposta", "`questao_id`, `alternativa_correta`, lista de `explicacoes`, `explicacao_correta` e `nivel_dificuldade_estimado` (baixo, medio ou alto)"],
+  ["`ROTULOS_TIPO_DE_ERRO`", "Texto exibido na página para cada tipo de erro"],
+  ["`CONTRATO_POR_PROMPT`", "Associa cada versão de prompt ao seu contrato"],
   ["`problemas_de_consistencia(...)`", "Confere a resposta com a questão cadastrada e devolve a lista de problemas; lista vazia significa resposta consistente"],
 ], [4, 6]);
 p("O formato já é garantido pela API. A conferência verifica o conteúdo: a resposta precisa repetir o identificador da questão, concordar com o gabarito do professor, explicar cada alternativa exatamente uma vez e marcar como correta apenas a alternativa do gabarito.");
-p("O campo `conceito_envolvido` existe por razão metodológica: permite agrupar os erros por conceito na análise dos resultados.");
+p("Na versão 2, a conferência também exige que só as alternativas incorretas tenham `tipo_de_erro`; a correta deve vir com esse campo vazio.");
+h3("Campos da versão 2 por alternativa");
+tabela(["Campo", "Na alternativa incorreta", "Na alternativa correta"], [
+  ["`tipo_de_erro`", "A natureza do erro, escolhida na lista abaixo", "Vazio"],
+  ["`elemento_incorreto`", "O ponto exato que está errado: data, período, autor, lugar, conceito ou relação", "Vazio"],
+  ["`por_que`", "O raciocínio que leva o estudante a escolhê-la e por que ele não se sustenta", "Por que ela é a mais adequada"],
+  ["`como_verificar`", "Como perceber o erro com outros conhecimentos, sem depender do gabarito", "Como confirmá-la com outros conhecimentos"],
+  ["`conceito_envolvido`", "Conceito central, em 2 a 6 palavras", "Idem"],
+], [3, 5, 3]);
+h3("Tipos de erro");
+tabela(["Valor", "Significado"], [
+  ["`anacronismo`", "Atribui algo a uma época ou data que não é a sua, como características da arte contemporânea ao Modernismo de 1922"],
+  ["`contexto_historico`", "Situa o fato em um contexto social, político ou geográfico errado"],
+  ["`conceito_trocado`", "Confunde conceitos próximos, como indianismo romântico e antropofagia modernista"],
+  ["`leitura_parcial`", "Apoia-se em parte do texto e ignora outra"],
+  ["`extrapolacao`", "Afirma mais do que o texto permite"],
+  ["`causa_efeito`", "Inverte ou inventa uma relação de causa e consequência"],
+  ["`fato_incorreto`", "Afirma dado, autor ou evento falso"],
+  ["`nao_responde`", "É verdadeira em si, mas não responde ao que foi perguntado"],
+  ["`outro`", "Nenhuma das categorias anteriores"],
+], [3, 7]);
+p("Os campos `conceito_envolvido` e `tipo_de_erro` existem por razão metodológica: permitem agrupar os erros por conceito e contar quais tipos de erro os distratores exploram, o que alimenta a análise dos resultados.");
 
 h2("4.6 Explicação de questões objetivas: app/correcao/objetiva.py");
 tabela(["Elemento", "O que faz"], [
-  ["`PROMPT_OBJETIVA`", "Prompt usado: `objetiva`, versão 1"],
+  ["`PROMPT_OBJETIVA`", "Prompt em uso: `objetiva`, versão 2. O contrato é escolhido pela versão"],
   ["`gabarito_da(questao)`", "Devolve a letra correta; recusa questão sem gabarito ou com mais de um"],
   ["`campos_do_prompt(questao)`", "Prepara identificador, enunciado, alternativas no formato `A) texto` e gabarito"],
   ["`gerar_explicacao(sessao, questao)`", "Chama o modelo, confere a resposta e grava a correção"],
@@ -408,18 +432,20 @@ tabela(["Elemento", "O que faz"], [
 ], [4, 6]);
 h3("Passos de gerar_explicacao");
 numerada([
-  "Carrega o prompt `objetiva_v1` e chama `chamar_modelo` com o formato `CorrecaoObjetiva`.",
+  "Carrega o prompt em uso (`objetiva_v2`) e chama `chamar_modelo` com o contrato da mesma versão (`CorrecaoObjetivaV2`).",
   "Se a chamada falhou, devolve a falha; a métrica já foi gravada por `chamar_modelo`.",
   "Se a resposta veio, confere a consistência com a questão.",
   "Se houver problema, não grava a correção, marca a métrica como falha e registra o motivo, por exemplo `saida inconsistente: alternativa_correta B diferente do gabarito D`.",
   "Se estiver tudo certo, grava a correção em `correcao` e liga a métrica a ela pelo campo `correcao_id`.",
 ]);
 p("A explicação de uma objetiva pertence à questão, e não à resposta de um aluno. Por isso, nessas correções, o campo `submissao_id` fica vazio.");
-h3("Prompt objetiva_v1");
-p("O texto fica em `prompts/objetiva/v1.md`. Em resumo, ele instrui o modelo a:");
+h3("Prompt objetiva_v2");
+p("O texto fica em `prompts/objetiva/v2.md`. A versão 1 continua em `prompts/objetiva/v1.md` e não é mais alterada. Em resumo, a versão 2 instrui o modelo a:");
 marcadores([
   "nunca questionar ou alterar o gabarito informado pelo professor;",
-  "para cada alternativa incorreta, identificar o erro de raciocínio plausível que levaria um estudante a escolhê-la e explicar por que ele não se sustenta (RF02 e RF03);",
+  "para cada alternativa incorreta, classificar o tipo de erro, apontar o elemento exato que está errado e explicar o raciocínio plausível que levaria um estudante a escolhê-la (RF02 e RF03);",
+  "mostrar como o estudante poderia perceber o erro por outros conhecimentos: o período ou contexto correto e suas características, o significado preciso dos conceitos confundidos ou o trecho do enunciado que contradiz a alternativa;",
+  "usar o período (década, século, movimento) em vez de um ano quando não houver segurança sobre a data;",
   "para a correta, apontar os elementos do enunciado que a sustentam, e descrever em passos o caminho até a resposta;",
   "não inventar dados, autores ou citações fora do enunciado;",
   "escrever em português do Brasil, dirigido ao estudante, sem expressões como \"obviamente\".",
@@ -430,7 +456,7 @@ tabela(["Rota", "O que faz"], [
   ["`GET /questoes`", "Lista as questões objetivas, com origem, área, início do enunciado e número de explicações geradas"],
   ["`GET /questoes/nova`", "Formulário de cadastro manual (RF01)"],
   ["`POST /questoes`", "Valida e grava a questão: enunciado, as cinco alternativas e exatamente uma correta. Com erro, devolve o formulário preenchido e a lista de problemas"],
-  ["`GET /questoes/{id}`", "Enunciado, alternativas com o gabarito destacado e, se existir, a explicação mais recente com modelo, prompt, tempo e custo"],
+  ["`GET /questoes/{id}`", "Enunciado, alternativas com o gabarito destacado e, se existir, a explicação mais recente: tipo de erro, o que está errado, por quê, como perceber sem o gabarito, além de modelo, prompt, tempo e custo. Cada explicação é lida com o contrato da versão que a gerou"],
   ["`POST /questoes/{id}/explicar`", "Gera uma nova explicação e volta para a página da questão; na falha, a página mostra o motivo e o número da métrica"],
 ], [4, 6]);
 p("A função `obter_cliente_llm` fornece o cliente do modelo às rotas. Nos testes, ela é trocada por um cliente falso, o que permite testar as páginas sem gastar crédito.");
@@ -463,12 +489,16 @@ p("Baixa questões da API comunitária enem.dev, que cobre as provas de 2009 a 2
 tabela(["Elemento", "O que faz"], [
   ["`buscar_questoes(ano, cliente)`", "Percorre todas as páginas da prova, respeitando o limite de uma requisição por segundo; para após cinco recusas seguidas"],
   ["`somente_texto(questao)`", "Diz se a questão não tem imagem no enunciado nem nas alternativas"],
-  ["`filtrar(questoes, area)`", "Mantém só a área pedida e, por padrão, só questões em texto"],
+  ["`FAIXAS`", "Numeração de cada área na prova regular: 1 a 45 (linguagens), 46 a 90 (humanas), 91 a 135 (natureza) e 136 a 180 (matemática)"],
+  ["`fora_da_faixa(questoes, area)`", "Lista as questões cuja numeração não corresponde à área informada pela API"],
+  ["`sem_duplicatas(questoes)`", "Mantém uma única cópia de cada número de questão e idioma"],
+  ["`filtrar(questoes, area)`", "Mantém a área pedida, dentro da faixa de numeração, sem repetidas e, por padrão, só questões em texto"],
   ["`montar_enunciado(questao)`", "Junta o texto-base e o comando da questão"],
   ["`salvar_copia(...)`", "Grava o arquivo JSON congelado com fonte, data de acesso e filtros"],
   ["`importar_no_banco(questoes, sessao)`", "Grava questões e gabarito no banco, sem duplicar"],
   ["`main()`", "Lê as opções da linha de comando e executa os passos acima"],
 ], [4, 6]);
+p("A conferência pela numeração foi incluída depois que a primeira importação, em 19/10/2026, trouxe como Ciências Humanas seis questões de outras áreas (30, 93, 96, 97, 98 e 153) e uma cópia repetida da questão 50. O arquivo congelado foi corrigido em 20/10/2026, mantendo a data de acesso original e registrando a correção no campo `correcoes` do próprio arquivo. Restaram 38 questões, numeradas de 47 a 90.");
 p("Questões com imagem ficam de fora por padrão porque exigiriam que o modelo interpretasse a imagem, o que acrescentaria uma variável que a pesquisa não quer medir neste momento. A opção `--com-imagens` desliga o filtro.");
 
 // ---------------------------------------------------------------------
@@ -523,13 +553,13 @@ tabela(["Comando", "Para que serve"], [
 
 // ---------------------------------------------------------------------
 h1("6. Testes automatizados");
-p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 28 testes.");
+p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 32 testes.");
 tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_precos.py`", "Custo correto para o modelo em uso; preço de cache aplicado; nome com sufixo de versão; modelo desconhecido não gera custo inventado"],
   ["`tests/test_llm.py`", "Sucesso grava tokens, custo, latência, modelo e prompt; resposta sem formato válido vira falha com tokens; erro de rede vira falha com motivo; cliente sem novas tentativas automáticas"],
   ["`tests/test_app.py`", "Rota de verificação; página de métricas e exportação em CSV"],
-  ["`tests/test_objetiva.py`", "Prompt montado com enunciado, alternativas e gabarito; correção gravada e ligada à métrica; quatro tipos de resposta inconsistente viram falha sem correção; resposta malformada; lista, detalhe e página inexistente; cadastro válido e inválido; geração pela página; falha exibida com o motivo"],
-  ["`tests/test_importar_enem.py`", "Paginação; parada após recusas seguidas; filtro de área e de imagens; montagem do enunciado; importação com gabarito e sem duplicar"],
+  ["`tests/test_objetiva.py`", "Prompt montado com enunciado, alternativas e gabarito; correção v2 gravada e ligada à métrica; seis tipos de resposta inconsistente viram falha sem correção, incluindo tipo de erro na alternativa correta ou ausente nas incorretas; explicação antiga da v1 continua legível; resposta malformada; lista, detalhe e página inexistente; cadastro válido e inválido; geração pela página; falha exibida com o motivo"],
+  ["`tests/test_importar_enem.py`", "Paginação; parada após recusas seguidas; exclusão de numeração fora da área e de repetidas; filtro de área e de imagens; montagem do enunciado; importação com gabarito e sem duplicar"],
 ], [3, 7]);
 
 // ---------------------------------------------------------------------
@@ -569,6 +599,9 @@ tabela(["Decisão", "Motivo"], [
   ["Cópia congelada das questões", "A fonte comunitária pode mudar; a pesquisa precisa ser reproduzível"],
   ["SQLite em vez de um servidor de banco", "Um usuário por vez; menos instalação e manutenção"],
   ["Resposta que contradiz o gabarito conta como falha", "Uma explicação incompatível com a decisão do professor é inutilizável, e a taxa de falha precisa refletir isso"],
+  ["Um contrato por versão de prompt", "Explicações antigas continuam legíveis e comparáveis com as novas"],
+  ["Tipo de erro em categoria fechada", "Permite contar e comparar os tipos de erro na análise, o que um texto livre não permitiria"],
+  ["Conferência da área pela numeração da prova", "A fonte comunitária classificou questões na área errada"],
   ["Explicação de objetiva ligada à questão, não a um aluno", "O RF02 pede a explicação de cada alternativa, que não depende de quem respondeu"],
 ], [4, 6]);
 
@@ -576,7 +609,8 @@ h2("8.2 Limitações e pontos de atenção");
 marcadores([
   "**Versão do modelo:** a API devolveu `gpt-6.1-sol` sem sufixo de data, o que indica um nome que pode apontar para versões atualizadas ao longo do tempo. O artigo deve citar também o período da coleta, que está registrado em `criado_em`.",
   "**Questões do ENEM nos dados de treino:** é provável que o modelo já tenha visto essas questões e suas resoluções. Como o professor informa a resposta correta, o efeito é menor, mas deve ser declarado como limitação.",
-  "**Gabarito de fonte comunitária:** o gabarito das questões escolhidas deve ser conferido com o gabarito oficial do INEP, que é a fonte primária citada no artigo.",
+  "**Dados de fonte comunitária:** a API classificou questões na área errada e repetiu uma questão, o que mostra que os dados precisam de conferência. O gabarito e o enunciado das questões escolhidas devem ser conferidos com a prova e o gabarito oficiais do INEP, que são a fonte primária citada no artigo.",
+  "**Categorias de tipo de erro:** foram definidas pelo autor do protótipo a partir dos erros comuns em questões de Ciências Humanas. No artigo, devem ser apresentadas como categorização própria ou fundamentadas em literatura sobre análise de distratores.",
   "**Tokens gravados em cache:** o cálculo supõe que esses tokens já estão incluídos no total de entrada, como acontece com os tokens lidos do cache. A suposição ainda deve ser confirmada na documentação da OpenAI; ela só afeta requisições que usam cache.",
   "**Revisão duplicada:** a tabela `revisao_professor` ainda permite mais de uma revisão para a mesma correção. A restrição será incluída na etapa 4.",
   "**Geração na própria requisição da página:** o navegador espera a resposta do modelo, o que leva alguns segundos. É adequado para um usuário por vez; a execução em lote da etapa 5 roda por linha de comando.",
@@ -588,12 +622,14 @@ marcadores([
 h1("9. Glossário");
 tabela(["Termo", "Significado"], [
   ["Alembic", "Ferramenta que registra e aplica mudanças na estrutura do banco de dados"],
+  ["Anacronismo", "Atribuir a uma época algo que pertence a outra"],
   ["API", "Interface pela qual um programa usa serviços de outro; aqui, a forma de enviar textos ao modelo da OpenAI e de buscar questões do ENEM"],
   ["Baseline", "Método simples usado como referência de comparação nos resultados"],
   ["Branch", "Linha paralela de desenvolvimento no Git, que não afeta a principal até ser incorporada"],
   ["Cache de prompt", "Reaproveitamento, pela OpenAI, de trechos iniciais repetidos entre requisições, cobrados mais barato"],
   ["Commit", "Registro de um conjunto de mudanças no histórico do Git"],
   ["CSV", "Arquivo de texto com valores separados por vírgula, aberto por planilhas e pelo pandas"],
+  ["Distrator", "Alternativa incorreta de uma questão objetiva, construída para parecer plausível"],
   ["Embeddings", "Representações numéricas do significado de um texto, usadas para medir semelhança"],
   ["FastAPI", "Biblioteca Python para construir aplicações web"],
   ["HTR", "Reconhecimento de texto manuscrito (do inglês Handwritten Text Recognition)"],
@@ -613,6 +649,7 @@ tabela(["Termo", "Significado"], [
 // ---------------------------------------------------------------------
 h1("10. Histórico de versões");
 tabela(["Data", "Versão", "Referência", "Mudança"], [
+  ["20/10/2026", "0.4", "pull request da explicação v2", "Explicação com tipo de erro, elemento errado e como perceber sem o gabarito (prompt objetiva_v2); importador confere a numeração da área e remove repetidas; arquivo congelado corrigido para 38 questões"],
   ["19/10/2026", "0.3", "pull request da etapa 2", "Módulo objetivo: contrato de saída, conferência com o gabarito, prompt objetiva_v1, páginas de lista, cadastro, detalhe e geração da explicação"],
   ["19/10/2026", "0.2", "pull request de revisão", "Novas tentativas automáticas desligadas; caminho do banco sem dependência da pasta; limite de tentativas no importador; primeira versão desta documentação"],
   ["16/10/2026", "0.1.1", "commit 18da774", "Importador de questões do ENEM"],
