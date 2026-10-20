@@ -75,8 +75,39 @@ def somente_texto(questao: dict) -> bool:
     return all(a.get("text") and not a.get("file") for a in questao["alternatives"])
 
 
+# Numeração das questões de cada área na prova regular do ENEM: 1 a 45 no
+# primeiro dia (linguagens) e 46 a 90 (humanas); 91 a 135 no segundo dia
+# (natureza) e 136 a 180 (matemática). A API comunitária tem questões com a
+# área trocada; a faixa de numeração serve de conferência.
+FAIXAS = {
+    "linguagens": (1, 45),
+    "ciencias-humanas": (46, 90),
+    "ciencias-natureza": (91, 135),
+    "matematica": (136, 180),
+}
+
+
+def fora_da_faixa(questoes: list[dict], area: str) -> list[dict]:
+    inicio, fim = FAIXAS[area]
+    return [q for q in questoes if not inicio <= q["index"] <= fim]
+
+
+def sem_duplicatas(questoes: list[dict]) -> list[dict]:
+    """Mantém a primeira ocorrência de cada número de questão (e idioma)."""
+    vistas, unicas = set(), []
+    for q in questoes:
+        chave = (q["index"], q.get("language"))
+        if chave not in vistas:
+            vistas.add(chave)
+            unicas.append(q)
+    return unicas
+
+
 def filtrar(questoes: list[dict], area: str, exigir_texto: bool = True) -> list[dict]:
+    """Área pedida, dentro da faixa de numeração, sem duplicatas e, por padrão, só texto."""
     selecionadas = [q for q in questoes if q.get("discipline") == area]
+    excluidas = set(id(q) for q in fora_da_faixa(selecionadas, area))
+    selecionadas = sem_duplicatas([q for q in selecionadas if id(q) not in excluidas])
     if exigir_texto:
         selecionadas = [q for q in selecionadas if somente_texto(q)]
     return sorted(selecionadas, key=lambda q: q["index"])
@@ -141,8 +172,14 @@ def main() -> None:
     selecionadas = filtrar(todas, args.area, exigir_texto)
     caminho = salvar_copia(selecionadas, args.ano, args.area, exigir_texto)
 
-    da_area = sum(1 for q in todas if q.get("discipline") == args.area)
-    print(f"Prova {args.ano}: {len(todas)} questões no total, {da_area} de {args.area}.")
+    da_area = [q for q in todas if q.get("discipline") == args.area]
+    print(f"Prova {args.ano}: {len(todas)} questões no total, {len(da_area)} marcadas como {args.area}.")
+    for q in fora_da_faixa(da_area, args.area):
+        print(f"  ATENÇÃO: questão {q['index']} está marcada como {args.area}, mas fora da faixa "
+              f"{FAIXAS[args.area][0]} a {FAIXAS[args.area][1]}. Excluída.")
+    repetidas = len(da_area) - len(sem_duplicatas(da_area))
+    if repetidas:
+        print(f"  ATENÇÃO: {repetidas} questão(ões) repetida(s) na API. Mantida só uma cópia.")
     print(f"Selecionadas (somente texto={exigir_texto}): {len(selecionadas)}")
     print(f"Cópia congelada em: {caminho}")
     for q in selecionadas:
