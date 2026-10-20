@@ -6,7 +6,7 @@ from openai import OpenAI
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.correcao.contratos import CorrecaoObjetiva
+from app.correcao.contratos import CONTRATO_POR_PROMPT, ROTULOS_TIPO_DE_ERRO
 from app.correcao.objetiva import gerar_explicacao
 from app.database import obter_sessao
 from app.models import Alternativa, Correcao, MetricaRequisicao, Questao
@@ -96,7 +96,9 @@ def detalhe(request: Request, questao_id: int, falha: int | None = None,
 
     explicacao, metrica = None, None
     if correcoes:
-        explicacao = CorrecaoObjetiva.model_validate_json(correcoes[0].feedback_json)
+        # Cada correção é lida com o contrato da versão de prompt que a gerou.
+        contrato = CONTRATO_POR_PROMPT[correcoes[0].prompt_versao]
+        explicacao = contrato.model_validate_json(correcoes[0].feedback_json)
         metrica = sessao.scalars(
             select(MetricaRequisicao).where(MetricaRequisicao.correcao_id == correcoes[0].id)
         ).first()
@@ -106,6 +108,7 @@ def detalhe(request: Request, questao_id: int, falha: int | None = None,
         "explicacao": explicacao,
         "por_letra": {e.letra: e for e in explicacao.explicacoes} if explicacao else {},
         "metrica": metrica,
+        "rotulos_erro": ROTULOS_TIPO_DE_ERRO,
         "total_explicacoes": len(correcoes),
         "falha": sessao.get(MetricaRequisicao, falha) if falha else None,
     })
