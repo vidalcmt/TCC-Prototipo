@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block titulo %}Cadastrar discursiva{% endblock %}
+{% block conteudo %}
+<h1>Cadastrar questão discursiva</h1>
+{% if erros %}
+<div class="aviso-erro">{% for e in erros %}<div>{{ e }}</div>{% endfor %}</div>
+{% endif %}
+<form method="post" action="/questoes/discursivas">
+  <label for="enunciado">Enunciado</label>
+  <textarea id="enunciado" name="enunciado" rows="7">{{ dados.get("enunciado", "") }}</textarea>
+
+  <label for="nota_maxima">Nota máxima</label>
+  <input type="text" id="nota_maxima" name="nota_maxima" value="{{ dados.get('nota_maxima', '') }}" inputmode="decimal" style="max-width: 120px">
+
+  <label for="resposta_esperada">Resposta esperada (opcional)</label>
+  <p class="discreto" style="margin: 2px 0 6px">Com ela, cada resposta pode ser corrigida nas duas condições: com e sem resposta esperada.</p>
+  <textarea id="resposta_esperada" name="resposta_esperada" rows="6">{{ dados.get("resposta_esperada", "") }}</textarea>
+
+  <label>Rubrica (opcional)</label>
+  <p class="discreto" style="margin: 2px 0 6px">Deixe em branco para o modelo definir os critérios. Linhas vazias são ignoradas.</p>
+  <table>
+    <tr><th style="width: 40px">#</th><th>Critério</th><th style="width: 110px">Peso</th></tr>
+    {% for i in linhas %}
+    <tr>
+      <td>{{ i }}</td>
+      <td><input type="text" name="criterio_{{ i }}" value="{{ dados.get('criterio_' ~ i, '') }}" aria-label="Critério {{ i }}"></td>
+      <td><input type="text" name="peso_{{ i }}" value="{{ dados.get('peso_' ~ i, '') }}" inputmode="decimal" aria-label="Peso do critério {{ i }}"></td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <label for="area">Área do conhecimento (opcional)</label>
+  <input type="text" id="area" name="area" value="{{ dados.get('area', '') }}" placeholder="ciencias-humanas">
+
+  <label for="fonte">Origem (opcional)</label>
+  <input type="text" id="fonte" name="fonte" value="{{ dados.get('fonte', '') }}" placeholder="Ex.: Unicamp 2023, 2ª fase, questão 15">
+
+  <label for="ano">Ano (opcional)</label>
+  <input type="text" id="ano" name="ano" value="{{ dados.get('ano', '') }}" inputmode="numeric">
+
+  <p><button type="submit">Salvar questão</button></p>
+</form>
+{% endblock %}

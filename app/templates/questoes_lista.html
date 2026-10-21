@@ -1,18 +1,22 @@
 {% extends "base.html" %}
 {% block titulo %}Questões{% endblock %}
 {% block conteudo %}
-<h1>Questões objetivas</h1>
-<p><a class="botao" href="/questoes/nova">Cadastrar questão</a></p>
+<h1>Questões</h1>
+<p>
+  <a class="botao" href="/questoes/nova">Cadastrar objetiva</a>
+  <a class="botao" href="/questoes/nova-discursiva">Cadastrar discursiva</a>
+</p>
 {% if not linhas %}
-<p class="discreto">Nenhuma questão cadastrada. Importe do ENEM com
+<p class="discreto">Nenhuma questão cadastrada. Importe objetivas do ENEM com
 <code>python -m scripts.importar_enem --ano 2023 --area ciencias-humanas --importar</code>
 ou cadastre uma à mão.</p>
 {% else %}
 <table>
-  <tr><th>#</th><th>Origem</th><th>Área</th><th>Início do enunciado</th><th>Explicações</th></tr>
+  <tr><th>#</th><th>Tipo</th><th>Origem</th><th>Área</th><th>Início do enunciado</th><th>Correções</th></tr>
   {% for questao, n in linhas %}
   <tr>
     <td><a href="/questoes/{{ questao.id }}">{{ questao.id }}</a></td>
+    <td>{{ "Discursiva" if questao.tipo == "discursiva" else "Objetiva" }}</td>
     <td>{{ questao.fonte or "" }}</td>
     <td>{{ questao.area or "" }}</td>
     <td><a href="/questoes/{{ questao.id }}">{{ questao.enunciado[:110] }}{% if questao.enunciado|length > 110 %}…{% endif %}</a></td>

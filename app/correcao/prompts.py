@@ -7,7 +7,8 @@ e registre a mudança em prompts/CHANGELOG.md.
 
 Dentro do arquivo, a linha "---usuario---" separa a instrução de sistema do
 modelo de mensagem do usuário. Campos entre chaves, como {enunciado}, são
-preenchidos na hora da chamada.
+preenchidos na hora da chamada, nas duas partes. Por isso, o texto do prompt
+não pode ter chaves que não sejam campos.
 """
 
 from dataclasses import dataclass
@@ -31,7 +32,7 @@ class Prompt:
 
     def mensagens(self, **campos: str) -> list[dict[str, str]]:
         return [
-            {"role": "system", "content": self.sistema},
+            {"role": "system", "content": self.sistema.format(**campos)},
             {"role": "user", "content": self.usuario.format(**campos)},
         ]
 
