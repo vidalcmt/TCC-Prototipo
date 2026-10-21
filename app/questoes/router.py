@@ -1,4 +1,4 @@
-"""Páginas de questões objetivas: lista, cadastro (RF01), detalhe e explicação (RF02, RF03)."""
+"""Lista de questões e páginas das objetivas: cadastro (RF01), detalhe e explicação (RF02, RF03)."""
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -10,16 +10,13 @@ from app.correcao.contratos import CONTRATO_POR_PROMPT, ROTULOS_TIPO_DE_ERRO
 from app.correcao.objetiva import gerar_explicacao
 from app.database import obter_sessao
 from app.models import Alternativa, Correcao, MetricaRequisicao, Questao
+from app.questoes.cliente import obter_cliente_llm
+from app.questoes.discursivas import pagina_da_questao
 from app.templates_config import templates
 
 router = APIRouter(prefix="/questoes", tags=["questoes"])
 
 LETRAS = ["A", "B", "C", "D", "E"]
-
-
-def obter_cliente_llm() -> OpenAI | None:
-    """Cliente do modelo. None significa o cliente padrão; os testes trocam por um falso."""
-    return None
 
 
 def buscar_questao(sessao: Session, questao_id: int) -> Questao:
@@ -37,7 +34,6 @@ def listar(request: Request, sessao: Session = Depends(obter_sessao)):
     linhas = sessao.execute(
         select(Questao, func.coalesce(total_explicacoes.c.n, 0))
         .outerjoin(total_explicacoes, total_explicacoes.c.questao_id == Questao.id)
-        .where(Questao.tipo == "objetiva")
         .order_by(Questao.id)
     ).all()
     return templates.TemplateResponse(request, "questoes_lista.html", {"linhas": linhas})
@@ -90,6 +86,8 @@ async def cadastrar(request: Request, sessao: Session = Depends(obter_sessao)):
 def detalhe(request: Request, questao_id: int, falha: int | None = None,
             sessao: Session = Depends(obter_sessao)):
     questao = buscar_questao(sessao, questao_id)
+    if questao.tipo == "discursiva":
+        return pagina_da_questao(request, questao, sessao)
     correcoes = sessao.scalars(
         select(Correcao).where(Correcao.questao_id == questao.id).order_by(Correcao.id.desc())
     ).all()
@@ -118,6 +116,8 @@ def detalhe(request: Request, questao_id: int, falha: int | None = None,
 def explicar(questao_id: int, sessao: Session = Depends(obter_sessao),
              cliente: OpenAI | None = Depends(obter_cliente_llm)):
     questao = buscar_questao(sessao, questao_id)
+    if questao.tipo != "objetiva":
+        raise HTTPException(status_code=400, detail="Explicação de alternativas só existe em questões objetivas.")
     resultado = gerar_explicacao(sessao, questao, cliente=cliente)
     if resultado.sucesso:
         return RedirectResponse(f"/questoes/{questao_id}", status_code=303)
