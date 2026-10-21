@@ -21,6 +21,9 @@ def questao(indice, area="ciencias-humanas", arquivos=(), contexto="Texto base."
 
 PROVA = [
     questao(46),
+    questao(46),                                           # repetida na API
+    questao(93),                                           # área trocada na API
+    questao(153),                                          # área trocada na API
     questao(47, arquivos=["https://enem.dev/img.png"]),     # imagem no enunciado
     questao(48, contexto="Veja: ![mapa](https://x/y.png)"),  # imagem no Markdown
     questao(49, alt_arquivo="https://enem.dev/alt.png"),     # imagem em alternativa
@@ -38,7 +41,7 @@ def test_paginacao_percorre_todas_as_paginas():
         })
 
     cliente = httpx.Client(base_url="https://api.teste/v1", transport=httpx.MockTransport(responder))
-    assert len(buscar_questoes(2023, cliente, espera=0)) == 5
+    assert len(buscar_questoes(2023, cliente, espera=0)) == len(PROVA)
 
 
 def test_recusas_seguidas_param_o_script_em_vez_de_repetir_para_sempre():
@@ -56,6 +59,12 @@ def test_recusas_seguidas_param_o_script_em_vez_de_repetir_para_sempre():
     with pytest.raises(LimiteDaApiExcedido):
         buscar_questoes(2023, cliente, espera=0)
     assert len(chamadas) == MAX_TENTATIVAS_429 + 1
+
+
+def test_filtro_exclui_numeracao_fora_da_area_e_repetidas():
+    indices = [q["index"] for q in filtrar(PROVA, "ciencias-humanas")]
+    assert 93 not in indices and 153 not in indices
+    assert indices.count(46) == 1
 
 
 def test_filtro_mantem_so_a_area_e_so_texto():

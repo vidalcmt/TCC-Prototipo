@@ -3,7 +3,9 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.correcao.contratos import CorrecaoObjetiva, ExplicacaoAlternativa
+from app.correcao.contratos import (
+    CorrecaoObjetiva, CorrecaoObjetivaV2, ExplicacaoAlternativa, ExplicacaoAlternativaV2,
+)
 from app.correcao.objetiva import campos_do_prompt, gerar_explicacao
 from app.database import obter_sessao
 from app.main import app
@@ -25,18 +27,34 @@ def criar_questao(sessao, gabarito="D"):
     return q
 
 
-def saida_valida(questao_id, gabarito="D", letras=LETRAS, marcadas=None):
+def saida_valida(questao_id, gabarito="D", letras=LETRAS, marcadas=None, tipo_na_correta=None,
+                 tipo_nas_erradas="conceito_trocado"):
     marcadas = marcadas if marcadas is not None else [gabarito]
-    return CorrecaoObjetiva(
+    return CorrecaoObjetivaV2(
         questao_id=str(questao_id),
         alternativa_correta=gabarito,
         explicacoes=[
-            ExplicacaoAlternativa(letra=l, correta=l in marcadas, por_que=f"Raciocínio sobre {l}.",
-                                  conceito_envolvido="violência patrimonial")
+            ExplicacaoAlternativaV2(
+                letra=l, correta=l in marcadas,
+                tipo_de_erro=tipo_na_correta if l in marcadas else tipo_nas_erradas,
+                elemento_incorreto=None if l in marcadas else f"Confunde o conceito em {l}.",
+                por_que=f"Raciocínio sobre {l}.",
+                como_verificar=f"Como verificar {l}.",
+                conceito_envolvido="violência patrimonial",
+            )
             for l in letras
         ],
         explicacao_correta="Passo 1. Passo 2.",
         nivel_dificuldade_estimado="medio",
+    )
+
+
+def saida_v1(questao_id, gabarito="D"):
+    return CorrecaoObjetiva(
+        questao_id=str(questao_id), alternativa_correta=gabarito,
+        explicacoes=[ExplicacaoAlternativa(letra=l, correta=l == gabarito, por_que=f"V1 sobre {l}.",
+                                           conceito_envolvido="conceito v1") for l in LETRAS],
+        explicacao_correta="Caminho v1.", nivel_dificuldade_estimado="baixo",
     )
 
 
@@ -52,7 +70,7 @@ def test_prompt_leva_enunciado_alternativas_e_gabarito(sessao):
     gerar_explicacao(sessao, q, cliente=cliente)
     mensagem = cliente.chamadas[0]["input"][1]["content"]
     assert "Lei Maria da Penha" in mensagem and "informada pelo professor: D" in mensagem
-    assert cliente.chamadas[0]["text_format"] is CorrecaoObjetiva
+    assert cliente.chamadas[0]["text_format"] is CorrecaoObjetivaV2
 
 
 def test_saida_valida_grava_correcao_ligada_a_metrica(sessao):
@@ -63,9 +81,11 @@ def test_saida_valida_grava_correcao_ligada_a_metrica(sessao):
     c = sessao.query(Correcao).one()
     m = sessao.query(MetricaRequisicao).one()
     assert m.correcao_id == c.id and m.sucesso and m.tipo_questao == "objetiva"
-    assert c.prompt_versao == "objetiva_v1" and c.modelo == "gpt-6.1-sol"
+    assert c.prompt_versao == "objetiva_v2" and c.modelo == "gpt-6.1-sol"
     assert c.submissao_id is None
-    assert CorrecaoObjetiva.model_validate_json(c.feedback_json).alternativa_correta == "D"
+    lida = CorrecaoObjetivaV2.model_validate_json(c.feedback_json)
+    assert lida.alternativa_correta == "D"
+    assert lida.explicacoes[0].tipo_de_erro == "conceito_trocado"
 
 
 @pytest.mark.parametrize("saida, trecho_do_motivo", [
@@ -73,6 +93,8 @@ def test_saida_valida_grava_correcao_ligada_a_metrica(sessao):
     (lambda qid: saida_valida(qid, letras="ABCD"), "alternativas explicadas"),
     (lambda qid: saida_valida(qid, marcadas=["D", "A"]), "marcadas como corretas"),
     (lambda qid: saida_valida(qid + 99), "questao_id"),
+    (lambda qid: saida_valida(qid, tipo_na_correta="anacronismo"), "alternativa correta D com tipo_de_erro"),
+    (lambda qid: saida_valida(qid, tipo_nas_erradas=None), "sem tipo_de_erro"),
 ])
 def test_saida_inconsistente_vira_falha_sem_correcao(sessao, saida, trecho_do_motivo):
     q = criar_questao(sessao)
@@ -151,7 +173,24 @@ def test_botao_gerar_mostra_explicacao_na_pagina(fabrica_sessao, cliente_web):
     pagina = cliente_web.post(f"/questoes/{qid}/explicar")
     assert pagina.status_code == 200
     assert "Raciocínio sobre A." in pagina.text and "violência patrimonial" in pagina.text
-    assert "Caminho até a resposta" in pagina.text and "objetiva_v1" in pagina.text
+    assert "Caminho até a resposta" in pagina.text and "objetiva_v2" in pagina.text
+    assert "Conceitos confundidos" in pagina.text  # rótulo do tipo de erro
+    assert "O que está errado:" in pagina.text and "Confunde o conceito em A." in pagina.text
+    assert "Como perceber sem o gabarito:" in pagina.text and "Como confirmar:" in pagina.text
+
+
+def test_explicacao_antiga_da_v1_continua_legivel(fabrica_sessao, cliente_web):
+    with fabrica_sessao() as s:
+        q = criar_questao(s)
+        s.add(Correcao(questao_id=q.id, feedback_json=saida_v1(q.id).model_dump_json(),
+                       modelo="gpt-6.1-sol", prompt_versao="objetiva_v1"))
+        s.commit()
+        qid = q.id
+
+    pagina = cliente_web.get(f"/questoes/{qid}")
+    assert pagina.status_code == 200
+    assert "V1 sobre A." in pagina.text and "Caminho v1." in pagina.text
+    assert "Como perceber sem o gabarito" not in pagina.text
 
 
 def test_falha_na_geracao_aparece_com_o_motivo(fabrica_sessao, cliente_web):

@@ -21,7 +21,16 @@
   <strong>{{ a.letra }})</strong> {{ a.texto }}{% if a.correta %}<span class="selo">Gabarito</span>{% endif %}
   {% set e = por_letra.get(a.letra) %}
   {% if e %}
-  <div class="explicacao">{{ e.por_que }}</div>
+  {% if e.tipo_de_erro %}
+  <div class="tipo-erro">{{ rotulos_erro.get(e.tipo_de_erro, e.tipo_de_erro) }}</div>
+  {% endif %}
+  {% if e.elemento_incorreto %}
+  <div class="explicacao"><strong>O que está errado:</strong> {{ e.elemento_incorreto }}</div>
+  {% endif %}
+  <div class="explicacao">{% if e.como_verificar is defined %}<strong>Por quê:</strong> {% endif %}{{ e.por_que }}</div>
+  {% if e.como_verificar %}
+  <div class="explicacao verificar"><strong>{% if a.correta %}Como confirmar{% else %}Como perceber sem o gabarito{% endif %}:</strong> {{ e.como_verificar }}</div>
+  {% endif %}
   <div class="conceito">Conceito envolvido: {{ e.conceito_envolvido }}</div>
   {% endif %}
 </div>

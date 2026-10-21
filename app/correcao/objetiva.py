@@ -5,12 +5,12 @@ from dataclasses import dataclass
 from openai import OpenAI
 from sqlalchemy.orm import Session
 
-from app.correcao.contratos import CorrecaoObjetiva, problemas_de_consistencia
+from app.correcao.contratos import CONTRATO_POR_PROMPT, problemas_de_consistencia
 from app.correcao.llm import chamar_modelo
 from app.correcao.prompts import carregar_prompt
 from app.models import Correcao, MetricaRequisicao, Questao
 
-PROMPT_OBJETIVA = ("objetiva", 1)
+PROMPT_OBJETIVA = ("objetiva", 2)
 
 
 @dataclass
@@ -49,8 +49,9 @@ def gerar_explicacao(
     com o motivo, porque uma saída inutilizável conta na taxa de falha.
     """
     prompt = carregar_prompt(*PROMPT_OBJETIVA)
+    formato = CONTRATO_POR_PROMPT[prompt.identificador]
     resultado = chamar_modelo(
-        sessao, prompt, CorrecaoObjetiva, campos_do_prompt(questao),
+        sessao, prompt, formato, campos_do_prompt(questao),
         tipo_questao="objetiva", cliente=cliente,
     )
     metrica = resultado.metrica
