@@ -33,15 +33,34 @@
 </form>
 
 {% for item in correcoes %}
-{% set c = item.correcao %}{% set a = item.analise %}{% set m = item.metrica %}
-<section class="correcao">
+{% set c = item.correcao %}{% set a = item.analise %}{% set m = item.metrica %}{% set r = item.revisao %}
+<section class="correcao" id="correcao-{{ c.id }}">
   <h2>Correção {{ c.id }}
     <span class="condicao">{{ "com resposta esperada" if c.usou_resposta_esperada else "sem resposta esperada" }}</span>
   </h2>
-  <div class="nota-sugerida">
-    <div class="rotulo">Nota sugerida pelo modelo</div>
-    <div class="valor">{{ a.nota_sugerida|num }} <span>de {{ a.nota_maxima|num }}</span></div>
-    <div class="discreto">É uma sugestão. A nota final é do professor. Confiança do modelo: {{ {"baixa": "baixa", "media": "média", "alta": "alta"}[a.confianca] }}.</div>
+  <div class="notas">
+    <div class="nota-sugerida">
+      <div class="rotulo">Nota sugerida pelo modelo</div>
+      <div class="valor">{{ a.nota_sugerida|num }} <span>de {{ a.nota_maxima|num }}</span></div>
+      <div class="discreto">É uma sugestão. A nota final é do professor. Confiança do modelo: {{ {"baixa": "baixa", "media": "média", "alta": "alta"}[a.confianca] }}.</div>
+    </div>
+    {% if r %}
+    <div class="nota-final">
+      <div class="rotulo">Nota final do professor</div>
+      <div class="valor">{{ r.nota_final|num }} <span>de {{ a.nota_maxima|num }}</span></div>
+      <div class="discreto">
+        {% if r.aceitou_sugestao %}Sugestão aceita{% else %}Ajustada de {{ r.nota_sugerida|num }} para {{ r.nota_final|num }} ({{ "+" if r.nota_final > r.nota_sugerida else "" }}{{ (r.nota_final - r.nota_sugerida)|num }}){% endif %}
+        em {{ r.criado_em.strftime("%d/%m/%Y %H:%M") }} (UTC).
+      </div>
+      {% if r.comentario %}<div class="comentario">“{{ r.comentario }}”</div>{% endif %}
+    </div>
+    {% else %}
+    <div class="nota-pendente">
+      <div class="rotulo">Nota final</div>
+      <div class="valor">Pendente</div>
+      <div class="discreto">Só passa a valer depois da sua decisão, no fim desta correção.</div>
+    </div>
+    {% endif %}
   </div>
 
   <h3>Análise por critério</h3>
@@ -60,6 +79,25 @@
 
   <h3>Feedback para o aluno</h3>
   <p style="white-space: pre-wrap">{{ a.feedback_elaborado }}</p>
+
+  {% if not r %}
+  <div class="decisao">
+    <h3>Sua decisão sobre a nota</h3>
+    {% if item.erro %}<div class="aviso-erro">{{ item.erro }}</div>{% endif %}
+    <form method="post" action="/correcoes/{{ c.id }}/revisao">
+      <label for="comentario-{{ c.id }}">Comentário (opcional)</label>
+      <textarea id="comentario-{{ c.id }}" name="comentario" rows="2" placeholder="Por que aceitou ou ajustou"></textarea>
+      {# O primeiro botão é o acionado pela tecla Enter; por isso "ajustar" vem antes de "aceitar". #}
+      <div class="acoes-decisao">
+        <input type="text" name="nota_final" inputmode="decimal" placeholder="Outra nota" aria-label="Outra nota" style="max-width: 120px">
+        <button type="submit" name="acao" value="ajustar" class="secundario">Registrar outra nota</button>
+        <span class="discreto">ou</span>
+        <button type="submit" name="acao" value="aceitar">Aceitar a nota sugerida ({{ a.nota_sugerida|num }})</button>
+      </div>
+      <p class="discreto">A decisão fica registrada e não pode ser alterada depois.</p>
+    </form>
+  </div>
+  {% endif %}
 
   {% if m %}
   <p class="discreto">Gerada por {{ m.modelo or m.modelo_solicitado }} com o prompt {{ m.prompt_versao }},

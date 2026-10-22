@@ -9,7 +9,9 @@ from sqlalchemy.orm import Session
 from app.correcao.contratos import CONTRATO_POR_PROMPT
 from app.correcao.discursiva import CondicaoIndisponivel, gerar_correcao
 from app.database import obter_sessao
-from app.models import Correcao, CriterioRubrica, MetricaRequisicao, Questao, RespostaEsperada, Submissao
+from app.models import (
+    Correcao, CriterioRubrica, MetricaRequisicao, Questao, RespostaEsperada, RevisaoProfessor, Submissao,
+)
 from app.questoes.cliente import obter_cliente_llm
 from app.templates_config import templates
 
@@ -89,12 +91,19 @@ async def cadastrar(request: Request, sessao: Session = Depends(obter_sessao)):
 
 def pagina_da_questao(request: Request, questao: Questao, sessao: Session) -> HTMLResponse:
     """Página de uma questão discursiva; chamada pela rota de detalhe de questões."""
-    total_correcoes = (
-        select(Correcao.submissao_id, func.count().label("n")).group_by(Correcao.submissao_id).subquery()
+    totais = (
+        select(
+            Correcao.submissao_id,
+            func.count(Correcao.id).label("correcoes"),
+            func.count(RevisaoProfessor.id).label("revisadas"),
+        )
+        .outerjoin(RevisaoProfessor, RevisaoProfessor.correcao_id == Correcao.id)
+        .group_by(Correcao.submissao_id)
+        .subquery()
     )
     respostas = sessao.execute(
-        select(Submissao, func.coalesce(total_correcoes.c.n, 0))
-        .outerjoin(total_correcoes, total_correcoes.c.submissao_id == Submissao.id)
+        select(Submissao, func.coalesce(totais.c.correcoes, 0), func.coalesce(totais.c.revisadas, 0))
+        .outerjoin(totais, totais.c.submissao_id == Submissao.id)
         .where(Submissao.questao_id == questao.id)
         .order_by(Submissao.id)
     ).all()
@@ -141,6 +150,7 @@ async def registrar_resposta(request: Request, questao_id: int, sessao: Session 
 
 @router.get("/respostas/{resposta_id}", response_class=HTMLResponse)
 def pagina_da_resposta(request: Request, resposta_id: int, falha: int | None = None,
+                       erro_revisao: int | None = None, mensagem: str | None = None,
                        sessao: Session = Depends(obter_sessao)):
     submissao = _submissao(sessao, resposta_id)
     questao = sessao.get(Questao, submissao.questao_id)
@@ -153,7 +163,13 @@ def pagina_da_resposta(request: Request, resposta_id: int, falha: int | None = N
         metrica = sessao.scalars(
             select(MetricaRequisicao).where(MetricaRequisicao.correcao_id == c.id)
         ).first()
-        correcoes.append({"correcao": c, "analise": analise, "metrica": metrica})
+        revisao = sessao.scalars(
+            select(RevisaoProfessor).where(RevisaoProfessor.correcao_id == c.id)
+        ).first()
+        correcoes.append({
+            "correcao": c, "analise": analise, "metrica": metrica, "revisao": revisao,
+            "erro": mensagem if erro_revisao == c.id else None,
+        })
 
     return templates.TemplateResponse(request, "resposta.html", {
         "submissao": submissao, "questao": questao, "correcoes": correcoes,

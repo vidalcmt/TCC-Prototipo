@@ -29,14 +29,15 @@
 <h2>Respostas</h2>
 {% if respostas %}
 <table>
-  <tr><th>#</th><th>Código</th><th>Origem</th><th>Início da resposta</th><th>Correções</th></tr>
-  {% for s, n in respostas %}
+  <tr><th>#</th><th>Código</th><th>Origem</th><th>Início da resposta</th><th>Correções</th><th>Revisadas</th></tr>
+  {% for s, n, revisadas in respostas %}
   <tr>
     <td><a href="/respostas/{{ s.id }}">{{ s.id }}</a></td>
     <td>{{ s.codigo_corpus or "" }}</td>
     <td>{{ origens.get(s.origem or "", s.origem) }}</td>
     <td><a href="/respostas/{{ s.id }}">{{ s.resposta_aluno[:90] }}{% if s.resposta_aluno|length > 90 %}…{% endif %}</a></td>
     <td>{{ n }}</td>
+    <td>{{ revisadas }}</td>
   </tr>
   {% endfor %}
 </table>
