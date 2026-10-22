@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block titulo %}Questão {{ questao.id }}{% endblock %}
+{% block conteudo %}
+<p><a href="/questoes">&larr; Voltar para a lista</a></p>
+<h1>Questão {{ questao.id }} <span class="discreto">(discursiva)</span></h1>
+<p class="discreto">{{ questao.fonte or "" }}{% if questao.area %} · {{ questao.area }}{% endif %} · nota máxima {{ questao.nota_maxima|num }}</p>
+
+<div class="enunciado">{{ questao.enunciado }}</div>
+
+<h2>Resposta esperada</h2>
+{% if questao.resposta_esperada %}
+<div class="enunciado">{{ questao.resposta_esperada.texto }}</div>
+{% else %}
+<p class="discreto">Não cadastrada. As respostas só podem ser corrigidas na condição sem resposta esperada.</p>
+{% endif %}
+
+<h2>Rubrica</h2>
+{% if questao.criterios %}
+<table>
+  <tr><th>#</th><th>Critério</th><th>Peso</th></tr>
+  {% for c in questao.criterios %}
+  <tr><td>{{ loop.index }}</td><td>{{ c.descricao }}</td><td>{{ c.peso|num }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="discreto">Não cadastrada. O modelo define os critérios a cada correção.</p>
+{% endif %}
+
+<h2>Respostas</h2>
+{% if respostas %}
+<table>
+  <tr><th>#</th><th>Código</th><th>Origem</th><th>Início da resposta</th><th>Correções</th><th>Revisadas</th></tr>
+  {% for s, n, revisadas in respostas %}
+  <tr>
+    <td><a href="/respostas/{{ s.id }}">{{ s.id }}</a></td>
+    <td>{{ s.codigo_corpus or "" }}</td>
+    <td>{{ origens.get(s.origem or "", s.origem) }}</td>
+    <td><a href="/respostas/{{ s.id }}">{{ s.resposta_aluno[:90] }}{% if s.resposta_aluno|length > 90 %}…{% endif %}</a></td>
+    <td>{{ n }}</td>
+    <td>{{ revisadas }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="discreto">Nenhuma resposta registrada ainda.</p>
+{% endif %}
+
+<h3>Registrar resposta de aluno</h3>
+<form method="post" action="/questoes/{{ questao.id }}/respostas">
+  <label for="resposta_aluno">Resposta</label>
+  <textarea id="resposta_aluno" name="resposta_aluno" rows="6" required></textarea>
+  <div style="display: flex; gap: 16px">
+    <div style="flex: 1">
+      <label for="codigo_corpus">Código no corpus (opcional)</label>
+      <input type="text" id="codigo_corpus" name="codigo_corpus" placeholder="R014">
+    </div>
+    <div style="flex: 1">
+      <label for="origem">Origem</label>
+      <select id="origem" name="origem" style="width: 100%; padding: 6px; font: inherit">
+        {% for valor, rotulo in origens.items() %}<option value="{{ valor }}">{{ rotulo }}</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+  <p class="discreto">Não use o nome do aluno: o código identifica a resposta de forma anônima.</p>
+  <p><button type="submit">Registrar resposta</button></p>
+</form>
+{% endblock %}

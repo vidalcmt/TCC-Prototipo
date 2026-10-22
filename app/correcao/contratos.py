@@ -8,9 +8,14 @@ antigas continuam aqui para que as correções já gravadas possam ser lidas.
 
 Campos com razão metodológica, que não devem ser removidos:
 - conceito_envolvido: permite agrupar erros por conceito na análise;
-- tipo_de_erro (v2): permite contar quais tipos de erro os distratores exploram.
+- tipo_de_erro (v2): permite contar quais tipos de erro os distratores exploram;
+- trecho_citado (discursiva): distingue feedback específico de genérico, e a
+  proporção de critérios com trecho citado é métrica de qualidade;
+- usou_resposta_esperada (discursiva): separa as duas condições experimentais.
 """
 
+import re
+import unicodedata
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -129,9 +134,54 @@ class CorrecaoObjetivaV2(BaseModel):
     nivel_dificuldade_estimado: Dificuldade
 
 
+# ---------------------------------------------------------------------------
+# Questão discursiva (prompt discursiva_v1)
+# ---------------------------------------------------------------------------
+
+StatusCriterio = Literal["atendido", "parcial", "nao_atendido"]
+
+
+class AnaliseCriterio(BaseModel):
+    criterio: str = Field(
+        description="O critério avaliado. Com rubrica, repita o texto do critério do professor."
+    )
+    peso: float = Field(description="Peso do critério. Com rubrica, o mesmo peso informado pelo professor.")
+    status: StatusCriterio
+    justificativa: str = Field(
+        description=(
+            "Por que o critério foi atendido, parcialmente atendido ou não atendido, "
+            "referindo-se ao que o aluno escreveu."
+        )
+    )
+    trecho_citado: str | None = Field(
+        description=(
+            "Trecho copiado literalmente da resposta do aluno que sustenta a avaliação, sem "
+            "alterar nenhuma palavra. Null quando o aluno não escreveu nada sobre o critério."
+        )
+    )
+
+
+class CorrecaoDiscursiva(BaseModel):
+    questao_id: str
+    usou_resposta_esperada: bool
+    analise_criterios: list[AnaliseCriterio]
+    feedback_elaborado: str = Field(
+        description=(
+            "Texto dirigido ao aluno explicando o que faltou e o caminho para a resposta completa, "
+            "com os conhecimentos que ele pode mobilizar para chegar lá."
+        )
+    )
+    nota_sugerida: float
+    nota_maxima: float
+    confianca: Literal["baixa", "media", "alta"] = Field(
+        description="Confiança na nota sugerida; baixa quando a resposta é ambígua ou foge ao tema."
+    )
+
+
 CONTRATO_POR_PROMPT: dict[str, type[BaseModel]] = {
     "objetiva_v1": CorrecaoObjetiva,
     "objetiva_v2": CorrecaoObjetivaV2,
+    "discursiva_v1": CorrecaoDiscursiva,
 }
 
 
@@ -168,4 +218,68 @@ def problemas_de_consistencia(
                 problemas.append(f"alternativa correta {e.letra} com tipo_de_erro {e.tipo_de_erro}")
             if not e.correta and e.tipo_de_erro is None:
                 problemas.append(f"alternativa incorreta {e.letra} sem tipo_de_erro")
+    return problemas
+
+
+def _normalizar(texto: str) -> str:
+    """Minúsculas, aspas retas e espaços simples, para comparar trechos citados."""
+    texto = unicodedata.normalize("NFC", texto).lower()
+    texto = texto.translate(str.maketrans({"“": '"', "”": '"', "‘": "'", "’": "'"}))
+    return re.sub(r"\s+", " ", texto).strip()
+
+
+def trecho_existe(trecho: str, resposta: str) -> bool:
+    """Diz se o trecho citado está de fato na resposta do aluno.
+
+    Aceita diferenças de maiúsculas, aspas e espaços, e trechos com reticências
+    no meio, desde que cada parte exista na resposta, na mesma ordem.
+    """
+    resposta_n = _normalizar(resposta)
+    partes = [p.strip(" \"'.,;:") for p in re.split(r"\.\.\.|…|\[\.\.\.\]", _normalizar(trecho))]
+    partes = [p for p in partes if p]
+    if not partes:
+        return False
+    posicao = 0
+    for parte in partes:
+        encontrado = resposta_n.find(parte, posicao)
+        if encontrado < 0:
+            return False
+        posicao = encontrado + len(parte)
+    return True
+
+
+def problemas_da_discursiva(
+    saida: CorrecaoDiscursiva,
+    questao_id: int,
+    resposta_aluno: str,
+    usou_resposta_esperada: bool,
+    nota_maxima: float,
+    pesos_rubrica: list[float] | None,
+) -> list[str]:
+    """Confere a correção discursiva com a questão e a resposta. Lista vazia significa consistente."""
+    problemas = []
+    if saida.questao_id != str(questao_id):
+        problemas.append(f"questao_id {saida.questao_id!r} diferente de {questao_id}")
+    if saida.usou_resposta_esperada != usou_resposta_esperada:
+        problemas.append(
+            f"usou_resposta_esperada {saida.usou_resposta_esperada} diferente da condição "
+            f"executada ({usou_resposta_esperada})"
+        )
+    if abs(saida.nota_maxima - nota_maxima) > 1e-9:
+        problemas.append(f"nota_maxima {saida.nota_maxima} diferente da cadastrada ({nota_maxima})")
+    if not 0 <= saida.nota_sugerida <= nota_maxima:
+        problemas.append(f"nota_sugerida {saida.nota_sugerida} fora do intervalo 0 a {nota_maxima}")
+    if not saida.analise_criterios:
+        problemas.append("nenhum critério analisado")
+
+    if pesos_rubrica:
+        pesos = [c.peso for c in saida.analise_criterios]
+        if len(pesos) != len(pesos_rubrica):
+            problemas.append(f"{len(pesos)} critérios analisados, a rubrica tem {len(pesos_rubrica)}")
+        elif any(abs(a - b) > 1e-9 for a, b in zip(pesos, pesos_rubrica)):
+            problemas.append(f"pesos {pesos} diferentes da rubrica {pesos_rubrica}")
+
+    for c in saida.analise_criterios:
+        if c.trecho_citado and not trecho_existe(c.trecho_citado, resposta_aluno):
+            problemas.append(f"trecho citado no critério {c.criterio!r} não existe na resposta do aluno")
     return problemas

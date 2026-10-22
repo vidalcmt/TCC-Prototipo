@@ -31,6 +31,33 @@
     input[type=text], textarea { width: 100%; box-sizing: border-box; padding: 6px 8px; font: inherit; border: 1px solid var(--borda); border-radius: 6px; }
     .linha-alternativa { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
     .linha-alternativa input[type=text] { flex: 1; }
+    .acoes-correcao { margin: 16px 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .correcao { border-top: 2px solid var(--borda); margin-top: 24px; padding-top: 4px; }
+    .condicao { font-size: 13px; font-weight: 600; color: var(--discreto); background: var(--fundo-claro); border: 1px solid var(--borda); padding: 1px 8px; border-radius: 10px; vertical-align: middle; }
+    .nota-sugerida { border: 1px dashed var(--acao); border-radius: 8px; padding: 10px 14px; background: #f5f9fe; max-width: 520px; }
+    .nota-sugerida .rotulo { font-size: 13px; font-weight: 600; color: var(--acao); text-transform: uppercase; letter-spacing: 0.03em; }
+    .nota-sugerida .valor { font-size: 28px; font-weight: 700; }
+    .nota-sugerida .valor span { font-size: 16px; font-weight: 400; color: var(--discreto); }
+    .criterio { border: 1px solid var(--borda); border-radius: 6px; padding: 10px 12px; margin: 8px 0; }
+    .status { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 10px; margin-left: 6px; }
+    .status-atendido { background: var(--destaque-fundo); color: var(--destaque); border: 1px solid var(--destaque); }
+    .status-parcial { background: #fff4e5; color: #8a4b00; border: 1px solid #f0c27a; }
+    .status-nao_atendido { background: var(--erro-fundo); color: var(--erro); border: 1px solid var(--erro); }
+    .trecho { margin: 8px 0 0; padding: 6px 10px; border-left: 3px solid var(--discreto); background: var(--fundo-claro); font-style: italic; }
+    details summary { cursor: pointer; color: var(--acao); margin: 8px 0; }
+    .notas { display: flex; gap: 12px; flex-wrap: wrap; }
+    .notas > div { flex: 1 1 260px; max-width: 420px; }
+    .nota-final { border: 2px solid var(--destaque); border-radius: 8px; padding: 10px 14px; background: var(--destaque-fundo); }
+    .nota-final .rotulo, .nota-pendente .rotulo { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--destaque); }
+    .nota-final .valor { font-size: 28px; font-weight: 700; }
+    .nota-final .valor span { font-size: 16px; font-weight: 400; color: var(--discreto); }
+    .nota-pendente { border: 1px dashed var(--borda); border-radius: 8px; padding: 10px 14px; }
+    .nota-pendente .rotulo { color: var(--discreto); }
+    .nota-pendente .valor { font-size: 22px; font-weight: 600; color: var(--discreto); margin: 4px 0; }
+    .comentario { margin-top: 6px; font-style: italic; }
+    .decisao { border: 1px solid var(--acao); border-radius: 8px; padding: 4px 14px 8px; margin: 16px 0; background: #f5f9fe; }
+    .acoes-decisao { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+    button.secundario { background: #fff; color: var(--acao); border: 1px solid var(--acao); }
   </style>
 </head>
 <body>
