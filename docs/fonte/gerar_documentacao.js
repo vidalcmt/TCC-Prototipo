@@ -106,8 +106,8 @@ function tabela(cabecalho, linhas, proporcoes) {
 // =====================================================================
 // CAPA
 // =====================================================================
-const VERSAO = "0.5";
-const DATA = "21/10/2026";
+const VERSAO = "0.6";
+const DATA = "22/10/2026";
 
 conteudo.push(new Paragraph({ spacing: { before: 2400 }, children: [] }));
 conteudo.push(new Paragraph({
@@ -178,8 +178,8 @@ tabela(
   [
     ["1", "Esqueleto, banco de dados e medição", "Concluída em 16/10/2026"],
     ["2", "Módulo objetivo", "Concluída em 19/10/2026; explicação v2 (tipo de erro) em 21/10/2026"],
-    ["3", "Módulo discursivo", "Implementada em 21/10/2026; aguardando revisão"],
-    ["4", "Tela de aceite do professor", "Pendente"],
+    ["3", "Módulo discursivo", "Implementada em 21/10/2026; em teste pelo autor"],
+    ["4", "Tela de aceite do professor", "Implementada em 22/10/2026; aguardando revisão"],
     ["5", "Execução em lote e baseline", "Pendente"],
     ["6", "Análise e coleta com especialistas", "Pendente"],
   ],
@@ -226,9 +226,9 @@ tabela(
     ["`app/database.py`", "Conexão com o banco e abertura de sessões"],
     ["`app/models.py`", "Definição das oito tabelas do banco"],
     ["`app/correcao/`", "Chamada ao modelo (`llm.py`), prompts (`prompts.py`), contratos de saída (`contratos.py`), explicação de objetivas (`objetiva.py`) e correção de discursivas (`discursiva.py`)"],
-    ["`app/metricas/`", "Cálculo de custo (`precos.py`), página e exportação de métricas (`router.py`)"],
+    ["`app/metricas/`", "Cálculo de custo (`precos.py`), números do artigo (`resumo.py`), página e exportações (`router.py`)"],
     ["`app/questoes/`", "Páginas de questões: lista dos dois tipos e objetivas (`router.py`), discursivas e respostas (`discursivas.py`), cliente do modelo para as rotas (`cliente.py`)"],
-    ["`app/revisao/`", "Reservada para a tela de aceite (etapa 4)"],
+    ["`app/revisao/`", "Aceite ou ajuste da nota pelo professor: regra (`servico.py`) e rota (`router.py`)"],
     ["`app/templates/`", "Páginas HTML"],
     ["`config/precos.toml`", "Preços por modelo, com fonte e data de acesso"],
     ["`prompts/`", "Prompts versionados e registro de mudanças"],
@@ -311,7 +311,7 @@ campos("correcao", [
 ]);
 campos("revisao_professor", [
   ["`id`", "inteiro", "Identificador"],
-  ["`correcao_id`", "inteiro", "Correção revisada"],
+  ["`correcao_id`", "inteiro", "Correção revisada; única, pois cada correção recebe no máximo uma revisão"],
   ["`nota_sugerida`", "decimal", "Cópia da nota do modelo no momento da revisão"],
   ["`nota_final`", "decimal", "Nota atribuída pelo professor"],
   ["`aceitou_sugestao`", "verdadeiro ou falso", "Calculado: as duas notas são iguais"],
@@ -512,7 +512,25 @@ tabela(["Rota", "O que faz"], [
 ], [4, 6]);
 p("Na página da resposta, a nota aparece com o rótulo \"Nota sugerida pelo modelo\" e o aviso de que a nota final é do professor (RF07). Cada critério mostra o status, a justificativa e o trecho citado. Aceitar ou ajustar a nota é a etapa 4.");
 
-h2("4.11 Custo: app/metricas/precos.py");
+h2("4.11 Revisão do professor: app/revisao/");
+p("Materializa os requisitos RF09 a RF11: a nota sugerida só vira nota final quando o professor a aceita ou informa outra, e as duas ficam gravadas lado a lado.");
+tabela(["Elemento", "O que faz"], [
+  ["`registrar_revisao(sessao, correcao, nota_final, comentario)`", "Grava a decisão. Recusa correção sem nota sugerida, correção já revisada e nota fora do intervalo de zero à nota máxima"],
+  ["`revisao_da(sessao, correcao_id)`", "Devolve a revisão de uma correção, se houver"],
+  ["`RevisaoInvalida`", "Erro com a mensagem exibida ao professor"],
+  ["`POST /correcoes/{id}/revisao`", "Recebe a ação `aceitar` ou `ajustar`, a nota e o comentário, e volta para a página da resposta"],
+], [4, 6]);
+h3("Regras");
+marcadores([
+  "**Uma revisão por correção:** garantida pela regra e também pelo banco, com uma restrição de unicidade. Assim, nem um clique duplo grava duas decisões.",
+  "**Decisão definitiva:** a revisão não é alterada depois. A decisão registrada é o dado da pesquisa.",
+  "**Aceite calculado:** `aceitou_sugestao` é calculado comparando as duas notas, e não informado pela tela. Digitar a mesma nota sugerida também conta como aceite.",
+  "**Proteção contra aceite por engano:** na tela, o botão acionado pela tecla Enter é o de registrar outra nota. Clicar em aceitar com outra nota digitada é recusado, com uma mensagem que explica o que fazer.",
+]);
+h3("Na página da resposta");
+p("Cada correção mostra a nota sugerida e, ao lado, a nota final: \"Pendente\" até a decisão, depois a nota do professor, indicando se a sugestão foi aceita ou ajustada (por exemplo, \"Ajustada de 6,5 para 7,5 (+1)\"). O formulário de decisão fica no fim da correção, depois da análise por critério e do feedback, para que o professor leia a justificativa antes de decidir.");
+
+h2("4.12 Custo: app/metricas/precos.py");
 tabela(["Elemento", "O que faz"], [
   ["`Preco`", "Preços de um modelo: entrada, entrada em cache, gravação em cache e saída"],
   ["`carregar_tabela()`", "Lê `config/precos.toml` uma vez e guarda em memória"],
@@ -520,22 +538,32 @@ tabela(["Elemento", "O que faz"], [
   ["`calcular_custo(...)`", "Aplica a fórmula da seção 5.2; devolve vazio para modelo sem preço, em vez de inventar um valor"],
 ], [4, 6]);
 
-h2("4.12 Métricas na web: app/metricas/router.py");
+h2("4.13 Métricas na web: app/metricas/router.py e resumo.py");
+p("O módulo `resumo.py` calcula, direto do banco, os números previstos na especificação para a seção de Resultados.");
+tabela(["Número", "Como é calculado"], [
+  ["Taxa de falha por tipo", "Chamadas com falha divididas pelo total de chamadas do tipo"],
+  ["Custo médio por tipo", "Média de `custo_usd` das chamadas que consumiram tokens, inclusive as que falharam, porque também foram cobradas"],
+  ["Tempo médio por tipo", "Média de `latencia_ms` das chamadas com sucesso"],
+  ["Taxa de concordância", "Revisões com `aceitou_sugestao` verdadeiro divididas pelo total de revisões, no geral e por condição"],
+  ["Desvio médio", "Média de nota final menos nota sugerida; positivo indica que o professor deu mais que o modelo"],
+  ["Desvio absoluto médio", "Média do valor absoluto da diferença; mostra o tamanho do ajuste, sem que ajustes para cima e para baixo se anulem"],
+], [3, 7]);
 tabela(["Rota", "O que faz"], [
-  ["`GET /metricas`", "Página com as 200 requisições mais recentes"],
+  ["`GET /metricas`", "Resumo das chamadas por tipo, concordância por condição e as 200 requisições mais recentes"],
   ["`GET /metricas/exportar.csv`", "Arquivo CSV com todas as requisições e todos os campos, para análise (RF14)"],
+  ["`GET /metricas/revisoes.csv`", "Arquivo CSV com uma linha por revisão: resposta, origem, condição, prompt, nota sugerida, nota final, aceite e diferença"],
 ], [4, 6]);
 
-h2("4.13 Aplicação: app/main.py");
+h2("4.14 Aplicação: app/main.py");
 tabela(["Rota", "O que faz"], [
   ["`GET /`", "Página inicial, com o modelo configurado"],
   ["`GET /saude`", "Verificação rápida de que o servidor está no ar"],
 ], [4, 6]);
 
-h2("4.14 Requisição de teste: scripts/teste_requisicao.py");
+h2("4.15 Requisição de teste: scripts/teste_requisicao.py");
 p("Faz uma chamada real ao modelo com o prompt `teste_v1` e mostra no terminal os números gravados. É o critério de pronto da etapa 1. Resultado da primeira execução, em 16/10/2026: sucesso, 77 tokens de entrada, 14 de saída, custo de US$ 0,000294 e latência de 3.587 ms.");
 
-h2("4.15 Importador do ENEM: scripts/importar_enem.py");
+h2("4.16 Importador do ENEM: scripts/importar_enem.py");
 p("Baixa questões da API comunitária enem.dev, que cobre as provas de 2009 a 2023, e grava uma cópia congelada em `dados/enem/` com a data de acesso. A API é mantida por voluntários e pode mudar ou sair do ar; a cópia garante que a pesquisa saiba exatamente quais questões usou.");
 tabela(["Elemento", "O que faz"], [
   ["`buscar_questoes(ano, cliente)`", "Percorre todas as páginas da prova, respeitando o limite de uma requisição por segundo; para após cinco recusas seguidas"],
@@ -604,13 +632,14 @@ tabela(["Comando", "Para que serve"], [
 
 // ---------------------------------------------------------------------
 h1("6. Testes automatizados");
-p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 62 testes.");
+p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 81 testes.");
 tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_precos.py`", "Custo correto para o modelo em uso; preço de cache aplicado; nome com sufixo de versão; modelo desconhecido não gera custo inventado"],
   ["`tests/test_llm.py`", "Sucesso grava tokens, custo, latência, modelo e prompt; resposta sem formato válido vira falha com tokens; erro de rede vira falha com motivo; cliente sem novas tentativas automáticas"],
   ["`tests/test_app.py`", "Rota de verificação; página de métricas e exportação em CSV"],
   ["`tests/test_objetiva.py`", "Prompt montado com enunciado, alternativas e gabarito; correção v2 gravada e ligada à métrica; seis tipos de resposta inconsistente viram falha sem correção, incluindo tipo de erro na alternativa correta ou ausente nas incorretas; explicação antiga da v1 continua legível; resposta malformada; lista, detalhe e página inexistente; cadastro válido e inválido; geração pela página; falha exibida com o motivo"],
   ["`tests/test_discursiva.py`", "Trecho citado (seis casos, incluindo paráfrase e ordem invertida); prompt nas duas condições, sem vazar a resposta esperada; condição gravada na correção e na métrica; condição indisponível; sete tipos de saída inconsistente; critérios livres sem rubrica; cadastro válido e inválido; registro de resposta; correção pela página com nota como sugestão; falhas exibidas"],
+  ["`tests/test_revisao.py`", "Aceite e ajuste; mesma nota conta como aceite; nota fora do intervalo; segunda revisão recusada pela regra e pelo banco; correção sem nota; concordância e desvios por condição; resumo vazio sem divisão por zero; resumo de chamadas; formulário e ordem dos botões; erros da revisão; exportação das revisões"],
   ["`tests/test_importar_enem.py`", "Paginação; parada após recusas seguidas; exclusão de numeração fora da área e de repetidas; filtro de área e de imagens; montagem do enunciado; importação com gabarito e sem duplicar"],
 ], [3, 7]);
 
@@ -652,6 +681,8 @@ tabela(["Decisão", "Motivo"], [
   ["SQLite em vez de um servidor de banco", "Um usuário por vez; menos instalação e manutenção"],
   ["Resposta que contradiz o gabarito conta como falha", "Uma explicação incompatível com a decisão do professor é inutilizável, e a taxa de falha precisa refletir isso"],
   ["Um contrato por versão de prompt", "Explicações antigas continuam legíveis e comparáveis com as novas"],
+  ["Uma revisão por correção, sem edição posterior", "A decisão registrada é o dado da pesquisa; alterá-la depois comprometeria a medida de concordância"],
+  ["Aceite calculado pela comparação das notas", "Evita inconsistência entre o que a tela informa e as notas gravadas"],
   ["Mesmo prompt nas duas condições, mudando só o campo da resposta esperada", "A diferença entre as condições fica restrita ao insumo do professor, o que torna a comparação válida"],
   ["Trecho citado conferido na resposta do aluno", "Um trecho inventado é uma alucinação e tornaria o feedback enganoso"],
   ["Nota calculada pelos pesos da rubrica", "Torna a nota sugerida explicável e verificável pelo professor a partir da análise por critério"],
@@ -667,7 +698,8 @@ marcadores([
   "**Dados de fonte comunitária:** a API classificou questões na área errada e repetiu uma questão, o que mostra que os dados precisam de conferência. O gabarito e o enunciado das questões escolhidas devem ser conferidos com a prova e o gabarito oficiais do INEP, que são a fonte primária citada no artigo.",
   "**Categorias de tipo de erro:** foram definidas pelo autor do protótipo a partir dos erros comuns em questões de Ciências Humanas. No artigo, devem ser apresentadas como categorização própria ou fundamentadas em literatura sobre análise de distratores.",
   "**Tokens gravados em cache:** o cálculo supõe que esses tokens já estão incluídos no total de entrada, como acontece com os tokens lidos do cache. A suposição ainda deve ser confirmada na documentação da OpenAI; ela só afeta requisições que usam cache.",
-  "**Revisão duplicada:** a tabela `revisao_professor` ainda permite mais de uma revisão para a mesma correção. A restrição será incluída na etapa 4.",
+  "**Ancoragem:** o professor vê a nota sugerida antes de decidir, o que pode puxar a sua nota em direção à do modelo. A concordância medida é, portanto, a concordância nas condições de uso do sistema, e não uma comparação com uma correção independente. Isso deve ser declarado no artigo.",
+  "**Duas correções da mesma resposta:** se o mesmo avaliador revisar as duas condições de uma resposta, a segunda decisão é influenciada pela primeira. O protocolo da coleta com especialistas deve definir quem revisa qual condição.",
   "**Critérios sem rubrica:** quando o professor não informa rubrica, o modelo define os critérios a cada correção, e eles podem variar entre correções da mesma questão. Para comparar condições, o corpus deve usar questões com rubrica.",
   "**Geração na própria requisição da página:** o navegador espera a resposta do modelo, o que leva alguns segundos. É adequado para um usuário por vez; a execução em lote da etapa 5 roda por linha de comando.",
   "**Explicações anteriores:** a página mostra só a explicação mais recente. As anteriores continuam no banco e entram na análise.",
@@ -685,6 +717,7 @@ tabela(["Termo", "Significado"], [
   ["Cache de prompt", "Reaproveitamento, pela OpenAI, de trechos iniciais repetidos entre requisições, cobrados mais barato"],
   ["Commit", "Registro de um conjunto de mudanças no histórico do Git"],
   ["CSV", "Arquivo de texto com valores separados por vírgula, aberto por planilhas e pelo pandas"],
+  ["Concordância", "Proporção de correções em que o professor aceitou a nota sugerida pelo modelo"],
   ["Condição experimental", "Cada uma das formas de rodar a correção comparadas na pesquisa: com e sem resposta esperada"],
   ["Distrator", "Alternativa incorreta de uma questão objetiva, construída para parecer plausível"],
   ["Embeddings", "Representações numéricas do significado de um texto, usadas para medir semelhança"],
@@ -707,6 +740,7 @@ tabela(["Termo", "Significado"], [
 // ---------------------------------------------------------------------
 h1("10. Histórico de versões");
 tabela(["Data", "Versão", "Referência", "Mudança"], [
+  ["22/10/2026", "0.6", "pull request da etapa 4", "Aceite ou ajuste da nota com uma revisão por correção (restrição no banco e migração), proteção contra aceite por engano, concordância e desvios na página de métricas, exportação das revisões"],
   ["21/10/2026", "0.5", "pull request da etapa 3", "Módulo discursivo: contrato e conferência (incluindo trecho citado), prompt discursiva_v1, cadastro com rubrica e resposta esperada opcionais, respostas de alunos e correção nas duas condições"],
   ["20/10/2026", "0.4", "pull request da explicação v2", "Explicação com tipo de erro, elemento errado e como perceber sem o gabarito (prompt objetiva_v2); importador confere a numeração da área e remove repetidas; arquivo congelado corrigido para 38 questões"],
   ["19/10/2026", "0.3", "pull request da etapa 2", "Módulo objetivo: contrato de saída, conferência com o gabarito, prompt objetiva_v1, páginas de lista, cadastro, detalhe e geração da explicação"],
