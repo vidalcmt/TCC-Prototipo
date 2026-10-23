@@ -25,7 +25,8 @@ def revisao_da(sessao: Session, correcao_id: int) -> RevisaoProfessor | None:
 
 
 def registrar_revisao(
-    sessao: Session, correcao: Correcao, nota_final: float, comentario: str | None = None
+    sessao: Session, correcao: Correcao, nota_final: float, comentario: str | None = None,
+    usuario_id: int | None = None,
 ) -> RevisaoProfessor:
     """Grava a decisão do professor sobre uma correção.
 
@@ -43,6 +44,7 @@ def registrar_revisao(
 
     revisao = RevisaoProfessor(
         correcao_id=correcao.id,
+        usuario_id=usuario_id,
         nota_sugerida=correcao.nota_sugerida,
         nota_final=nota_final,
         aceitou_sugestao=abs(nota_final - correcao.nota_sugerida) <= TOLERANCIA,

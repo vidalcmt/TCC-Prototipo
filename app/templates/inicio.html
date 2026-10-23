@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% from "_macros.html" import nota_circulada, nota_pendente %}
+{% block titulo %}Início{% endblock %}
+{% block conteudo %}
+{% set usuario = request.state.usuario %}
+{% if senha_trocada %}<div class="aviso aviso-certo">Senha trocada. Use a nova senha nos próximos acessos.</div>{% endif %}
+<h1>{{ saudacao() }}, {{ usuario.nome.split()[0] }}.</h1>
+<p class="resumo">
+  {% if request.state.pendentes == 0 %}Nenhuma correção espera decisão agora.
+  {% elif request.state.pendentes == 1 %}1 correção espera a sua decisão.{% if fila %} Chegou {{ fila[0][0].criado_em|quando }}.{% endif %}
+  {% else %}{{ request.state.pendentes }} correções esperam a sua decisão. A mais antiga chegou {{ fila[0][0].criado_em|quando }}.{% endif %}
+</p>
+
+<div class="duas-colunas">
+  <div>
+    <section class="secao">
+      <h2 class="secao-titulo">Para revisar</h2>
+      <div class="pilha">
+        {% for c, s, q in fila %}
+        <a class="pilha-item" href="/respostas/{{ s.id }}#correcao-{{ c.id }}">
+          {{ nota_pendente() }}
+          <div>
+            <div class="titulo">Resposta {{ s.codigo_corpus or s.id }}, questão {{ q.id }}</div>
+            <div class="detalhe">{{ "Com" if c.usou_resposta_esperada else "Sem" }} resposta esperada. Nota sugerida: {{ c.nota_sugerida|num }} de {{ q.nota_maxima|num }}. Corrigida {{ c.criado_em|quando }}.</div>
+          </div>
+          <span class="acao">Revisar</span>
+        </a>
+        {% else %}
+        <p class="pilha-vazia">Tudo revisado. As próximas correções aparecem aqui.</p>
+        {% endfor %}
+      </div>
+      {% if request.state.pendentes > fila|length %}<p class="discreto" style="margin-top: 10px"><a href="/revisar">Ver todas as {{ request.state.pendentes }}</a></p>{% endif %}
+    </section>
+
+    <section class="secao">
+      <h2 class="secao-titulo">Revisadas recentemente</h2>
+      <div class="pilha">
+        {% for r, c, s, q, autor in recentes %}
+        <a class="pilha-item" href="/respostas/{{ s.id }}#correcao-{{ c.id }}">
+          {{ nota_circulada(r.nota_final) }}
+          <div>
+            <div class="titulo">Resposta {{ s.codigo_corpus or s.id }}, questão {{ q.id }}</div>
+            <div class="detalhe">
+              {{ "Com" if c.usou_resposta_esperada else "Sem" }} resposta esperada.
+              {% if r.aceitou_sugestao %}Sugestão aceita{% else %}Sugerida {{ r.nota_sugerida|num }}, ajustada para {{ r.nota_final|num }}{% endif %}{% if autor %} por {{ "você" if autor.id == usuario.id else autor.nome }}{% endif %}, {{ r.criado_em|quando }}.
+            </div>
+          </div>
+          <span class="acao">Ver</span>
+        </a>
+        {% else %}
+        <p class="pilha-vazia">Nenhuma revisão ainda.</p>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+
+  <aside>
+    <section class="secao">
+      <h2 class="secao-titulo">Começar</h2>
+      <div class="atalhos">
+        <a class="botao bloco" href="/questoes/nova-discursiva">Cadastrar discursiva</a>
+        <a class="botao contorno bloco" href="/questoes/nova">Cadastrar objetiva</a>
+        <a class="botao contorno bloco" href="/questoes">Ver questões</a>
+      </div>
+    </section>
+    <section class="secao">
+      <h2 class="secao-titulo">Últimos 7 dias</h2>
+      <p class="semana">
+        <strong>{{ semana.correcoes }} {{ "correção" if semana.correcoes == 1 else "correções" }}</strong> e
+        <strong>{{ semana.revisoes }} {{ "revisão" if semana.revisoes == 1 else "revisões" }}</strong>.
+        {% if semana.concordancia is not none %}
+        Concordância de <strong>{{ (semana.concordancia * 100)|round|int }}%</strong>,
+        com desvio médio de <strong>{{ ("%+.1f"|format(semana.desvio))|replace(".", ",") }}</strong> ponto.
+        {% endif %}
+        {% if usuario.eh_admin %}Custo de <strong>US$ {{ ("%.2f"|format(semana.custo))|replace(".", ",") }}</strong>.{% endif %}
+      </p>
+      {% if usuario.eh_admin %}<p class="semana"><a href="/metricas">Ver métricas</a></p>{% endif %}
+    </section>
+  </aside>
+</div>
+{% endblock %}

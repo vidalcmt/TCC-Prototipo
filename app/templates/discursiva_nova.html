@@ -5,7 +5,7 @@
 {% if erros %}
 <div class="aviso-erro">{% for e in erros %}<div>{{ e }}</div>{% endfor %}</div>
 {% endif %}
-<form method="post" action="/questoes/discursivas">
+<form class="formulario" method="post" action="/questoes/discursivas">
   <label for="enunciado">Enunciado</label>
   <textarea id="enunciado" name="enunciado" rows="7">{{ dados.get("enunciado", "") }}</textarea>
 

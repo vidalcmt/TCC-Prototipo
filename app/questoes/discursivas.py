@@ -10,8 +10,9 @@ from app.correcao.contratos import CONTRATO_POR_PROMPT
 from app.correcao.discursiva import CondicaoIndisponivel, gerar_correcao
 from app.database import obter_sessao
 from app.models import (
-    Correcao, CriterioRubrica, MetricaRequisicao, Questao, RespostaEsperada, RevisaoProfessor, Submissao,
+    Correcao, CriterioRubrica, MetricaRequisicao, Questao, RespostaEsperada, RevisaoProfessor, Submissao, Usuario,
 )
+from app.contas.sessao import verificar_limite_diario
 from app.questoes.cliente import obter_cliente_llm
 from app.templates_config import templates
 
@@ -166,8 +167,9 @@ def pagina_da_resposta(request: Request, resposta_id: int, falha: int | None = N
         revisao = sessao.scalars(
             select(RevisaoProfessor).where(RevisaoProfessor.correcao_id == c.id)
         ).first()
+        autor = sessao.get(Usuario, revisao.usuario_id) if revisao and revisao.usuario_id else None
         correcoes.append({
-            "correcao": c, "analise": analise, "metrica": metrica, "revisao": revisao,
+            "correcao": c, "analise": analise, "metrica": metrica, "revisao": revisao, "autor": autor,
             "erro": mensagem if erro_revisao == c.id else None,
         })
 
@@ -185,8 +187,11 @@ async def corrigir(request: Request, resposta_id: int, sessao: Session = Depends
     condicao = (await request.form()).get("condicao")
     if condicao not in ("com", "sem"):
         raise HTTPException(status_code=400, detail="Condição deve ser 'com' ou 'sem'.")
+    usuario = request.state.usuario
+    verificar_limite_diario(sessao, usuario)
     try:
-        resultado = gerar_correcao(sessao, submissao, condicao == "com", cliente=cliente)
+        resultado = gerar_correcao(sessao, submissao, condicao == "com", cliente=cliente,
+                                   usuario_id=usuario.id)
     except CondicaoIndisponivel as erro:
         raise HTTPException(status_code=400, detail=str(erro))
     if resultado.sucesso:

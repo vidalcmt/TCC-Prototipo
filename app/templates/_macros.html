@@ -1,0 +1,18 @@
+{% macro icone_marca() -%}
+<svg class="marca-icone" viewBox="0 0 28 28" aria-hidden="true"><rect class="folha" x="3" y="2" width="22" height="24" rx="3" stroke-width="1.6"/><path class="linhas" d="M7 9h14M7 14h14M7 19h8" stroke-width="1.6"/><path class="visto" d="M14 18.5l3.2 3.2 6.8-9.4" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+{%- endmacro %}
+
+{% macro nota_circulada(valor, grande=False) -%}
+<span class="nota-circulada{% if grande %} grande{% endif %}"><svg viewBox="0 0 56 48" aria-hidden="true"><path class="traco" d="M10 27C6 14 20 5 31 5c13 0 21 8 20 19-1 12-14 19-26 18C13 41 6 34 8 23" fill="none" stroke-width="2.2" stroke-linecap="round"/></svg>{{ valor|num }}</span>
+{%- endmacro %}
+
+{% macro nota_pendente() -%}
+<span class="nota-circulada pendente" aria-label="Nota pendente"><svg viewBox="0 0 56 48" aria-hidden="true"><ellipse class="traco" cx="28" cy="24" rx="24" ry="19" fill="none" stroke-width="1.6" stroke-dasharray="4 4"/></svg>?</span>
+{%- endmacro %}
+
+{% macro botao_tema() -%}
+<button type="button" class="botao-leve botao-tema" data-alternar-tema aria-pressed="false" aria-label="Usar tema escuro" title="Usar tema escuro">
+  <svg class="sol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8 6 18M18 6l1.8-1.8"/></svg>
+  <svg class="lua" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"/></svg>
+</button>
+{%- endmacro %}

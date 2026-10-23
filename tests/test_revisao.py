@@ -117,17 +117,6 @@ def test_resumo_de_requisicoes_por_tipo(sessao):
 
 # ---------- páginas ----------
 
-@pytest.fixture
-def cliente_web(fabrica_sessao):
-    def sessao_de_teste():
-        with fabrica_sessao() as s:
-            yield s
-
-    app.dependency_overrides[obter_sessao] = sessao_de_teste
-    yield TestClient(app)
-    app.dependency_overrides.clear()
-
-
 def pagina_com_correcao(fabrica_sessao):
     from app.correcao.contratos import AnaliseCriterio, CorrecaoDiscursiva
     with fabrica_sessao() as s:

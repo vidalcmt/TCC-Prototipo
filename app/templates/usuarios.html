@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block titulo %}Usuários{% endblock %}
+{% block conteudo %}
+{% set eu = request.state.usuario %}
+<h1>Usuários</h1>
+<p class="resumo">Quem pode entrar no sistema. Só administradores veem esta página.</p>
+
+{% if criada %}
+<div class="aviso aviso-certo" role="status">
+  <strong>Conta criada para {{ criada.usuario.nome }} ({{ criada.usuario.email }}).</strong>
+  <div>Senha provisória, que aparece só agora:</div>
+  <div class="senha-mostrada">{{ criada.senha_provisoria }}</div>
+  <div class="ajuda">Envie o e-mail e a senha para a pessoa por um canal seguro. No primeiro acesso, o sistema pede uma senha nova.</div>
+</div>
+{% endif %}
+{% if redefinida %}
+<div class="aviso aviso-certo" role="status">
+  <strong>Nova senha provisória para {{ redefinida.usuario.nome }}:</strong>
+  <div class="senha-mostrada">{{ redefinida.senha }}</div>
+  <div class="ajuda">A senha anterior deixou de valer. A pessoa troca esta no próximo acesso.</div>
+</div>
+{% endif %}
+{% if erro %}<div class="aviso-erro" role="alert">{{ erro }}</div>{% endif %}
+
+<div class="duas-colunas" style="grid-template-columns: minmax(0, 1fr) 340px">
+  <div>
+    <table>
+      <tr><th>Nome</th><th>Papel</th><th>Revisões</th><th>Situação</th><th></th></tr>
+      {% for u, revisoes in linhas %}
+      <tr>
+        <td><strong>{{ u.nome }}</strong>{% if u.id == eu.id %} <span class="discreto">(você)</span>{% endif %}<br><span class="discreto">{{ u.email }}</span></td>
+        <td>{{ papeis[u.papel] }}</td>
+        <td>{{ revisoes }}</td>
+        <td>
+          {% if not u.ativo %}<span class="discreto">Desativada</span>
+          {% elif u.ultimo_acesso is none %}<span class="discreto">Ainda não entrou</span>
+          {% elif u.precisa_trocar_senha %}<span class="discreto">Senha provisória</span>
+          {% else %}<span style="color: var(--certo); font-weight: 700">Ativa</span>{% endif %}
+          {% if u.ultimo_acesso %}<br><span class="discreto">Último acesso {{ u.ultimo_acesso|quando }}</span>{% endif %}
+        </td>
+        <td class="acoes-conta">
+          {% if u.id != eu.id %}
+          <form method="post" action="/usuarios/{{ u.id }}/redefinir-senha" data-pergunta="Gerar uma nova senha para {{ u.nome }}? A senha atual deixa de valer." onsubmit="return confirm(this.dataset.pergunta)"><button type="submit" class="secundario pequeno">Nova senha</button></form>
+          <form method="post" action="/usuarios/{{ u.id }}/situacao"{% if u.ativo %} data-pergunta="Desativar a conta de {{ u.nome }}? A pessoa sai do sistema na hora." onsubmit="return confirm(this.dataset.pergunta)"{% endif %}>
+            <input type="hidden" name="ativo" value="{{ '0' if u.ativo else '1' }}">
+            <button type="submit" class="secundario pequeno">{{ "Desativar" if u.ativo else "Reativar" }}</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  <aside>
+    <form class="formulario" method="post" action="/usuarios">
+      <h2 style="margin-top: 16px">Criar conta</h2>
+      <label for="nome">Nome</label>
+      <input id="nome" name="nome" type="text" value="{{ dados.get('nome', '') }}" required>
+      <label for="email">E-mail</label>
+      <input id="email" name="email" type="email" value="{{ dados.get('email', '') }}" required>
+      <label for="papel">Papel</label>
+      <select id="papel" name="papel">
+        {% for valor, rotulo in papeis.items() %}<option value="{{ valor }}"{% if dados.get('papel') == valor %} selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+      </select>
+      <p class="ajuda">Avaliadores cadastram questões, corrigem e revisam notas. Administradores também criam contas e veem métricas e custos.</p>
+      <p class="ajuda">O sistema gera uma senha provisória e mostra uma única vez, para você enviar à pessoa.</p>
+      <p style="margin-top: 16px"><button type="submit" class="bloco">Criar conta</button></p>
+    </form>
+  </aside>
+</div>
+{% endblock %}
