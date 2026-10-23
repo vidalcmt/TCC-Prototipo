@@ -3,7 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.correcao.contratos import AnaliseCriterio, CorrecaoDiscursiva, trecho_existe
+from app.correcao.contratos import AnaliseCriterioV2, CorrecaoDiscursivaV2, trecho_existe
 from app.correcao.discursiva import CondicaoIndisponivel, campos_do_prompt, gerar_correcao
 from app.database import obter_sessao
 from app.main import app
@@ -34,17 +34,20 @@ def criar_discursiva(sessao, com_resposta_esperada=True, com_rubrica=True):
     return q, s
 
 
-def saida(questao_id, usou=True, nota=8.0, nota_maxima=10.0, trecho="provocou o êxodo rural",
+def saida(questao_id, usou=True, nota=7.0, nota_maxima=10.0, trecho="provocou o êxodo rural",
           pesos=(4.0, 6.0)):
-    return CorrecaoDiscursiva(
+    """Critério 1 atendido e os demais parciais: com pesos 4 e 6, a nota é 4 + 3 = 7."""
+    return CorrecaoDiscursivaV2(
         questao_id=str(questao_id), usou_resposta_esperada=usou,
         analise_criterios=[
-            AnaliseCriterio(criterio=f"Critério {i}", peso=p, status="atendido" if i == 1 else "parcial",
-                            justificativa=f"Justificativa {i}.", trecho_citado=trecho if i == 1 else None)
+            AnaliseCriterioV2(criterio=f"Critério {i}", item=None, peso=p,
+                              status="atendido" if i == 1 else "parcial",
+                              justificativa=f"Justificativa {i}.", trecho_citado=trecho if i == 1 else None)
             for i, p in enumerate(pesos, start=1)
         ],
         feedback_elaborado="Você identificou bem a consequência; faltou explicar os cercamentos.",
         nota_sugerida=nota, nota_maxima=nota_maxima, confianca="alta",
+        motivo_confianca="A evidência de cada critério é clara.",
     )
 
 
@@ -97,7 +100,7 @@ def test_correcao_valida_grava_a_condicao_executada(sessao, usar):
     c = sessao.query(Correcao).one()
     m = sessao.query(MetricaRequisicao).one()
     assert c.usou_resposta_esperada is usar and m.usou_resposta_esperada is usar
-    assert c.submissao_id == s.id and c.nota_sugerida == 8.0 and c.prompt_versao == "discursiva_v1"
+    assert c.submissao_id == s.id and c.nota_sugerida == 7.0 and c.prompt_versao == "discursiva_v2"
     assert m.correcao_id == c.id and m.tipo_questao == "discursiva"
     # O texto do sistema também recebe a condição preenchida
     sistema = cliente.chamadas[0]["input"][0]["content"]
@@ -119,6 +122,8 @@ def test_condicao_com_resposta_esperada_exige_resposta_cadastrada(sessao):
     ({"trecho": "a crise do feudalismo"}, "não existe na resposta do aluno"),
     ({"pesos": (4.0, 3.0, 3.0)}, "a rubrica tem 2"),
     ({"pesos": (5.0, 5.0)}, "diferentes da rubrica"),
+    ({"nota": 8.0}, "não corresponde aos critérios"),
+    ({"nota": 7.2}, "não corresponde aos critérios"),
 ])
 def test_correcao_inconsistente_vira_falha_sem_gravar(sessao, dados, motivo):
     q, s = criar_discursiva(sessao)
@@ -133,7 +138,8 @@ def test_correcao_inconsistente_vira_falha_sem_gravar(sessao, dados, motivo):
 def test_sem_rubrica_aceita_criterios_definidos_pelo_modelo(sessao):
     q, s = criar_discursiva(sessao, com_rubrica=False)
     resultado = gerar_correcao(sessao, s, False,
-                               cliente=ClienteFalso(resposta_falsa(saida(q.id, usou=False, pesos=(3, 3, 4)))))
+                               cliente=ClienteFalso(resposta_falsa(saida(q.id, usou=False, nota=6.5,
+                                                                         pesos=(3, 3, 4)))))
     assert resultado.sucesso
 
 
