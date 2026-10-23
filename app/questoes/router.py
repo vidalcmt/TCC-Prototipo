@@ -10,6 +10,7 @@ from app.correcao.contratos import CONTRATO_POR_PROMPT, ROTULOS_TIPO_DE_ERRO
 from app.correcao.objetiva import gerar_explicacao
 from app.database import obter_sessao
 from app.models import Alternativa, Correcao, MetricaRequisicao, Questao
+from app.contas.sessao import verificar_limite_diario
 from app.questoes.cliente import obter_cliente_llm
 from app.questoes.discursivas import pagina_da_questao
 from app.templates_config import templates
@@ -113,12 +114,14 @@ def detalhe(request: Request, questao_id: int, falha: int | None = None,
 
 
 @router.post("/{questao_id}/explicar")
-def explicar(questao_id: int, sessao: Session = Depends(obter_sessao),
+def explicar(request: Request, questao_id: int, sessao: Session = Depends(obter_sessao),
              cliente: OpenAI | None = Depends(obter_cliente_llm)):
     questao = buscar_questao(sessao, questao_id)
     if questao.tipo != "objetiva":
         raise HTTPException(status_code=400, detail="Explicação de alternativas só existe em questões objetivas.")
-    resultado = gerar_explicacao(sessao, questao, cliente=cliente)
+    usuario = request.state.usuario
+    verificar_limite_diario(sessao, usuario)
+    resultado = gerar_explicacao(sessao, questao, cliente=cliente, usuario_id=usuario.id)
     if resultado.sucesso:
         return RedirectResponse(f"/questoes/{questao_id}", status_code=303)
     return RedirectResponse(

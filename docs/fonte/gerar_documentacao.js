@@ -106,8 +106,8 @@ function tabela(cabecalho, linhas, proporcoes) {
 // =====================================================================
 // CAPA
 // =====================================================================
-const VERSAO = "0.6";
-const DATA = "22/10/2026";
+const VERSAO = "0.7";
+const DATA = "23/10/2026";
 
 conteudo.push(new Paragraph({ spacing: { before: 2400 }, children: [] }));
 conteudo.push(new Paragraph({
@@ -165,8 +165,9 @@ tabela(
     ["Cadastro de questões objetivas e discursivas", "Reconhecimento de texto manuscrito (fase posterior, medida à parte)"],
     ["Explicação das alternativas das objetivas", "Treinamento ou ajuste fino de modelo próprio"],
     ["Feedback e nota sugerida nas discursivas, com e sem resposta esperada", "Acesso direto de alunos ao sistema"],
-    ["Tela de aceite ou ajuste da nota pelo professor", "Publicação em ambiente de produção"],
+    ["Tela de aceite ou ajuste da nota pelo professor", "Cadastro aberto: as contas são criadas pelo administrador"],
     ["Registro de métricas e exportação em CSV", ""],
+    ["Login com contas individuais, papéis e limite diário de chamadas", ""],
     ["Comparação com um método de similaridade de textos (baseline)", ""],
   ],
   [1, 1],
@@ -180,6 +181,8 @@ tabela(
     ["2", "Módulo objetivo", "Concluída em 19/10/2026; explicação v2 (tipo de erro) em 21/10/2026"],
     ["3", "Módulo discursivo", "Implementada em 21/10/2026; em teste pelo autor"],
     ["4", "Tela de aceite do professor", "Implementada em 22/10/2026; aguardando revisão"],
+    ["Apoio", "Login, contas, página inicial e novo visual com tema escuro", "Implementado em 23/10/2026; aguardando revisão"],
+    ["Apoio", "Publicação no Google Cloud", "Pendente; depende do login"],
     ["5", "Execução em lote e baseline", "Pendente"],
     ["6", "Análise e coleta com especialistas", "Pendente"],
   ],
@@ -196,6 +199,8 @@ tabela(
     ["Linguagem", "Python 3.11 ou superior", "As bibliotecas de comparação de textos em português usadas no baseline existem de forma madura em Python."],
     ["Servidor web", "FastAPI", "Leve, rápido de escrever e já conhecido pelo autor."],
     ["Páginas", "HTML gerado no servidor (Jinja2)", "Dispensa um projeto de interface separado, o que reduz o código no prazo disponível."],
+    ["Visual", "CSS próprio, sem biblioteca de componentes", "Poucas páginas; um arquivo de estilo com cores em variáveis permite o tema claro e o escuro sem dependência extra."],
+    ["Login", "Sessão em cookie assinado (Starlette) e senhas com scrypt", "Ambos vêm prontos com o FastAPI e com o Python; nenhuma biblioteca de autenticação a mais para manter."],
     ["Banco de dados", "SQLite", "Um único arquivo, sem servidor para instalar. Suficiente para um usuário por vez."],
     ["Acesso ao banco", "SQLAlchemy", "Permite trabalhar com as tabelas como classes Python, sem escrever SQL à mão."],
     ["Evolução do banco", "Alembic", "Registra cada mudança na estrutura das tabelas como uma migração versionada."],
@@ -221,15 +226,18 @@ h2("2.3 Estrutura de pastas");
 tabela(
   ["Caminho", "Conteúdo"],
   [
-    ["`app/main.py`", "Aplicação web: rotas da página inicial e de verificação"],
+    ["`app/main.py`", "Aplicação web: junta as rotas, aplica o login e trata os avisos de acesso"],
+    ["`app/inicio.py`", "Página inicial e lista de correções que esperam revisão"],
+    ["`app/contas/`", "Senhas (`senhas.py`), sessão e permissões (`sessao.py`), regras das contas (`servico.py`) e páginas de entrar, trocar senha e usuários (`router.py`)"],
     ["`app/config.py`", "Leitura das configurações do arquivo .env"],
     ["`app/database.py`", "Conexão com o banco e abertura de sessões"],
-    ["`app/models.py`", "Definição das oito tabelas do banco"],
+    ["`app/models.py`", "Definição das nove tabelas do banco"],
     ["`app/correcao/`", "Chamada ao modelo (`llm.py`), prompts (`prompts.py`), contratos de saída (`contratos.py`), explicação de objetivas (`objetiva.py`) e correção de discursivas (`discursiva.py`)"],
     ["`app/metricas/`", "Cálculo de custo (`precos.py`), números do artigo (`resumo.py`), página e exportações (`router.py`)"],
     ["`app/questoes/`", "Páginas de questões: lista dos dois tipos e objetivas (`router.py`), discursivas e respostas (`discursivas.py`), cliente do modelo para as rotas (`cliente.py`)"],
     ["`app/revisao/`", "Aceite ou ajuste da nota pelo professor: regra (`servico.py`) e rota (`router.py`)"],
-    ["`app/templates/`", "Páginas HTML"],
+    ["`app/templates/`", "Páginas HTML; `base.html` tem a barra de navegação e `_macros.html` os elementos repetidos, como a nota circulada"],
+    ["`app/static/`", "Estilo (`estilo.css`), script do tema e do menu (`app.js`) e fontes com as suas licenças"],
     ["`config/precos.toml`", "Preços por modelo, com fonte e data de acesso"],
     ["`prompts/`", "Prompts versionados e registro de mudanças"],
     ["`alembic/`", "Migrações do banco"],
@@ -244,7 +252,7 @@ tabela(
 
 // ---------------------------------------------------------------------
 h1("3. Modelo de dados");
-p("O banco tem oito tabelas, criadas pela migração inicial do Alembic. Duas delas existem por razão metodológica e não devem ser simplificadas: `revisao_professor`, que guarda a nota sugerida e a nota final lado a lado e permite calcular a concordância, e `metrica_requisicao`, que registra também as falhas, porque a taxa de falha é um resultado da pesquisa.");
+p("O banco tem nove tabelas. As oito primeiras foram criadas pela migração inicial do Alembic e a tabela `usuario` por uma migração própria, que também ligou revisões e chamadas ao usuário que as fez. Duas delas existem por razão metodológica e não devem ser simplificadas: `revisao_professor`, que guarda a nota sugerida e a nota final lado a lado e permite calcular a concordância, e `metrica_requisicao`, que registra também as falhas, porque a taxa de falha é um resultado da pesquisa.");
 tabela(
   ["Tabela", "Finalidade"],
   [
@@ -256,6 +264,7 @@ tabela(
     ["`correcao`", "Saída do modelo para uma submissão"],
     ["`revisao_professor`", "Decisão do professor sobre a nota sugerida"],
     ["`metrica_requisicao`", "Números de cada chamada ao modelo"],
+    ["`usuario`", "Pessoas que podem entrar no sistema, com papel e situação"],
   ],
   [3, 7],
 );
@@ -312,6 +321,7 @@ campos("correcao", [
 campos("revisao_professor", [
   ["`id`", "inteiro", "Identificador"],
   ["`correcao_id`", "inteiro", "Correção revisada; única, pois cada correção recebe no máximo uma revisão"],
+  ["`usuario_id`", "inteiro", "Quem decidiu (vazio nas revisões anteriores ao login)"],
   ["`nota_sugerida`", "decimal", "Cópia da nota do modelo no momento da revisão"],
   ["`nota_final`", "decimal", "Nota atribuída pelo professor"],
   ["`aceitou_sugestao`", "verdadeiro ou falso", "Calculado: as duas notas são iguais"],
@@ -321,6 +331,7 @@ campos("revisao_professor", [
 campos("metrica_requisicao", [
   ["`id`", "inteiro", "Identificador"],
   ["`correcao_id`", "inteiro", "Correção gerada (vazio quando a chamada falha)"],
+  ["`usuario_id`", "inteiro", "Quem pediu a chamada (vazio nas chamadas por linha de comando e nas anteriores ao login); usado no limite diário"],
   ["`tipo_questao`", "texto", "`objetiva` ou `discursiva`"],
   ["`usou_resposta_esperada`", "verdadeiro ou falso", "Condição experimental"],
   ["`modelo_solicitado`", "texto", "Nome pedido à API, por exemplo `gpt-6.1-sol`"],
@@ -337,6 +348,17 @@ campos("metrica_requisicao", [
   ["`motivo_falha`", "texto", "Descrição do erro, quando houver"],
   ["`criado_em`", "data e hora", "Momento da requisição, em UTC; documenta o período da coleta"],
 ]);
+campos("usuario", [
+  ["`id`", "inteiro", "Identificador"],
+  ["`nome`", "texto", "Nome exibido nas páginas e nas revisões"],
+  ["`email`", "texto", "Usado para entrar; único e guardado em minúsculas"],
+  ["`senha_resumo`", "texto", "Resumo criptográfico da senha (scrypt); a senha em si nunca é gravada"],
+  ["`papel`", "texto", "`admin` ou `avaliador`"],
+  ["`ativo`", "verdadeiro ou falso", "Conta desativada não entra e perde a sessão aberta"],
+  ["`precisa_trocar_senha`", "verdadeiro ou falso", "Verdadeiro enquanto a senha for a provisória"],
+  ["`criado_em`", "data e hora", "Momento da criação da conta"],
+  ["`ultimo_acesso`", "data e hora", "Último login com sucesso"],
+]);
 
 // ---------------------------------------------------------------------
 h1("4. Módulos e funções");
@@ -344,8 +366,9 @@ h1("4. Módulos e funções");
 h2("4.1 Configuração: app/config.py");
 tabela(["Elemento", "O que faz"], [
   ["`RAIZ`", "Caminho absoluto da pasta do projeto, usado para achar arquivos independentemente de onde o comando é rodado"],
-  ["`Configuracao`", "Lê `OPENAI_API_KEY`, `MODELO` e `DATABASE_URL` do arquivo .env, com valores padrão"],
-  ["`config`", "Instância única das configurações, importada pelos outros módulos"],
+  ["`Configuracao`", "Lê do arquivo .env a chave da API, o modelo, o banco e as opções de login listadas na seção 5.1, com valores padrão"],
+  ["`FUSO`", "Fuso usado nas datas exibidas e na virada do dia do limite diário: `America/Sao_Paulo`"],
+  ["`config`", "Instância única das configurações, importada pelos outros módulos. Sem `SECRET_KEY`, gera uma chave temporária e avisa no terminal"],
 ], [4, 6]);
 
 h2("4.2 Banco de dados: app/database.py");
@@ -384,6 +407,7 @@ tabela(["Parâmetro", "Significado"], [
   ["`usou_resposta_esperada`", "Condição experimental gravada na métrica"],
   ["`modelo`", "Permite trocar o modelo em um experimento; por padrão, o do .env"],
   ["`cliente`", "Permite usar um cliente falso nos testes"],
+  ["`usuario_id`", "Quem pediu a chamada, gravado na métrica"],
 ], [4, 6]);
 h3("Por que as novas tentativas automáticas estão desligadas");
 p("Por padrão, a biblioteca da OpenAI repete uma chamada que falhou até duas vezes, sem avisar. Com isso, a latência medida somaria várias tentativas e uma falha intermediária desapareceria dos dados. Com `max_retries=0`, cada linha de `metrica_requisicao` corresponde a exatamente uma tentativa. Quando for preciso tentar de novo, como na execução em lote, o código chama outra vez e a nova tentativa vira outra linha.");
@@ -555,9 +579,13 @@ tabela(["Rota", "O que faz"], [
 ], [4, 6]);
 
 h2("4.14 Aplicação: app/main.py");
-tabela(["Rota", "O que faz"], [
-  ["`GET /`", "Página inicial, com o modelo configurado"],
-  ["`GET /saude`", "Verificação rápida de que o servidor está no ar"],
+p("Junta as rotas de todos os módulos e define quem pode acessar cada grupo. Toda página exige login, com três exceções: `/entrar`, `/sair` e `/saude`, além dos arquivos de estilo e fontes. As métricas exigem o papel de administrador. A documentação automática que o FastAPI gera em `/docs` foi desligada, porque listaria todas as rotas para qualquer visitante.");
+tabela(["Situação", "O que o sistema faz"], [
+  ["Sem login", "Leva à página de entrar e, depois do login, volta para a página pedida"],
+  ["Senha provisória", "Leva à página de trocar senha antes de qualquer outra"],
+  ["Avaliador em página de administrador", "Mostra o aviso \"Página restrita\" (código 403)"],
+  ["Limite diário atingido", "Mostra o aviso \"Limite de hoje atingido\" (código 429), sem chamar o modelo"],
+  ["`GET /saude`", "Responde que o servidor está no ar; é usada pelo monitoramento da publicação"],
 ], [4, 6]);
 
 h2("4.15 Requisição de teste: scripts/teste_requisicao.py");
@@ -580,6 +608,68 @@ tabela(["Elemento", "O que faz"], [
 p("A conferência pela numeração foi incluída depois que a primeira importação, em 19/10/2026, trouxe como Ciências Humanas seis questões de outras áreas (30, 93, 96, 97, 98 e 153) e uma cópia repetida da questão 50. O arquivo congelado foi corrigido em 20/10/2026, mantendo a data de acesso original e registrando a correção no campo `correcoes` do próprio arquivo. Restaram 38 questões, numeradas de 47 a 90.");
 p("Questões com imagem ficam de fora por padrão porque exigiriam que o modelo interpretasse a imagem, o que acrescentaria uma variável que a pesquisa não quer medir neste momento. A opção `--com-imagens` desliga o filtro.");
 
+h2("4.17 Contas e login: app/contas/");
+p("O login existe para evitar acessos indevidos e custos indevidos quando o sistema for publicado. Não há cadastro aberto: o administrador cria cada conta, o sistema gera uma senha provisória e a pessoa a troca no primeiro acesso.");
+h3("Senhas: senhas.py");
+tabela(["Elemento", "O que faz"], [
+  ["`gerar_resumo(senha)`", "Calcula o resumo da senha com scrypt e um sal aleatório. Grava no formato `scrypt$n$r$p$sal$resumo`, que guarda também os parâmetros usados"],
+  ["`conferir(senha, gravado)`", "Recalcula o resumo com os parâmetros gravados e compara em tempo constante, para que a demora da comparação não revele quantos caracteres coincidem"],
+  ["`senha_provisoria()`", "Gera uma senha no formato `xxxx-xxxx-xxxx`, sem letras e números que se confundem, como l e 1"],
+  ["`problema_na_senha_nova(...)`", "Exige pelo menos 8 caracteres e confirmação igual"],
+], [4, 6]);
+p("Os parâmetros do scrypt (N = 2^17, r = 8, p = 1) são os mínimos recomendados pela OWASP. Cada cálculo usa cerca de 128 MB de memória e leva perto de meio segundo, o que torna caro adivinhar senhas a partir de uma cópia do banco. Esse custo só aparece no login e na troca de senha.");
+h3("Sessão e permissões: sessao.py");
+tabela(["Elemento", "O que faz"], [
+  ["`iniciar_sessao` e `encerrar_sessao`", "Gravam e apagam o usuário no cookie da sessão. O cookie é assinado com a `SECRET_KEY`: o navegador consegue lê-lo, mas não alterá-lo sem que o servidor perceba"],
+  ["`marca_da_senha(usuario)`", "Trecho do resumo da senha guardado no cookie. Quando a senha muda, a marca deixa de conferir e as sessões abertas em outros navegadores caem"],
+  ["`exigir_login`", "Confere a sessão em toda página protegida: usuário existente, ativo e com a marca certa. Também conta as correções que esperam revisão, número mostrado na barra de navegação"],
+  ["`exigir_admin`", "Igual a `exigir_login`, mas recusa quem não é administrador"],
+  ["`verificar_limite_diario(...)`", "Conta as chamadas ao modelo feitas pelo usuário desde a meia-noite de Brasília e recusa a próxima quando o limite é atingido"],
+  ["`ControleDeTentativas`", "Depois de 5 senhas erradas para o mesmo e-mail em 10 minutos, recusa novas tentativas até a janela passar, mesmo com a senha certa"],
+], [4, 6]);
+h3("Regras das contas: servico.py");
+tabela(["Elemento", "O que faz"], [
+  ["`criar_conta(...)`", "Valida nome, e-mail e papel, recusa e-mail repetido e devolve a conta com a senha provisória"],
+  ["`autenticar(...)`", "Confere e-mail e senha de conta ativa. Para um e-mail inexistente, faz o mesmo cálculo de uma conta real, para que o tempo de resposta não revele quais e-mails têm conta"],
+  ["`trocar_senha(...)` e `redefinir_senha(...)`", "A primeira é feita pela própria pessoa; a segunda, pelo administrador, gera nova senha provisória e invalida a anterior"],
+  ["`alterar_situacao(...)`", "Desativa ou reativa uma conta. O administrador não pode desativar a si mesmo, e o sistema mantém sempre pelo menos um administrador ativo"],
+], [4, 6]);
+h3("Páginas: router.py");
+tabela(["Rota", "O que faz"], [
+  ["`GET` e `POST /entrar`", "Página de login. Volta para a página pedida antes do login, só se ela for do próprio sistema, para que um link malicioso não redirecione a outro site"],
+  ["`POST /sair`", "Encerra a sessão"],
+  ["`GET` e `POST /trocar-senha`", "Troca de senha, obrigatória no primeiro acesso"],
+  ["`GET` e `POST /usuarios`", "Lista as contas e cria novas (só administrador). A senha provisória aparece uma única vez, logo após a criação"],
+  ["`POST /usuarios/{id}/redefinir-senha`", "Gera nova senha provisória, depois de confirmação na tela"],
+  ["`POST /usuarios/{id}/situacao`", "Desativa ou reativa a conta; desativar pede confirmação"],
+], [4, 6]);
+h3("Papéis");
+tabela(["Papel", "O que pode fazer"], [
+  ["Avaliador", "Cadastrar questões e respostas, pedir correções e explicações, aceitar ou ajustar notas"],
+  ["Administrador", "Tudo o que o avaliador faz, mais criar e gerenciar contas e ver métricas, custos e exportações"],
+], [3, 7]);
+
+h2("4.18 Página inicial: app/inicio.py");
+tabela(["Rota", "O que faz"], [
+  ["`GET /`", "Saudação, as cinco correções mais antigas que esperam decisão, as últimas revisões com quem decidiu, atalhos de cadastro e um resumo dos últimos 7 dias (o custo aparece só para administradores)"],
+  ["`GET /revisar`", "Todas as correções que esperam decisão, da mais antiga para a mais recente"],
+], [4, 6]);
+p("A fila mostra primeiro as correções mais antigas para que nenhuma fique esquecida. O número de correções pendentes também aparece na barra de navegação, ao lado de \"Para revisar\".");
+
+h2("4.19 Visual e tema escuro");
+p("O visual usa a metáfora da folha de prova corrigida: fundo claro como papel, azul de caneta nas ações e a nota final do professor escrita à mão e circulada em vermelho. A nota sugerida pelo modelo aparece em caixa tracejada, para que a diferença entre sugestão e nota final seja visível de relance.");
+tabela(["Elemento", "O que faz"], [
+  ["Cores em variáveis CSS", "Cada cor tem um nome (`--papel`, `--tinta`, `--caneta-azul`, `--caneta-vermelha` e outras). O tema escuro redefine só esses valores, sem duplicar o resto do estilo"],
+  ["Botão de tema", "Na barra de navegação e na página de entrar. Alterna entre claro e escuro e guarda a escolha no navegador. Sem escolha guardada, segue a preferência do sistema operacional"],
+  ["Script no início da página", "Aplica o tema antes de desenhar a página, o que evita um clarão branco ao abrir uma página no tema escuro"],
+  ["Fontes", "Atkinson Hyperlegible, desenhada para leitura por pessoas com baixa visão, nos textos; Caveat, manuscrita, só na nota circulada. As duas são servidas pelo próprio sistema, com as licenças em `app/static/fontes/`, sem depender de serviços externos"],
+  ["Celular", "Abaixo de 760 pixels de largura, os links da barra ficam num menu e as colunas passam a ser empilhadas"],
+  ["Datas", "Exibidas no horário de Brasília e, nas listas, de forma relativa (\"há 2 horas\", \"ontem\")"],
+], [4, 6]);
+
+h2("4.20 Primeiro administrador: scripts/criar_admin.py");
+p("Cria a primeira conta de administrador pela linha de comando, já que não existe cadastro aberto. A senha provisória aparece uma única vez no terminal e precisa ser trocada no primeiro acesso. As contas seguintes são criadas pela página Usuários.");
+
 // ---------------------------------------------------------------------
 h1("5. Configuração e execução");
 
@@ -589,6 +679,10 @@ tabela(["Variável", "Obrigatória", "Significado"], [
   ["`OPENAI_API_KEY`", "Sim", "Chave criada em platform.openai.com/api-keys"],
   ["`MODELO`", "Não", "Modelo usado; padrão `gpt-6.1-sol`. Trocar exige registrar no artigo"],
   ["`DATABASE_URL`", "Não", "Outro banco, sempre com caminho absoluto. Sem ela, usa `tcc.db` na raiz"],
+  ["`SECRET_KEY`", "Sim, fora do computador do autor", "Chave que assina o cookie de login. Sem ela, o sistema usa uma chave temporária e todos saem a cada reinício. O comando que gera uma está no `.env.example`"],
+  ["`COOKIE_SEGURO`", "Não", "`true` só com HTTPS, no servidor publicado: o navegador passa a enviar o cookie apenas por conexão criptografada"],
+  ["`LIMITE_CHAMADAS_DIA`", "Não", "Máximo de chamadas ao modelo por pessoa por dia; padrão 60"],
+  ["`NOME_SISTEMA`", "Não", "Nome exibido nas páginas; padrão Devolutiva"],
 ], [3, 2, 6]);
 
 h2("5.2 Tabela de preços");
@@ -615,6 +709,7 @@ numerada([
   "Instalar as dependências: `pip install -r requirements.txt`.",
   "Criar o .env: `Copy-Item .env.example .env` e colar a chave na linha `OPENAI_API_KEY`.",
   "Criar o banco: `alembic upgrade head`.",
+  "Criar o primeiro administrador: `python -m scripts.criar_admin --nome \"Seu Nome\" --email voce@exemplo.com`. Anotar a senha provisória mostrada.",
   "Testar a conexão: `python -m scripts.teste_requisicao`.",
 ]);
 p("Se o PowerShell bloquear a ativação do ambiente, rode antes `Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned`, que libera scripts só na janela atual.");
@@ -626,17 +721,19 @@ tabela(["Comando", "Para que serve"], [
   ["`alembic upgrade head`", "Aplicar mudanças novas na estrutura do banco"],
   ["`uvicorn app.main:app --reload`", "Subir o sistema em http://localhost:8000; as questões ficam em /questoes"],
   ["`pytest`", "Rodar os testes automatizados"],
+  ["`python -m scripts.criar_admin --nome ... --email ...`", "Criar uma conta de administrador pela linha de comando"],
   ["`python -m scripts.importar_enem --ano 2023 --area ciencias-humanas`", "Listar questões do ENEM em texto e congelar a cópia"],
   ["o mesmo comando com `--importar` no final", "Gravar também as questões no banco"],
 ], [5, 5]);
 
 // ---------------------------------------------------------------------
 h1("6. Testes automatizados");
-p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 81 testes.");
+p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 121 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
 tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_precos.py`", "Custo correto para o modelo em uso; preço de cache aplicado; nome com sufixo de versão; modelo desconhecido não gera custo inventado"],
   ["`tests/test_llm.py`", "Sucesso grava tokens, custo, latência, modelo e prompt; resposta sem formato válido vira falha com tokens; erro de rede vira falha com motivo; cliente sem novas tentativas automáticas"],
-  ["`tests/test_app.py`", "Rota de verificação; página de métricas e exportação em CSV"],
+  ["`tests/test_app.py`", "Rota de verificação pública; página de métricas e exportação em CSV"],
+  ["`tests/test_contas.py`", "Resumo de senha e parâmetros da OWASP; nenhuma rota aberta sem login (todas as rotas da aplicação são percorridas); volta à página pedida só se for interna; senha errada, conta desativada e bloqueio por tentativas; troca obrigatória da senha provisória e suas validações; troca de senha encerra outras sessões; avaliador sem acesso a métricas e usuários; criação de conta com senha provisória exibida uma vez; nova senha invalida a anterior; desativação derruba a sessão; regras do último administrador; revisão e chamada gravam quem fez; fila de revisão; limite diário sem chamar o modelo; datas relativas e saudação no horário de Brasília; nome com aspas exibido com segurança"],
   ["`tests/test_objetiva.py`", "Prompt montado com enunciado, alternativas e gabarito; correção v2 gravada e ligada à métrica; seis tipos de resposta inconsistente viram falha sem correção, incluindo tipo de erro na alternativa correta ou ausente nas incorretas; explicação antiga da v1 continua legível; resposta malformada; lista, detalhe e página inexistente; cadastro válido e inválido; geração pela página; falha exibida com o motivo"],
   ["`tests/test_discursiva.py`", "Trecho citado (seis casos, incluindo paráfrase e ordem invertida); prompt nas duas condições, sem vazar a resposta esperada; condição gravada na correção e na métrica; condição indisponível; sete tipos de saída inconsistente; critérios livres sem rubrica; cadastro válido e inválido; registro de resposta; correção pela página com nota como sugestão; falhas exibidas"],
   ["`tests/test_revisao.py`", "Aceite e ajuste; mesma nota conta como aceite; nota fora do intervalo; segunda revisão recusada pela regra e pelo banco; correção sem nota; concordância e desvios por condição; resumo vazio sem divisão por zero; resumo de chamadas; formulário e ordem dos botões; erros da revisão; exportação das revisões"],
@@ -689,6 +786,13 @@ tabela(["Decisão", "Motivo"], [
   ["Tipo de erro em categoria fechada", "Permite contar e comparar os tipos de erro na análise, o que um texto livre não permitiria"],
   ["Conferência da área pela numeração da prova", "A fonte comunitária classificou questões na área errada"],
   ["Explicação de objetiva ligada à questão, não a um aluno", "O RF02 pede a explicação de cada alternativa, que não depende de quem respondeu"],
+  ["Contas criadas pelo administrador, sem cadastro aberto", "O sistema chama uma API paga; só pessoas convidadas devem gerar custo"],
+  ["Sessão em cookie assinado, sem tabela de sessões", "Menos código e nenhuma tabela a limpar; a marca da senha no cookie permite derrubar sessões quando a senha muda ou a conta é desativada"],
+  ["scrypt da biblioteca padrão do Python", "Algoritmo recomendado pela OWASP para senhas, sem dependência extra"],
+  ["Limite diário de chamadas por pessoa", "Uma conta comprometida ou um uso por engano não consegue consumir o orçamento de um mês em um dia"],
+  ["Quem revisou e quem pediu a chamada gravados", "Permite separar os dados por avaliador na análise e conferir o uso de cada conta"],
+  ["Métricas e custos só para administradores", "Os avaliadores da coleta não precisam ver custos, e ver a concordância acumulada poderia influenciar as suas decisões"],
+  ["Fontes servidas pelo próprio sistema", "As páginas não dependem de serviços externos e não enviam dados de acesso a terceiros"],
 ], [4, 6]);
 
 h2("8.2 Limitações e pontos de atenção");
@@ -704,6 +808,9 @@ marcadores([
   "**Geração na própria requisição da página:** o navegador espera a resposta do modelo, o que leva alguns segundos. É adequado para um usuário por vez; a execução em lote da etapa 5 roda por linha de comando.",
   "**Explicações anteriores:** a página mostra só a explicação mais recente. As anteriores continuam no banco e entram na análise.",
   "**Latência e rede:** a latência inclui o tempo de rede do computador onde o sistema roda. Medições comparadas entre si devem vir da mesma máquina e conexão.",
+  "**Bloqueio por tentativas em memória:** a contagem de senhas erradas fica na memória do servidor e recomeça quando ele reinicia. É suficiente para um único servidor; com vários, precisaria ir para o banco.",
+  "**Limite diário conta também as falhas:** uma chamada que falhou também foi cobrada pela OpenAI, por isso entra na contagem.",
+  "**Chave de sessão:** sem `SECRET_KEY` no .env, cada reinício do servidor encerra todas as sessões. No servidor publicado, a chave é obrigatória e `COOKIE_SEGURO` deve estar ligado.",
 ]);
 
 // ---------------------------------------------------------------------
@@ -718,28 +825,38 @@ tabela(["Termo", "Significado"], [
   ["Commit", "Registro de um conjunto de mudanças no histórico do Git"],
   ["CSV", "Arquivo de texto com valores separados por vírgula, aberto por planilhas e pelo pandas"],
   ["Concordância", "Proporção de correções em que o professor aceitou a nota sugerida pelo modelo"],
+  ["Cookie", "Pequeno texto que o site guarda no navegador e que volta a cada página; aqui, identifica a sessão de login"],
   ["Condição experimental", "Cada uma das formas de rodar a correção comparadas na pesquisa: com e sem resposta esperada"],
   ["Distrator", "Alternativa incorreta de uma questão objetiva, construída para parecer plausível"],
   ["Embeddings", "Representações numéricas do significado de um texto, usadas para medir semelhança"],
   ["FastAPI", "Biblioteca Python para construir aplicações web"],
   ["HTR", "Reconhecimento de texto manuscrito (do inglês Handwritten Text Recognition)"],
+  ["HTTPS", "Conexão criptografada entre o navegador e o servidor"],
   ["JSON", "Formato de texto para dados estruturados em campos e valores"],
   ["Latência", "Tempo entre o envio da requisição e a chegada da resposta completa"],
   ["Migração", "Arquivo que descreve uma mudança na estrutura do banco e permite aplicá-la de forma repetível"],
+  ["OWASP", "Fundação aberta que publica guias de segurança para aplicações web"],
+  ["Papel", "Conjunto de permissões de uma conta: administrador ou avaliador"],
   ["Prompt", "Texto de instrução enviado ao modelo de linguagem"],
+  ["Resumo criptográfico", "Valor calculado a partir da senha do qual não se consegue voltar à senha; também chamado de hash"],
   ["Rubrica", "Lista de critérios de correção de uma questão discursiva, cada um com seu peso na nota"],
   ["Rota", "Endereço da aplicação web associado a uma ação, como `GET /questoes`, que lista as questões"],
   ["Pull request", "Pedido para incorporar uma branch à principal, com espaço para revisão e comentários"],
   ["Pydantic", "Biblioteca que valida se dados têm os campos e tipos esperados"],
+  ["Sal", "Valor aleatório misturado a cada senha antes do resumo, para que senhas iguais tenham resumos diferentes"],
   ["Saída estruturada", "Recurso da API que obriga o modelo a responder em JSON com um formato definido"],
+  ["scrypt", "Função de resumo de senhas que exige muito processamento e memória, o que torna caro adivinhar senhas"],
+  ["Sessão", "Período em que a pessoa fica conectada depois do login, sem digitar a senha de novo; aqui, até 12 horas"],
   ["SQLAlchemy", "Biblioteca que permite manipular tabelas do banco como classes Python"],
   ["SQLite", "Banco de dados guardado em um único arquivo, sem servidor"],
+  ["Tema", "Conjunto de cores das páginas: claro ou escuro"],
   ["Token", "Unidade de texto (em geral parte de uma palavra) usada pela API para contar e cobrar o uso"],
 ], [3, 7]);
 
 // ---------------------------------------------------------------------
 h1("10. Histórico de versões");
 tabela(["Data", "Versão", "Referência", "Mudança"], [
+  ["23/10/2026", "0.7", "pull request de login e visual", "Contas individuais criadas pelo administrador, senha provisória com troca obrigatória, papéis, bloqueio por tentativas, limite diário de chamadas, autoria de revisões e chamadas; página inicial com fila de revisão; novo visual com barra de navegação, tema claro e escuro e versão para celular"],
   ["22/10/2026", "0.6", "pull request da etapa 4", "Aceite ou ajuste da nota com uma revisão por correção (restrição no banco e migração), proteção contra aceite por engano, concordância e desvios na página de métricas, exportação das revisões"],
   ["21/10/2026", "0.5", "pull request da etapa 3", "Módulo discursivo: contrato e conferência (incluindo trecho citado), prompt discursiva_v1, cadastro com rubrica e resposta esperada opcionais, respostas de alunos e correção nas duas condições"],
   ["20/10/2026", "0.4", "pull request da explicação v2", "Explicação com tipo de erro, elemento errado e como perceber sem o gabarito (prompt objetiva_v2); importador confere a numeração da área e remove repetidas; arquivo congelado corrigido para 38 questões"],
@@ -756,6 +873,9 @@ marcadores([
   "OPENAI. Pricing. Disponível em: https://developers.openai.com/api/docs/pricing. Acesso em: 15 out. 2026.",
   "OPENAI. Structured model outputs. Disponível em: https://developers.openai.com/api/docs/guides/structured-outputs. Acesso em: 15 out. 2026.",
   "ENEM API. Documentação. Disponível em: https://docs.enem.dev/introduction. Acesso em: 16 out. 2026.",
+  "OWASP. Password Storage Cheat Sheet. Disponível em: https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html. Acesso em: 23 out. 2026.",
+  "PERCIVAL, C.; JOSEFSSON, S. RFC 7914: The scrypt Password-Based Key Derivation Function. IETF, 2016. Disponível em: https://www.rfc-editor.org/rfc/rfc7914. Acesso em: 23 out. 2026.",
+  "BRAILLE INSTITUTE. Atkinson Hyperlegible Font. Disponível em: https://www.brailleinstitute.org/freefont/. Acesso em: 23 out. 2026.",
 ]);
 
 // =====================================================================
