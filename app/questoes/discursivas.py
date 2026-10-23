@@ -7,10 +7,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.correcao.contratos import CONTRATO_POR_PROMPT
-from app.correcao.discursiva import CondicaoIndisponivel, gerar_correcao
+from app.correcao.discursiva import CondicaoIndisponivel, compor_resposta, gerar_correcao
 from app.database import obter_sessao
 from app.models import (
-    Correcao, CriterioRubrica, MetricaRequisicao, Questao, RespostaEsperada, RevisaoProfessor, Submissao, Usuario,
+    Correcao, CriterioRubrica, ItemQuestao, MetricaRequisicao, Questao, RespostaEsperada, RespostaItem,
+    RevisaoProfessor, Submissao, Usuario,
 )
 from app.contas.sessao import verificar_limite_diario
 from app.questoes.cliente import obter_cliente_llm
@@ -18,7 +19,8 @@ from app.templates_config import templates
 
 router = APIRouter(tags=["discursivas"])
 
-LINHAS_RUBRICA = 6
+LINHAS_RUBRICA = 8
+LETRAS_ITENS = "abcde"
 ORIGENS = {"": "Não informada", "autor": "Autor", "voluntario": "Voluntário", "especialista": "Especialista"}
 ROTULOS_STATUS = {"atendido": "Atendido", "parcial": "Parcial", "nao_atendido": "Não atendido"}
 
@@ -37,11 +39,14 @@ def _numero(texto: str | None) -> float | None:
 # Cadastro da questão (RF04)
 # ---------------------------------------------------------------------------
 
+def _contexto_do_formulario(dados: dict, erros: list[str]) -> dict:
+    return {"dados": dados, "erros": erros, "linhas": range(1, LINHAS_RUBRICA + 1), "letras": LETRAS_ITENS}
+
+
 @router.get("/questoes/nova-discursiva", response_class=HTMLResponse)
 def formulario(request: Request):
-    return templates.TemplateResponse(request, "discursiva_nova.html", {
-        "dados": {"nota_maxima": "10"}, "erros": [], "linhas": range(1, LINHAS_RUBRICA + 1),
-    })
+    return templates.TemplateResponse(request, "discursiva_nova.html",
+                                      _contexto_do_formulario({"nota_maxima": "10"}, []))
 
 
 @router.post("/questoes/discursivas", response_class=HTMLResponse)
@@ -55,9 +60,20 @@ async def cadastrar(request: Request, sessao: Session = Depends(obter_sessao)):
     if nota_maxima is None or nota_maxima <= 0:
         erros.append("Informe uma nota máxima maior que zero.")
 
+    # Itens: preenchidos em ordem, a partir do a, sem pular letras.
+    preenchidas = [letra for letra in LETRAS_ITENS if dados.get(f"item_{letra}")]
+    itens = {letra: ItemQuestao(letra=letra, enunciado=dados[f"item_{letra}"]) for letra in preenchidas}
+    if preenchidas and preenchidas != list(LETRAS_ITENS[:len(preenchidas)]):
+        faltando = next(letra for letra in LETRAS_ITENS if letra not in preenchidas)
+        erros.append(f"Itens: preencha em ordem, sem pular letras (falta o item {faltando}).")
+    elif len(preenchidas) == 1:
+        erros.append("Itens: uma questão com itens precisa de pelo menos dois. "
+                     "Para uma resposta única, deixe os itens em branco.")
+
     criterios = []
     for i in range(1, LINHAS_RUBRICA + 1):
         descricao, peso_texto = dados.get(f"criterio_{i}", ""), dados.get(f"peso_{i}", "")
+        letra = dados.get(f"criterio_item_{i}", "")
         if not descricao and not peso_texto:
             continue
         peso = _numero(peso_texto)
@@ -65,13 +81,14 @@ async def cadastrar(request: Request, sessao: Session = Depends(obter_sessao)):
             erros.append(f"Critério {i}: falta a descrição.")
         elif peso is None or peso <= 0:
             erros.append(f"Critério {i}: informe um peso maior que zero.")
+        elif letra and letra not in itens:
+            erros.append(f"Critério {i}: o item {letra} não foi preenchido.")
         else:
-            criterios.append(CriterioRubrica(descricao=descricao, peso=peso))
+            criterios.append(CriterioRubrica(descricao=descricao, peso=peso, item=itens.get(letra)))
 
     if erros:
-        return templates.TemplateResponse(request, "discursiva_nova.html", {
-            "dados": dados, "erros": erros, "linhas": range(1, LINHAS_RUBRICA + 1),
-        }, status_code=400)
+        return templates.TemplateResponse(request, "discursiva_nova.html",
+                                          _contexto_do_formulario(dados, erros), status_code=400)
 
     ano = dados.get("ano", "")
     questao = Questao(
@@ -81,6 +98,7 @@ async def cadastrar(request: Request, sessao: Session = Depends(obter_sessao)):
         fonte=dados.get("fonte") or "Cadastro manual",
         ano=int(ano) if ano.isdigit() else None,
         nota_maxima=nota_maxima,
+        itens=list(itens.values()),
         criterios=criterios,
     )
     if dados.get("resposta_esperada"):
@@ -135,12 +153,22 @@ def _submissao(sessao: Session, resposta_id: int) -> Submissao:
 async def registrar_resposta(request: Request, questao_id: int, sessao: Session = Depends(obter_sessao)):
     questao = _questao_discursiva(sessao, questao_id)
     dados = {chave: str(valor).strip() for chave, valor in (await request.form()).items()}
-    if not dados.get("resposta_aluno"):
-        raise HTTPException(status_code=400, detail="A resposta do aluno está vazia.")
+    if questao.itens:
+        # Um campo por item; item vazio é gravado como resposta em branco.
+        respostas = [RespostaItem(item=item, texto=dados.get(f"resposta_{item.letra}", ""))
+                     for item in questao.itens]
+        if not any(r.texto for r in respostas):
+            raise HTTPException(status_code=400, detail="A resposta do aluno está vazia em todos os itens.")
+        texto = compor_resposta([(r.item.letra, r.texto) for r in respostas])
+    else:
+        respostas, texto = [], dados.get("resposta_aluno", "")
+        if not texto:
+            raise HTTPException(status_code=400, detail="A resposta do aluno está vazia.")
     origem = dados.get("origem", "")
     submissao = Submissao(
         questao_id=questao.id,
-        resposta_aluno=dados["resposta_aluno"],
+        resposta_aluno=texto,
+        respostas_itens=respostas,
         codigo_corpus=dados.get("codigo_corpus") or None,
         origem=origem if origem in ORIGENS and origem else None,
     )
