@@ -106,7 +106,7 @@ function tabela(cabecalho, linhas, proporcoes) {
 // =====================================================================
 // CAPA
 // =====================================================================
-const VERSAO = "0.7";
+const VERSAO = "0.8";
 const DATA = "23/10/2026";
 
 conteudo.push(new Paragraph({ spacing: { before: 2400 }, children: [] }));
@@ -179,7 +179,7 @@ tabela(
   [
     ["1", "Esqueleto, banco de dados e medição", "Concluída em 16/10/2026"],
     ["2", "Módulo objetivo", "Concluída em 19/10/2026; explicação v2 (tipo de erro) em 21/10/2026"],
-    ["3", "Módulo discursivo", "Implementada em 21/10/2026; em teste pelo autor"],
+    ["3", "Módulo discursivo", "Implementada em 21/10/2026; versão 2 do prompt e questões com itens em 23/10/2026, após o teste piloto"],
     ["4", "Tela de aceite do professor", "Implementada em 22/10/2026; aguardando revisão"],
     ["Apoio", "Login, contas, página inicial e novo visual com tema escuro", "Implementado em 23/10/2026; aguardando revisão"],
     ["Apoio", "Publicação no Google Cloud", "Pendente; depende do login"],
@@ -231,7 +231,7 @@ tabela(
     ["`app/contas/`", "Senhas (`senhas.py`), sessão e permissões (`sessao.py`), regras das contas (`servico.py`) e páginas de entrar, trocar senha e usuários (`router.py`)"],
     ["`app/config.py`", "Leitura das configurações do arquivo .env"],
     ["`app/database.py`", "Conexão com o banco e abertura de sessões"],
-    ["`app/models.py`", "Definição das nove tabelas do banco"],
+    ["`app/models.py`", "Definição das onze tabelas do banco"],
     ["`app/correcao/`", "Chamada ao modelo (`llm.py`), prompts (`prompts.py`), contratos de saída (`contratos.py`), explicação de objetivas (`objetiva.py`) e correção de discursivas (`discursiva.py`)"],
     ["`app/metricas/`", "Cálculo de custo (`precos.py`), números do artigo (`resumo.py`), página e exportações (`router.py`)"],
     ["`app/questoes/`", "Páginas de questões: lista dos dois tipos e objetivas (`router.py`), discursivas e respostas (`discursivas.py`), cliente do modelo para as rotas (`cliente.py`)"],
@@ -252,7 +252,7 @@ tabela(
 
 // ---------------------------------------------------------------------
 h1("3. Modelo de dados");
-p("O banco tem nove tabelas. As oito primeiras foram criadas pela migração inicial do Alembic e a tabela `usuario` por uma migração própria, que também ligou revisões e chamadas ao usuário que as fez. Duas delas existem por razão metodológica e não devem ser simplificadas: `revisao_professor`, que guarda a nota sugerida e a nota final lado a lado e permite calcular a concordância, e `metrica_requisicao`, que registra também as falhas, porque a taxa de falha é um resultado da pesquisa.");
+p("O banco tem onze tabelas. As oito primeiras foram criadas pela migração inicial do Alembic, a tabela `usuario` por uma migração própria, que também ligou revisões e chamadas ao usuário que as fez, e as tabelas `item_questao` e `resposta_item` pela migração dos itens das discursivas. Duas delas existem por razão metodológica e não devem ser simplificadas: `revisao_professor`, que guarda a nota sugerida e a nota final lado a lado e permite calcular a concordância, e `metrica_requisicao`, que registra também as falhas, porque a taxa de falha é um resultado da pesquisa.");
 tabela(
   ["Tabela", "Finalidade"],
   [
@@ -260,6 +260,8 @@ tabela(
     ["`alternativa`", "As cinco alternativas de uma questão objetiva e qual é a correta"],
     ["`criterio_rubrica`", "Critérios de correção de uma discursiva, com peso (opcional)"],
     ["`resposta_esperada`", "Resposta de referência de uma discursiva (opcional)"],
+    ["`item_questao`", "Itens de uma discursiva (a, b, c), cada um com o seu comando (opcional)"],
+    ["`resposta_item`", "Resposta do aluno a cada item, em questão com itens"],
     ["`submissao`", "Resposta de um aluno ou do corpus a uma questão"],
     ["`correcao`", "Saída do modelo para uma submissão"],
     ["`revisao_professor`", "Decisão do professor sobre a nota sugerida"],
@@ -288,9 +290,16 @@ campos("alternativa", [
   ["`texto`", "texto", "Texto da alternativa"],
   ["`correta`", "verdadeiro ou falso", "Se é a alternativa correta"],
 ]);
+campos("item_questao", [
+  ["`id`", "inteiro", "Identificador"],
+  ["`questao_id`", "inteiro", "Questão a que pertence"],
+  ["`letra`", "texto", "De a a e; única dentro da questão"],
+  ["`enunciado`", "texto", "Comando do item"],
+]);
 campos("criterio_rubrica", [
   ["`id`", "inteiro", "Identificador"],
   ["`questao_id`", "inteiro", "Questão a que pertence"],
+  ["`item_id`", "inteiro", "Item a que o critério se refere; vazio em questão sem itens ou em critério que vale para a resposta inteira"],
   ["`descricao`", "texto", "O que o critério avalia"],
   ["`peso`", "decimal", "Peso do critério na nota"],
 ]);
@@ -301,11 +310,17 @@ campos("resposta_esperada", [
 campos("submissao", [
   ["`id`", "inteiro", "Identificador"],
   ["`questao_id`", "inteiro", "Questão respondida"],
-  ["`resposta_aluno`", "texto", "Resposta discursiva"],
+  ["`resposta_aluno`", "texto", "Resposta discursiva. Em questão com itens, o texto completo, com cada item identificado pela letra e os itens vazios marcados como \"(em branco)\""],
   ["`alternativa_escolhida`", "texto", "Letra escolhida, nas objetivas"],
   ["`codigo_corpus`", "texto", "Código anônimo da resposta no corpus, por exemplo `R014`"],
   ["`origem`", "texto", "`autor`, `voluntario` ou `especialista`; usada como variável de análise"],
   ["`criado_em`", "data e hora", "Momento do registro"],
+]);
+campos("resposta_item", [
+  ["`id`", "inteiro", "Identificador"],
+  ["`submissao_id`", "inteiro", "Resposta a que pertence"],
+  ["`item_id`", "inteiro", "Item respondido; único dentro da resposta"],
+  ["`texto`", "texto", "Resposta do aluno ao item; vazio quando o item ficou em branco"],
 ]);
 campos("correcao", [
   ["`id`", "inteiro", "Identificador"],
@@ -486,7 +501,7 @@ tabela(["Rota", "O que faz"], [
 p("A função `obter_cliente_llm` fornece o cliente do modelo às rotas. Nos testes, ela é trocada por um cliente falso, o que permite testar as páginas sem gastar crédito.");
 
 h2("4.8 Contrato de saída discursivo");
-p("Também em `app/correcao/contratos.py`, segue o formato da especificação. Os campos `trecho_citado` e `usou_resposta_esperada` existem por razão metodológica: o primeiro distingue feedback específico de feedback genérico, e a proporção de critérios com trecho citado é métrica de qualidade; o segundo separa as duas condições experimentais na análise.");
+p("Também em `app/correcao/contratos.py`. A versão 1 (`CorrecaoDiscursiva`) segue o formato da especificação; a versão 2 (`CorrecaoDiscursivaV2`), em uso, acrescenta os campos descritos adiante. Os campos `trecho_citado` e `usou_resposta_esperada` existem por razão metodológica: o primeiro distingue feedback específico de feedback genérico, e a proporção de critérios com trecho citado é métrica de qualidade; o segundo separa as duas condições experimentais na análise.");
 tabela(["Campo", "Conteúdo"], [
   ["`questao_id`", "Identificador da questão"],
   ["`usou_resposta_esperada`", "Condição em que a correção rodou"],
@@ -495,6 +510,12 @@ tabela(["Campo", "Conteúdo"], [
   ["`nota_sugerida`, `nota_maxima`", "Nota proposta e nota máxima da questão"],
   ["`confianca`", "baixa, media ou alta"],
 ], [3, 7]);
+h3("Campos acrescentados na versão 2");
+tabela(["Campo", "Conteúdo"], [
+  ["`analise_criterios[].item`", "Letra do item a que o critério se refere, ou nulo em questão sem itens e em critério que vale para a resposta inteira"],
+  ["`motivo_confianca`", "Uma frase com o motivo do nível de confiança"],
+], [3, 7]);
+p("Na versão 2, a análise por critério é dirigida ao professor e pode citar o conteúdo esperado, porque é com ela que o professor confere a nota. O feedback é dirigido ao aluno e não pode conter esse conteúdo. A confiança passou a medir só a certeza sobre a nota, e não a qualidade da resposta.");
 h3("Conferência da correção discursiva");
 p("A função `problemas_da_discursiva` recusa a correção, que então conta como falha, quando:");
 marcadores([
@@ -505,18 +526,35 @@ marcadores([
   "há rubrica e o número de critérios ou os pesos são diferentes dos do professor;",
   "algum trecho citado não existe na resposta do aluno.",
 ]);
-p("A função `trecho_existe` faz a última verificação. Ela ignora diferenças de maiúsculas, aspas e espaços e aceita trechos com reticências no meio, desde que cada parte exista na resposta e na mesma ordem. Uma paráfrase, ou um trecho inventado, é recusada.");
+p("Na versão 2, a correção também é recusada quando:");
+marcadores([
+  "um critério é ligado a um item que a questão não tem, ou a qualquer item numa questão sem itens;",
+  "há rubrica e os itens dos critérios são diferentes dos itens definidos pelo professor;",
+  "o trecho citado em um critério ligado a um item não existe na resposta daquele item. Assim, um trecho do item a não serve de evidência para o item c, e um item em branco não pode ter trecho citado;",
+  "a nota sugerida não corresponde à conta feita a partir dos pesos e dos status dos critérios. A função `nota_pelos_criterios` refaz a conta; quando o valor exato fica no meio de dois múltiplos de 0,5, os dois arredondamentos são aceitos.",
+]);
+p("A função `trecho_existe` confere os trechos citados. Ela ignora diferenças de maiúsculas, aspas e espaços e aceita trechos com reticências no meio, desde que cada parte exista na resposta e na mesma ordem. Uma paráfrase, ou um trecho inventado, é recusada.");
 
 h2("4.9 Correção discursiva: app/correcao/discursiva.py");
 tabela(["Elemento", "O que faz"], [
-  ["`PROMPT_DISCURSIVA`", "Prompt em uso: `discursiva`, versão 1"],
-  ["`campos_do_prompt(questao, submissao, usar)`", "Prepara enunciado, nota máxima, rubrica numerada com pesos, resposta esperada ou o aviso de que não há, resposta do aluno e a condição"],
+  ["`PROMPT_DISCURSIVA`", "Prompt em uso: `discursiva`, versão 2"],
+  ["`compor_resposta(pares)`", "Monta o texto completo de uma resposta por itens, com cada item identificado pela letra e os vazios marcados como \"(em branco)\""],
+  ["`campos_do_prompt(questao, submissao, usar)`", "Prepara enunciado, itens, nota máxima, rubrica numerada com pesos e itens, resposta esperada ou o aviso de que não há, resposta do aluno por item e a condição"],
   ["`gerar_correcao(sessao, submissao, usar)`", "Corrige a resposta em uma das duas condições, confere e grava a correção ligada à resposta e à métrica"],
   ["`CondicaoIndisponivel`", "Erro quando se pede a condição com resposta esperada para questão que não tem uma; nada é enviado ao modelo"],
 ], [4, 6]);
 p("Na condição sem resposta esperada, o texto da resposta esperada não é enviado de forma alguma; o campo recebe apenas o aviso de que ela não foi informada. As duas condições usam o mesmo prompt, e só o conteúdo dos campos muda, o que torna a comparação justa.");
-h3("Prompt discursiva_v1");
-p("O texto fica em `prompts/discursiva/v1.md`. Em resumo, ele instrui o modelo a:");
+h3("Prompt discursiva_v2 (em uso)");
+p("O texto fica em `prompts/discursiva/v2.md`. Ele foi escrito depois do teste piloto do autor com a questão 01 de História da Fuvest 2025, no qual a versão 1 mostrou quatro problemas causados pelas próprias regras do prompt.");
+tabela(["Problema observado na v1", "Causa na v1", "Regra na v2"], [
+  ["O feedback entregava a resposta (\"retome o conceito de Inquisição\")", "A regra 9 mandava indicar os conceitos e fatos que o aluno poderia mobilizar", "O feedback pode repetir o que o enunciado pede, que o aluno já conhece, mas não o conteúdo que atende ao pedido; orienta com trechos a reler e perguntas"],
+  ["O feedback cobrava conteúdo que o gabarito não pede (autoridades civis)", "A regra 9 mandava mostrar o caminho para a resposta completa, sem limite", "O feedback só cobra o que algum critério da rubrica exige; sem rubrica, só o que o enunciado pede"],
+  ["Confiança baixa numa resposta curta e claramente errada", "A regra 8 associava confiança baixa a resposta curta ou fora do tema, misturando qualidade da resposta e certeza da nota", "A confiança mede a certeza sobre a nota, com os três níveis definidos, e vem acompanhada de um motivo"],
+  ["A análise por critério revelava o gabarito", "Não era um erro: a análise é do professor. Faltava deixar isso explícito", "A saída declara dois leitores: a análise, para o professor, pode citar o conteúdo esperado; o feedback, para o aluno, não pode"],
+], [3, 3, 4]);
+p("A v2 também trata os itens: avalia a evidência de cada critério só na resposta do item indicado, considera não atendidos os critérios de um item em branco e organiza o feedback por item. Ela informa ao modelo que o sistema refaz a conta da nota.");
+h3("Prompt discursiva_v1 (substituído)");
+p("O texto fica em `prompts/discursiva/v1.md` e continua no repositório, porque as correções feitas com ele no teste piloto apontam para esta versão. Em resumo, ele instrui o modelo a:");
 marcadores([
   "com rubrica, avaliar exatamente os critérios e pesos do professor, na mesma ordem; sem rubrica, definir de 3 a 5 critérios;",
   "copiar literalmente o trecho da resposta do aluno que sustenta cada avaliação (RF06);",
@@ -527,14 +565,16 @@ marcadores([
 
 h2("4.10 Páginas de discursivas: app/questoes/discursivas.py");
 tabela(["Rota", "O que faz"], [
-  ["`GET /questoes/nova-discursiva`", "Formulário de cadastro: enunciado, nota máxima, resposta esperada e rubrica opcionais (RF04)"],
-  ["`POST /questoes/discursivas`", "Valida e grava. Linhas de rubrica vazias são ignoradas; linha só com critério ou só com peso é erro"],
-  ["`GET /questoes/{id}`", "Para questão discursiva: resposta esperada, rubrica, lista de respostas e formulário de nova resposta"],
-  ["`POST /questoes/{id}/respostas`", "Registra a resposta de um aluno com código anônimo e origem (RF05)"],
+  ["`GET /questoes/nova-discursiva`", "Formulário de cadastro: enunciado, itens, nota máxima, resposta esperada e rubrica opcionais (RF04)"],
+  ["`POST /questoes/discursivas`", "Valida e grava. Linhas de rubrica vazias são ignoradas; linha só com critério ou só com peso é erro. Itens devem ser preenchidos em ordem e ser pelo menos dois; um critério só pode apontar para um item preenchido"],
+  ["`GET /questoes/{id}`", "Para questão discursiva: itens, resposta esperada, rubrica com o item de cada critério, lista de respostas e formulário de nova resposta, com um campo por item quando houver"],
+  ["`POST /questoes/{id}/respostas`", "Registra a resposta de um aluno com código anônimo e origem (RF05). Em questão com itens, grava a resposta de cada item e o texto completo; pelo menos um item precisa estar preenchido"],
   ["`GET /respostas/{id}`", "Resposta do aluno, botões de correção nas duas condições e todas as correções já feitas, da mais recente para a mais antiga"],
   ["`POST /respostas/{id}/corrigir`", "Corrige na condição escolhida (`com` ou `sem`) e volta para a página da resposta"],
 ], [4, 6]);
-p("Na página da resposta, a nota aparece com o rótulo \"Nota sugerida pelo modelo\" e o aviso de que a nota final é do professor (RF07). Cada critério mostra o status, a justificativa e o trecho citado. Aceitar ou ajustar a nota é a etapa 4.");
+p("Na página da resposta, a nota aparece com o rótulo \"Nota sugerida pelo modelo\" e o aviso de que a nota final é do professor (RF07), junto com o nível e o motivo da confiança. A análise por critério leva o rótulo \"para o professor\" e o feedback, \"para o aluno\". Cada critério mostra o item, o status, a justificativa e o trecho citado. Em questão com itens, a resposta do aluno aparece item por item, com o comando de cada um. Aceitar ou ajustar a nota é a etapa 4.");
+h3("Questões com itens");
+p("Provas como a da Fuvest têm um texto-base e vários itens (a, b, c), cada um com o seu comando. O cadastro aceita até cinco itens, e a resposta do aluno tem um campo por item. A nota e a decisão do professor continuam valendo para a questão inteira, como na correção da Fuvest, que soma os itens. Ligar cada critério da rubrica a um item permite ao sistema conferir se o trecho citado veio da resposta certa.");
 
 h2("4.11 Revisão do professor: app/revisao/");
 p("Materializa os requisitos RF09 a RF11: a nota sugerida só vira nota final quando o professor a aceita ou informa outra, e as duas ficam gravadas lado a lado.");
@@ -728,14 +768,15 @@ tabela(["Comando", "Para que serve"], [
 
 // ---------------------------------------------------------------------
 h1("6. Testes automatizados");
-p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 121 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
+p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 146 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
 tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_precos.py`", "Custo correto para o modelo em uso; preço de cache aplicado; nome com sufixo de versão; modelo desconhecido não gera custo inventado"],
   ["`tests/test_llm.py`", "Sucesso grava tokens, custo, latência, modelo e prompt; resposta sem formato válido vira falha com tokens; erro de rede vira falha com motivo; cliente sem novas tentativas automáticas"],
   ["`tests/test_app.py`", "Rota de verificação pública; página de métricas e exportação em CSV"],
   ["`tests/test_contas.py`", "Resumo de senha e parâmetros da OWASP; nenhuma rota aberta sem login (todas as rotas da aplicação são percorridas); volta à página pedida só se for interna; senha errada, conta desativada e bloqueio por tentativas; troca obrigatória da senha provisória e suas validações; troca de senha encerra outras sessões; avaliador sem acesso a métricas e usuários; criação de conta com senha provisória exibida uma vez; nova senha invalida a anterior; desativação derruba a sessão; regras do último administrador; revisão e chamada gravam quem fez; fila de revisão; limite diário sem chamar o modelo; datas relativas e saudação no horário de Brasília; nome com aspas exibido com segurança"],
   ["`tests/test_objetiva.py`", "Prompt montado com enunciado, alternativas e gabarito; correção v2 gravada e ligada à métrica; seis tipos de resposta inconsistente viram falha sem correção, incluindo tipo de erro na alternativa correta ou ausente nas incorretas; explicação antiga da v1 continua legível; resposta malformada; lista, detalhe e página inexistente; cadastro válido e inválido; geração pela página; falha exibida com o motivo"],
-  ["`tests/test_discursiva.py`", "Trecho citado (seis casos, incluindo paráfrase e ordem invertida); prompt nas duas condições, sem vazar a resposta esperada; condição gravada na correção e na métrica; condição indisponível; sete tipos de saída inconsistente; critérios livres sem rubrica; cadastro válido e inválido; registro de resposta; correção pela página com nota como sugestão; falhas exibidas"],
+  ["`tests/test_itens.py`", "Cadastro com itens e critérios por item; itens fora de ordem, item único e critério ligado a item vazio; resposta com um campo por item e texto completo com itens em branco; prompt com e sem itens; trecho citado de outro item ou de item em branco; item inexistente ou diferente da rubrica; nota que não corresponde aos critérios, inclusive no empate; rótulos de professor e aluno e motivo da confiança na página; correção da v1 ainda legível"],
+  ["`tests/test_discursiva.py`", "Trecho citado (seis casos, incluindo paráfrase e ordem invertida); prompt nas duas condições, sem vazar a resposta esperada; condição gravada na correção e na métrica; condição indisponível; nove tipos de saída inconsistente, incluindo nota diferente da conta pelos critérios; critérios livres sem rubrica; cadastro válido e inválido; registro de resposta; correção pela página com nota como sugestão; falhas exibidas"],
   ["`tests/test_revisao.py`", "Aceite e ajuste; mesma nota conta como aceite; nota fora do intervalo; segunda revisão recusada pela regra e pelo banco; correção sem nota; concordância e desvios por condição; resumo vazio sem divisão por zero; resumo de chamadas; formulário e ordem dos botões; erros da revisão; exportação das revisões"],
   ["`tests/test_importar_enem.py`", "Paginação; parada após recusas seguidas; exclusão de numeração fora da área e de repetidas; filtro de área e de imagens; montagem do enunciado; importação com gabarito e sem duplicar"],
 ], [3, 7]);
@@ -784,6 +825,9 @@ tabela(["Decisão", "Motivo"], [
   ["Trecho citado conferido na resposta do aluno", "Um trecho inventado é uma alucinação e tornaria o feedback enganoso"],
   ["Nota calculada pelos pesos da rubrica", "Torna a nota sugerida explicável e verificável pelo professor a partir da análise por critério"],
   ["Tipo de erro em categoria fechada", "Permite contar e comparar os tipos de erro na análise, o que um texto livre não permitiria"],
+  ["Análise para o professor, feedback para o aluno", "O professor precisa ver o conteúdo esperado para conferir a nota; o aluno precisa ser orientado sem receber a resposta"],
+  ["Nota recalculada pelo sistema", "A nota sugerida precisa ser explicável pela análise; uma conta errada do modelo tornaria a nota inconsistente com a própria justificativa"],
+  ["Itens com resposta separada, mas nota por questão", "Permite conferir a evidência item a item sem mudar a unidade de análise da concordância, que continua sendo a questão"],
   ["Conferência da área pela numeração da prova", "A fonte comunitária classificou questões na área errada"],
   ["Explicação de objetiva ligada à questão, não a um aluno", "O RF02 pede a explicação de cada alternativa, que não depende de quem respondeu"],
   ["Contas criadas pelo administrador, sem cadastro aberto", "O sistema chama uma API paga; só pessoas convidadas devem gerar custo"],
@@ -804,6 +848,8 @@ marcadores([
   "**Tokens gravados em cache:** o cálculo supõe que esses tokens já estão incluídos no total de entrada, como acontece com os tokens lidos do cache. A suposição ainda deve ser confirmada na documentação da OpenAI; ela só afeta requisições que usam cache.",
   "**Ancoragem:** o professor vê a nota sugerida antes de decidir, o que pode puxar a sua nota em direção à do modelo. A concordância medida é, portanto, a concordância nas condições de uso do sistema, e não uma comparação com uma correção independente. Isso deve ser declarado no artigo.",
   "**Duas correções da mesma resposta:** se o mesmo avaliador revisar as duas condições de uma resposta, a segunda decisão é influenciada pela primeira. O protocolo da coleta com especialistas deve definir quem revisa qual condição.",
+  "**Feedback que entrega a resposta:** a regra da v2 reduz o problema, mas não há conferência automática possível, porque decidir se um texto revela a resposta exige interpretação. Convém incluir essa pergunta no instrumento dos especialistas e contar os casos na análise.",
+  "**Correções do teste piloto:** as correções feitas com a v1 continuam no banco e identificadas pela versão do prompt. A comparação entre condições deve usar apenas correções da mesma versão.",
   "**Critérios sem rubrica:** quando o professor não informa rubrica, o modelo define os critérios a cada correção, e eles podem variar entre correções da mesma questão. Para comparar condições, o corpus deve usar questões com rubrica.",
   "**Geração na própria requisição da página:** o navegador espera a resposta do modelo, o que leva alguns segundos. É adequado para um usuário por vez; a execução em lote da etapa 5 roda por linha de comando.",
   "**Explicações anteriores:** a página mostra só a explicação mais recente. As anteriores continuam no banco e entram na análise.",
@@ -839,6 +885,7 @@ tabela(["Termo", "Significado"], [
   ["Papel", "Conjunto de permissões de uma conta: administrador ou avaliador"],
   ["Prompt", "Texto de instrução enviado ao modelo de linguagem"],
   ["Resumo criptográfico", "Valor calculado a partir da senha do qual não se consegue voltar à senha; também chamado de hash"],
+  ["Item", "Parte de uma questão discursiva com comando próprio, identificada por letra (a, b, c), que compartilha o texto-base com as demais"],
   ["Rubrica", "Lista de critérios de correção de uma questão discursiva, cada um com seu peso na nota"],
   ["Rota", "Endereço da aplicação web associado a uma ação, como `GET /questoes`, que lista as questões"],
   ["Pull request", "Pedido para incorporar uma branch à principal, com espaço para revisão e comentários"],
@@ -856,6 +903,7 @@ tabela(["Termo", "Significado"], [
 // ---------------------------------------------------------------------
 h1("10. Histórico de versões");
 tabela(["Data", "Versão", "Referência", "Mudança"], [
+  ["23/10/2026", "0.8", "pull request dos itens e da discursiva_v2", "Questões discursivas com itens e resposta por item; prompt discursiva_v2 após o teste piloto (feedback sem entregar a resposta e limitado à rubrica, confiança com motivo, análise para o professor); conferência do item de cada critério, do trecho por item e da conta da nota"],
   ["23/10/2026", "0.7", "pull request de login e visual", "Contas individuais criadas pelo administrador, senha provisória com troca obrigatória, papéis, bloqueio por tentativas, limite diário de chamadas, autoria de revisões e chamadas; página inicial com fila de revisão; novo visual com barra de navegação, tema claro e escuro e versão para celular"],
   ["22/10/2026", "0.6", "pull request da etapa 4", "Aceite ou ajuste da nota com uma revisão por correção (restrição no banco e migração), proteção contra aceite por engano, concordância e desvios na página de métricas, exportação das revisões"],
   ["21/10/2026", "0.5", "pull request da etapa 3", "Módulo discursivo: contrato e conferência (incluindo trecho citado), prompt discursiva_v1, cadastro com rubrica e resposta esperada opcionais, respostas de alunos e correção nas duas condições"],
