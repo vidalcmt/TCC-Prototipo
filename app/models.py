@@ -55,7 +55,12 @@ class Questao(Base):
         back_populates="questao", cascade="all, delete-orphan", order_by="Alternativa.letra"
     )
     criterios: Mapped[list["CriterioRubrica"]] = relationship(
-        back_populates="questao", cascade="all, delete-orphan"
+        back_populates="questao", cascade="all, delete-orphan", order_by="CriterioRubrica.id"
+    )
+    # Itens de uma discursiva (a, b, c...), como nas provas da Fuvest. Vazio
+    # quando a questão tem uma resposta única.
+    itens: Mapped[list["ItemQuestao"]] = relationship(
+        back_populates="questao", cascade="all, delete-orphan", order_by="ItemQuestao.letra"
     )
     resposta_esperada: Mapped["RespostaEsperada | None"] = relationship(
         back_populates="questao", cascade="all, delete-orphan", uselist=False
@@ -74,6 +79,20 @@ class Alternativa(Base):
     questao: Mapped[Questao] = relationship(back_populates="alternativas")
 
 
+class ItemQuestao(Base):
+    """Um item de uma questão discursiva, com o seu próprio comando."""
+
+    __tablename__ = "item_questao"
+    __table_args__ = (UniqueConstraint("questao_id", "letra", name="uq_item_questao_letra"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    questao_id: Mapped[int] = mapped_column(ForeignKey("questao.id"))
+    letra: Mapped[str] = mapped_column(String(1))
+    enunciado: Mapped[str] = mapped_column(Text)
+
+    questao: Mapped[Questao] = relationship(back_populates="itens")
+
+
 class CriterioRubrica(Base):
     """Opcional: a questão discursiva pode ou não ter rubrica (RF04)."""
 
@@ -81,10 +100,14 @@ class CriterioRubrica(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     questao_id: Mapped[int] = mapped_column(ForeignKey("questao.id"))
+    # Item a que o critério se refere. Vazio em questão sem itens ou em
+    # critério que vale para a resposta inteira.
+    item_id: Mapped[int | None] = mapped_column(ForeignKey("item_questao.id"))
     descricao: Mapped[str] = mapped_column(Text)
     peso: Mapped[float] = mapped_column(Float, default=1.0)
 
     questao: Mapped[Questao] = relationship(back_populates="criterios")
+    item: Mapped["ItemQuestao | None"] = relationship()
 
 
 class RespostaEsperada(Base):
@@ -110,6 +133,30 @@ class Submissao(Base):
     codigo_corpus: Mapped[str | None] = mapped_column(String(50))
     origem: Mapped[str | None] = mapped_column(String(30))
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+
+    # Em questão com itens, a resposta de cada item fica aqui, e resposta_aluno
+    # guarda o texto completo, com os itens identificados pela letra.
+    respostas_itens: Mapped[list["RespostaItem"]] = relationship(
+        cascade="all, delete-orphan", order_by="RespostaItem.id"
+    )
+
+    def resposta_do_item(self, letra: str) -> str:
+        for r in self.respostas_itens:
+            if r.item.letra == letra:
+                return r.texto
+        return ""
+
+
+class RespostaItem(Base):
+    __tablename__ = "resposta_item"
+    __table_args__ = (UniqueConstraint("submissao_id", "item_id", name="uq_resposta_item"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    submissao_id: Mapped[int] = mapped_column(ForeignKey("submissao.id"))
+    item_id: Mapped[int] = mapped_column(ForeignKey("item_questao.id"))
+    texto: Mapped[str] = mapped_column(Text, default="")  # vazio: item em branco
+
+    item: Mapped[ItemQuestao] = relationship()
 
 
 class Correcao(Base):

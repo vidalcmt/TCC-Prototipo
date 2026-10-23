@@ -12,7 +12,17 @@
 </details>
 
 <h2>Resposta do aluno</h2>
+{% if questao.itens %}
+{% for item in questao.itens %}
+{% set texto = submissao.resposta_do_item(item.letra) %}
+<div class="resposta-item">
+  <div class="comando-item"><span class="letra-item">{{ item.letra }})</span> {{ item.enunciado }}</div>
+  <div class="enunciado">{% if texto %}{{ texto }}{% else %}<span class="discreto">Em branco.</span>{% endif %}</div>
+</div>
+{% endfor %}
+{% else %}
 <div class="enunciado">{{ submissao.resposta_aluno }}</div>
+{% endif %}
 
 {% if falha %}
 <div class="aviso-erro">
@@ -43,7 +53,7 @@
     <div class="nota-sugerida">
       <div class="rotulo">Nota sugerida pelo modelo</div>
       <div class="valor">{{ a.nota_sugerida|num }} <span class="de">de {{ a.nota_maxima|num }}</span></div>
-      <div class="discreto">É uma sugestão. A nota final é do professor. Confiança do modelo: {{ {"baixa": "baixa", "media": "média", "alta": "alta"}[a.confianca] }}.</div>
+      <div class="discreto">É uma sugestão. A nota final é do professor. Confiança do modelo: {{ {"baixa": "baixa", "media": "média", "alta": "alta"}[a.confianca] }}{% if a.motivo_confianca %}: {{ a.motivo_confianca }}{% else %}.{% endif %}</div>
     </div>
     {% if r %}
     <div class="nota-final">
@@ -64,10 +74,11 @@
     {% endif %}
   </div>
 
-  <h3>Análise por critério</h3>
+  <h3>Análise por critério <span class="leitor">para o professor</span></h3>
+  <p class="discreto">Pode citar o conteúdo esperado, para você conferir a nota. O aluno recebe só o feedback, mais abaixo.</p>
   {% for cr in a.analise_criterios %}
   <div class="criterio">
-    <div><strong>{{ cr.criterio }}</strong> <span class="discreto">(peso {{ cr.peso|num }})</span>
+    <div>{% if cr.item %}<span class="letra-item">{{ cr.item }})</span> {% endif %}<strong>{{ cr.criterio }}</strong> <span class="discreto">(peso {{ cr.peso|num }})</span>
       <span class="status status-{{ cr.status }}">{{ rotulos_status[cr.status] }}</span></div>
     <div class="explicacao">{{ cr.justificativa }}</div>
     {% if cr.trecho_citado %}
@@ -78,7 +89,7 @@
   </div>
   {% endfor %}
 
-  <h3>Feedback para o aluno</h3>
+  <h3>Feedback <span class="leitor">para o aluno</span></h3>
   <p style="white-space: pre-wrap">{{ a.feedback_elaborado }}</p>
 
   {% if not r %}
