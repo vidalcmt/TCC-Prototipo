@@ -36,7 +36,8 @@ modelo e versão do prompt desde a primeira requisição.
    pip install -r requirements.txt
    ```
 
-3. Copie `.env.example` para `.env` e coloque a sua chave da API da OpenAI.
+3. Copie `.env.example` para `.env`, coloque a sua chave da API da OpenAI e
+   gere uma `SECRET_KEY` (o comando está no próprio arquivo).
    O `.env` está no `.gitignore` e nunca deve ir para o GitHub.
 
 4. Crie o banco:
@@ -45,7 +46,17 @@ modelo e versão do prompt desde a primeira requisição.
    alembic upgrade head
    ```
 
-5. Faça uma requisição de teste (critério de pronto da etapa 1):
+5. Crie a primeira conta de administrador. A senha provisória aparece uma
+   única vez no terminal e precisa ser trocada no primeiro acesso:
+
+   ```bash
+   python -m scripts.criar_admin --nome "Seu Nome" --email voce@exemplo.com
+   ```
+
+   As demais contas são criadas pela página Usuários, dentro do sistema.
+   Não existe cadastro aberto.
+
+6. Faça uma requisição de teste (critério de pronto da etapa 1):
 
    ```bash
    python -m scripts.teste_requisicao
@@ -54,13 +65,13 @@ modelo e versão do prompt desde a primeira requisição.
    A saída mostra tokens, custo e latência. A mesma linha aparece na página de
    métricas.
 
-6. Suba o servidor e abra <http://localhost:8000>:
+7. Suba o servidor e abra <http://localhost:8000>:
 
    ```bash
    uvicorn app.main:app --reload
    ```
 
-7. Rode os testes (não gastam crédito, usam um cliente falso):
+8. Rode os testes (não gastam crédito, usam um cliente falso):
 
    ```bash
    pytest
@@ -72,6 +83,8 @@ modelo e versão do prompt desde a primeira requisição.
 app/
   main.py            aplicação FastAPI
   config.py          leitura do .env
+  inicio.py          página inicial e fila de revisão
+  contas/            login, senhas, papéis e limite diário
   database.py        conexão com o SQLite
   models.py          tabelas da especificação
   correcao/
@@ -83,6 +96,7 @@ app/
   questoes/          cadastro de questões (etapas 2 e 3)
   revisao/           tela de aceite do professor (etapa 4)
   templates/         páginas HTML
+  static/            estilo, fontes e script do tema claro/escuro
 config/precos.toml   preços por modelo, com fonte e data de acesso
 prompts/             prompts versionados e registro de mudanças
 alembic/             migrações do banco
@@ -100,6 +114,8 @@ tests/               testes automatizados
   `prompts/<nome>/v<N>.md` e uma entrada em `prompts/CHANGELOG.md`.
 - **Preço atualizado leva nova data de acesso** em `config/precos.toml`.
 - **A nota final só existe após a ação do professor** (RF11).
+- **Toda página exige login**, exceto `/entrar` e `/saude`. Métricas e
+  usuários são só para administradores.
 
 ## Acompanhamento
 
