@@ -8,7 +8,9 @@ antigas continuam aqui para que as correções já gravadas possam ser lidas.
 
 Campos com razão metodológica, que não devem ser removidos:
 - conceito_envolvido: permite agrupar erros por conceito na análise;
-- tipo_de_erro (v2): permite contar quais tipos de erro os distratores exploram;
+- tipo_de_erro (v2 e v3): permite contar quais tipos de erro os distratores exploram;
+- pista (v3): permite contar em quantas alternativas há uma pista de conteúdo
+  para eliminá-las;
 - trecho_citado (discursiva): distingue feedback específico de genérico, e a
   proporção de critérios com trecho citado é métrica de qualidade;
 - usou_resposta_esperada (discursiva): separa as duas condições experimentais.
@@ -135,6 +137,58 @@ class CorrecaoObjetivaV2(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Versão 3 (prompt objetiva_v3): explicação única, pista do enunciado e pista
+# para eliminar cada alternativa
+# ---------------------------------------------------------------------------
+
+class ExplicacaoAlternativaV3(BaseModel):
+    letra: Letra
+    correta: bool = Field(description="Verdadeiro apenas para a alternativa indicada como correta.")
+    tipo_de_erro: TipoDeErro | None = Field(
+        description=(
+            "Para alternativa incorreta, a natureza do erro: anacronismo, contexto_historico, "
+            "conceito_trocado, leitura_parcial, extrapolacao, causa_efeito, fato_incorreto, "
+            "nao_responde ou outro. Para a alternativa correta: null."
+        )
+    )
+    explicacao: str = Field(
+        description=(
+            "Em até duas frases. Para alternativa incorreta: o que está errado e por quê, numa só "
+            "passagem. Para a correta: por que ela é a resposta."
+        )
+    )
+    pista: str | None = Field(
+        description=(
+            "Só para alternativa incorreta, em uma frase: a pista de conteúdo que permite eliminá-la "
+            "sem saber a resposta, como um elemento de outra época, sistema ou conceito incompatível "
+            "com o enunciado. Null quando não houver uma pista assim, e sempre null na correta. Nunca "
+            "uma pista genérica de prova (tamanho, palavras absolutas, posição da letra)."
+        )
+    )
+    conceito_envolvido: str = Field(
+        description="Conceito central mobilizado pela alternativa, em 2 a 6 palavras."
+    )
+
+
+class CorrecaoObjetivaV3(BaseModel):
+    questao_id: str
+    alternativa_correta: Letra
+    pista_do_enunciado: str = Field(
+        description=(
+            "A palavra, expressão ou dado do enunciado que indica o caminho da resolução e o que ele "
+            "sinaliza, em até duas frases."
+        )
+    )
+    explicacoes: list[ExplicacaoAlternativaV3] = Field(
+        description="Uma explicação por alternativa, em ordem alfabética, de A até a última."
+    )
+    explicacao_correta: str = Field(
+        description="O caminho do enunciado até a resposta correta, em até quatro passos curtos."
+    )
+    nivel_dificuldade_estimado: Dificuldade
+
+
+# ---------------------------------------------------------------------------
 # Questão discursiva (prompt discursiva_v1)
 # ---------------------------------------------------------------------------
 
@@ -229,6 +283,7 @@ class CorrecaoDiscursivaV2(BaseModel):
 CONTRATO_POR_PROMPT: dict[str, type[BaseModel]] = {
     "objetiva_v1": CorrecaoObjetiva,
     "objetiva_v2": CorrecaoObjetivaV2,
+    "objetiva_v3": CorrecaoObjetivaV3,
     "discursiva_v1": CorrecaoDiscursiva,
     "discursiva_v2": CorrecaoDiscursivaV2,
 }
@@ -239,13 +294,15 @@ CONTRATO_POR_PROMPT: dict[str, type[BaseModel]] = {
 # ---------------------------------------------------------------------------
 
 def problemas_de_consistencia(
-    saida: CorrecaoObjetiva | CorrecaoObjetivaV2, questao_id: int, letras: list[str], gabarito: str
+    saida: CorrecaoObjetiva | CorrecaoObjetivaV2 | CorrecaoObjetivaV3,
+    questao_id: int, letras: list[str], gabarito: str,
 ) -> list[str]:
     """Confere a saída com a questão cadastrada. Lista vazia significa saída consistente.
 
     O formato já foi garantido pela API; aqui se verifica o conteúdo: a resposta
     não pode contrariar o gabarito informado pelo professor nem pular ou repetir
-    alternativas. Na versão 2, só as alternativas incorretas têm tipo de erro.
+    alternativas. Nas versões 2 e 3, só as alternativas incorretas têm tipo de
+    erro; na versão 3, a correta também não pode ter pista para eliminá-la.
     """
     problemas = []
     if saida.questao_id != str(questao_id):
@@ -261,7 +318,11 @@ def problemas_de_consistencia(
     if marcadas != [gabarito]:
         problemas.append(f"alternativas marcadas como corretas {marcadas}, esperado [{gabarito}]")
 
-    if isinstance(saida, CorrecaoObjetivaV2):
+    if isinstance(saida, CorrecaoObjetivaV3):
+        for e in saida.explicacoes:
+            if e.correta and e.pista is not None:
+                problemas.append(f"alternativa correta {e.letra} com pista para eliminá-la")
+    if isinstance(saida, (CorrecaoObjetivaV2, CorrecaoObjetivaV3)):
         for e in saida.explicacoes:
             if e.correta and e.tipo_de_erro is not None:
                 problemas.append(f"alternativa correta {e.letra} com tipo_de_erro {e.tipo_de_erro}")

@@ -191,6 +191,10 @@ td input[type=text] { padding: 6px 8px; }
 .conceito { font-size: 14px; color: var(--lapis); margin-top: 6px; }
 .explicacao { margin-top: 8px; }
 .explicacao.verificar { background: var(--caneta-azul-fundo); border-left: 3px solid var(--caneta-azul); padding: 8px 12px; border-radius: 4px; }
+.explicacao .tipo-erro { margin: 0 6px 0 0; vertical-align: 1px; }
+.pista { margin-top: 8px; background: var(--caneta-azul-fundo); border-left: 3px solid var(--caneta-azul); padding: 8px 12px; border-radius: 4px; }
+.pista-enunciado { margin: 16px 0 4px; background: var(--caneta-azul-fundo); border: 1px solid var(--caneta-azul); border-radius: 10px; padding: 12px 16px; }
+.pista-enunciado .rotulo { font-size: 13px; font-weight: 700; color: var(--caneta-azul); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
 .tipo-erro { display: inline-block; margin-top: 8px; font-size: 13px; font-weight: 700; padding: 1px 9px; border-radius: 10px; background: var(--atencao-fundo); color: var(--atencao); border: 1px solid var(--atencao-borda); }
 
 .acoes-correcao { margin: 20px 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }

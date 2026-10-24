@@ -15,12 +15,27 @@
 </div>
 {% endif %}
 
+{% if explicacao and explicacao.pista_do_enunciado %}
+<div class="pista-enunciado">
+  <div class="rotulo">Pista do enunciado</div>
+  <div>{{ explicacao.pista_do_enunciado }}</div>
+</div>
+{% endif %}
+
 <h2>Alternativas</h2>
 {% for a in questao.alternativas %}
 <div class="alternativa {% if a.correta %}correta{% endif %}">
   <strong>{{ a.letra }})</strong> {{ a.texto }}{% if a.correta %}<span class="selo">Gabarito</span>{% endif %}
   {% set e = por_letra.get(a.letra) %}
-  {% if e %}
+  {% if e and e.explicacao is defined %}
+  {# Versão 3: etiqueta do erro, explicação única e pista para eliminar #}
+  <div class="explicacao">
+    {% if e.tipo_de_erro %}<span class="tipo-erro">{{ rotulos_erro.get(e.tipo_de_erro, e.tipo_de_erro) }}</span>{% endif %}
+    {{ e.explicacao }}
+  </div>
+  {% if e.pista %}<div class="pista"><strong>Pista para eliminar:</strong> {{ e.pista }}</div>{% endif %}
+  <div class="conceito">{{ e.conceito_envolvido }}</div>
+  {% elif e %}
   {% if e.tipo_de_erro %}
   <div class="tipo-erro">{{ rotulos_erro.get(e.tipo_de_erro, e.tipo_de_erro) }}</div>
   {% endif %}
