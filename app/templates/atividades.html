@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block titulo %}Atividades{% endblock %}
+{% block conteudo %}
+<div class="cabecalho-pagina">
+  <div>
+    <h1>Atividades</h1>
+    <p class="resumo">Junte questões já cadastradas, ponha na ordem e imprima uma folha pronta para a turma.</p>
+  </div>
+</div>
+
+<div class="duas-colunas" style="grid-template-columns: minmax(0, 1fr) 320px">
+  <div>
+    {% if linhas %}
+    <div class="blocos">
+      {% for atividade, n, autor in linhas %}
+      <a class="bloco" href="/atividades/{{ atividade.id }}">
+        <div class="bloco-titulo">{{ atividade.titulo }}</div>
+        {% if atividade.turma %}<div class="bloco-turma">{{ atividade.turma }}</div>{% endif %}
+        <div class="bloco-rodape">
+          <span>{{ n }} {{ "questão" if n == 1 else "questões" }}</span>
+          <span>{{ atividade.criado_em|quando }}{% if autor %}, por {{ autor.nome.split()[0] }}{% endif %}</span>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="pilha-vazia">Nenhuma atividade ainda. Crie a primeira ao lado.</p>
+    {% endif %}
+  </div>
+
+  <aside>
+    <form class="formulario" method="post" action="/atividades">
+      <h2 style="margin-top: 0">Nova atividade</h2>
+      {% if erro %}<div class="aviso-erro" role="alert">{{ erro }}</div>{% endif %}
+      <label for="titulo">Título</label>
+      <input type="text" id="titulo" name="titulo" value="{{ dados.get('titulo', '') }}" placeholder="Ex.: Revisão de Geografia" required>
+      <label for="turma">Turma (opcional)</label>
+      <input type="text" id="turma" name="turma" value="{{ dados.get('turma', '') }}" placeholder="Ex.: 3º ano A">
+      <label for="instrucoes">Instruções para o aluno (opcional)</label>
+      <textarea id="instrucoes" name="instrucoes" rows="3" placeholder="Ex.: Responda a caneta. Duração: 50 minutos.">{{ dados.get('instrucoes', '') }}</textarea>
+      <p><button type="submit" class="bloco-largo">Criar atividade</button></p>
+    </form>
+  </aside>
+</div>
+{% endblock %}

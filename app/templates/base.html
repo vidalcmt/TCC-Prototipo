@@ -15,6 +15,7 @@
     <nav class="menu" aria-label="Principal" id="menu-principal">
       <a href="/"{% if caminho == "/" %} aria-current="page"{% endif %}>Início</a>
       <a href="/questoes"{% if caminho.startswith("/questoes") or caminho.startswith("/respostas") %} aria-current="page"{% endif %}>Questões</a>
+      <a href="/atividades"{% if caminho.startswith("/atividades") %} aria-current="page"{% endif %}>Atividades</a>
       <a href="/revisar"{% if caminho == "/revisar" %} aria-current="page"{% endif %}>Para revisar{% if request.state.pendentes %}<span class="contador" aria-label="{{ request.state.pendentes }} pendentes">{{ request.state.pendentes }}</span>{% endif %}</a>
       {% if usuario.eh_admin %}
       <a href="/metricas"{% if caminho.startswith("/metricas") %} aria-current="page"{% endif %}>Métricas</a>

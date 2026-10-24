@@ -1,0 +1,68 @@
+/* Folha de atividade em A4. Sempre clara, na tela e no papel. */
+@font-face { font-family: "Atkinson"; src: url("fontes/atkinson-hyperlegible-latin-400-normal.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Atkinson"; src: url("fontes/atkinson-hyperlegible-latin-700-normal.woff2") format("woff2"); font-weight: 700; font-display: swap; }
+
+@page { size: A4; margin: 15mm 16mm 16mm; }
+
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #E9EDF3; color: #111; }
+body { font-family: "Atkinson", system-ui, sans-serif; font-size: 11pt; line-height: 1.45; }
+
+/* Barra de controles, só na tela */
+.controles { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center;
+  padding: 10px 16px; background: #1A2540; color: #fff; font-size: 14px; }
+.controles a { color: #fff; }
+.controles button { font: inherit; font-weight: 700; border: 0; border-radius: 8px; padding: 8px 14px; background: #fff; color: #1A2540; cursor: pointer; }
+.controles select { font: inherit; border-radius: 6px; padding: 4px 6px; }
+.controles .dica { opacity: .8; }
+
+/* A folha */
+.folha { width: 210mm; min-height: 297mm; margin: 16px auto; padding: 15mm 16mm 16mm; background: #fff; box-shadow: 0 2px 12px rgba(0,0,0,.15); }
+
+.cabecalho { border: 1.5px solid #111; border-radius: 4px; padding: 3mm 4mm; margin-bottom: 5mm; }
+.cabecalho h1 { font-size: 15pt; margin: 0 0 1mm; }
+.cabecalho .turma { font-size: 10.5pt; }
+.campos { display: grid; grid-template-columns: 1fr 34mm 34mm 24mm; gap: 3mm; margin-top: 3mm; font-size: 10pt; }
+.campos div { border-bottom: 1px solid #111; padding-bottom: 1mm; min-height: 7mm; display: flex; align-items: flex-end; }
+.faixa-gabarito { margin-top: 2mm; font-weight: 700; font-size: 10pt; text-transform: uppercase; letter-spacing: .05em; }
+
+.instrucoes { white-space: pre-wrap; font-size: 10pt; margin: 0 0 5mm; padding: 2mm 3mm; background: #F2F4F7; border-left: 2px solid #111; }
+
+.resumo-gabarito { font-size: 10pt; margin: 0 0 5mm; }
+.resumo-gabarito span { display: inline-block; margin: 0 4mm 1mm 0; }
+
+.questao { margin: 0 0 6mm; }
+.questao-cabecalho { font-weight: 700; margin-bottom: 1.5mm; }
+.questao-cabecalho .valor { font-weight: 400; font-size: 9.5pt; color: #444; }
+.enunciado { white-space: pre-wrap; margin: 0 0 2mm; }
+
+.alternativas { list-style: none; padding: 0; margin: 0; break-inside: avoid; }
+.alternativas li { display: flex; gap: 2.5mm; margin: 1.2mm 0; align-items: flex-start; }
+.bolha { flex: 0 0 auto; width: 5.2mm; height: 5.2mm; border: 1.3px solid #111; border-radius: 50%; display: inline-flex;
+  align-items: center; justify-content: center; font-size: 8pt; font-weight: 700; margin-top: .3mm; }
+.alternativas li.correta .bolha { background: #111; color: #fff; }
+.alternativas li.correta .texto { font-weight: 700; }
+
+.item { margin: 2mm 0 3mm; break-inside: avoid; }
+.item-comando { margin-bottom: 1mm; }
+.item-comando .letra { font-weight: 700; }
+.linhas div { height: 8.5mm; border-bottom: 1px solid #9AA3B2; }
+
+.resposta-gabarito { border: 1px dashed #111; border-radius: 4px; padding: 2mm 3mm; margin: 1mm 0 2mm; font-size: 10pt; break-inside: avoid; }
+.resposta-gabarito .rotulo { font-weight: 700; font-size: 9pt; text-transform: uppercase; letter-spacing: .04em; }
+.resposta-gabarito .texto { white-space: pre-wrap; }
+.resposta-gabarito table { border-collapse: collapse; width: 100%; margin-top: 1mm; }
+.resposta-gabarito td { border-top: 1px solid #ccc; padding: .8mm 1mm; vertical-align: top; }
+.resposta-gabarito td.peso { width: 18mm; text-align: right; white-space: nowrap; }
+
+@media print {
+  html, body { background: #fff; }
+  .controles { display: none; }
+  .folha { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
+}
+
+@media screen and (max-width: 820px) {
+  .folha { width: auto; min-height: 0; margin: 8px; padding: 6mm; }
+  .campos { grid-template-columns: 1fr 1fr; }
+}

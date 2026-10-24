@@ -226,3 +226,37 @@ class MetricaRequisicao(Base):
     sucesso: Mapped[bool] = mapped_column(Boolean)
     motivo_falha: Mapped[str | None] = mapped_column(Text)
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+
+
+class Atividade(Base):
+    """Um conjunto de questões montado pelo professor para uma turma, que pode
+    ser impresso em folha A4. Não interfere na correção nem nas métricas."""
+
+    __tablename__ = "atividade"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    titulo: Mapped[str] = mapped_column(String(200))
+    turma: Mapped[str | None] = mapped_column(String(100))
+    instrucoes: Mapped[str | None] = mapped_column(Text)
+    usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuario.id"))
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+
+    itens: Mapped[list["AtividadeQuestao"]] = relationship(
+        back_populates="atividade", cascade="all, delete-orphan", order_by="AtividadeQuestao.ordem"
+    )
+
+
+class AtividadeQuestao(Base):
+    """Uma questão dentro de uma atividade, na posição definida pelo professor.
+    A mesma questão pode estar em várias atividades."""
+
+    __tablename__ = "atividade_questao"
+    __table_args__ = (UniqueConstraint("atividade_id", "questao_id", name="uq_atividade_questao"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    atividade_id: Mapped[int] = mapped_column(ForeignKey("atividade.id"))
+    questao_id: Mapped[int] = mapped_column(ForeignKey("questao.id"))
+    ordem: Mapped[int] = mapped_column(Integer)
+
+    atividade: Mapped[Atividade] = relationship(back_populates="itens")
+    questao: Mapped[Questao] = relationship()
