@@ -198,12 +198,16 @@ class MetricaRequisicao(Base):
     """Uma linha por chamada ao modelo, com sucesso ou falha (RF12).
 
     correcao_id fica vazio quando a chamada falha antes de gerar uma correção.
+    questao_id e submissao_id dizem de onde veio a chamada mesmo nas falhas,
+    o que permite ligar cada custo à questão e à resposta que o geraram.
     """
 
     __tablename__ = "metrica_requisicao"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     correcao_id: Mapped[int | None] = mapped_column(ForeignKey("correcao.id"))
+    questao_id: Mapped[int | None] = mapped_column(ForeignKey("questao.id"))
+    submissao_id: Mapped[int | None] = mapped_column(ForeignKey("submissao.id"))
     # Quem disparou a chamada; vazio em scripts e chamadas anteriores ao login.
     usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuario.id"))
     tipo_questao: Mapped[str | None] = mapped_column(String(20))

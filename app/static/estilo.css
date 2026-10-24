@@ -282,3 +282,9 @@ details summary { cursor: pointer; color: var(--caneta-azul); margin: 10px 0; fo
   table { display: block; overflow-x: auto; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+
+/* Origem das chamadas na página de métricas */
+td.origem { white-space: nowrap; }
+.so-estas { display: block; font-size: 12px; color: var(--lapis); }
+.rolagem { overflow-x: auto; }
+.sem-quebra { white-space: nowrap; }
