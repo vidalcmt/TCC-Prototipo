@@ -228,3 +228,4 @@ def test_metrica_da_v2_registra_tipo_e_prompt(sessao):
     _corrigir(sessao, q, s, saida_itens(q.id, nota=2.0))
     m = sessao.query(MetricaRequisicao).one()
     assert m.tipo_questao == "discursiva" and m.prompt_versao == "discursiva_v2"
+    assert m.questao_id == q.id and m.submissao_id == s.id
