@@ -106,7 +106,7 @@ function tabela(cabecalho, linhas, proporcoes) {
 // =====================================================================
 // CAPA
 // =====================================================================
-const VERSAO = "0.11";
+const VERSAO = "0.12";
 const DATA = "24/10/2026";
 
 conteudo.push(new Paragraph({ spacing: { before: 2400 }, children: [] }));
@@ -168,6 +168,7 @@ tabela(
     ["Tela de aceite ou ajuste da nota pelo professor", "Cadastro aberto: as contas são criadas pelo administrador"],
     ["Registro de métricas e exportação em CSV", ""],
     ["Login com contas individuais, papéis e limite diário de chamadas", ""],
+    ["Atividades montadas pelo professor, impressas em folha A4", ""],
     ["Comparação com um método de similaridade de textos (baseline)", ""],
   ],
   [1, 1],
@@ -231,11 +232,12 @@ tabela(
     ["`app/contas/`", "Senhas (`senhas.py`), sessão e permissões (`sessao.py`), regras das contas (`servico.py`) e páginas de entrar, trocar senha e usuários (`router.py`)"],
     ["`app/config.py`", "Leitura das configurações do arquivo .env"],
     ["`app/database.py`", "Conexão com o banco e abertura de sessões"],
-    ["`app/models.py`", "Definição das onze tabelas do banco"],
+    ["`app/models.py`", "Definição das treze tabelas do banco"],
     ["`app/correcao/`", "Chamada ao modelo (`llm.py`), prompts (`prompts.py`), contratos de saída (`contratos.py`), explicação de objetivas (`objetiva.py`) e correção de discursivas (`discursiva.py`)"],
     ["`app/metricas/`", "Cálculo de custo (`precos.py`), números do artigo (`resumo.py`), página e exportações (`router.py`)"],
     ["`app/questoes/`", "Páginas de questões: lista dos dois tipos e objetivas (`router.py`), discursivas e respostas (`discursivas.py`), cliente do modelo para as rotas (`cliente.py`)"],
     ["`app/revisao/`", "Aceite ou ajuste da nota pelo professor: regra (`servico.py`) e rota (`router.py`)"],
+    ["`app/atividades/`", "Atividades: montagem de conjuntos de questões e folha de impressão em A4 (`router.py`)"],
     ["`app/templates/`", "Páginas HTML; `base.html` tem a barra de navegação e `_macros.html` os elementos repetidos, como a nota circulada"],
     ["`app/static/`", "Estilo (`estilo.css`), script do tema e do menu (`app.js`) e fontes com as suas licenças"],
     ["`config/precos.toml`", "Preços por modelo, com fonte e data de acesso"],
@@ -252,7 +254,7 @@ tabela(
 
 // ---------------------------------------------------------------------
 h1("3. Modelo de dados");
-p("O banco tem onze tabelas. As oito primeiras foram criadas pela migração inicial do Alembic, a tabela `usuario` por uma migração própria, que também ligou revisões e chamadas ao usuário que as fez, e as tabelas `item_questao` e `resposta_item` pela migração dos itens das discursivas. Duas delas existem por razão metodológica e não devem ser simplificadas: `revisao_professor`, que guarda a nota sugerida e a nota final lado a lado e permite calcular a concordância, e `metrica_requisicao`, que registra também as falhas, porque a taxa de falha é um resultado da pesquisa.");
+p("O banco tem treze tabelas. As oito primeiras foram criadas pela migração inicial do Alembic, a tabela `usuario` por uma migração própria, que também ligou revisões e chamadas ao usuário que as fez, as tabelas `item_questao` e `resposta_item` pela migração dos itens das discursivas, e as tabelas `atividade` e `atividade_questao` pela migração das atividades. Duas delas existem por razão metodológica e não devem ser simplificadas: `revisao_professor`, que guarda a nota sugerida e a nota final lado a lado e permite calcular a concordância, e `metrica_requisicao`, que registra também as falhas, porque a taxa de falha é um resultado da pesquisa.");
 tabela(
   ["Tabela", "Finalidade"],
   [
@@ -262,6 +264,8 @@ tabela(
     ["`resposta_esperada`", "Resposta de referência de uma discursiva (opcional)"],
     ["`item_questao`", "Itens de uma discursiva (a, b, c), cada um com o seu comando (opcional)"],
     ["`resposta_item`", "Resposta do aluno a cada item, em questão com itens"],
+    ["`atividade`", "Conjunto de questões montado pelo professor para uma turma"],
+    ["`atividade_questao`", "Questões de uma atividade, na ordem escolhida"],
     ["`submissao`", "Resposta de um aluno ou do corpus a uma questão"],
     ["`correcao`", "Saída do modelo para uma submissão"],
     ["`revisao_professor`", "Decisão do professor sobre a nota sugerida"],
@@ -321,6 +325,20 @@ campos("resposta_item", [
   ["`submissao_id`", "inteiro", "Resposta a que pertence"],
   ["`item_id`", "inteiro", "Item respondido; único dentro da resposta"],
   ["`texto`", "texto", "Resposta do aluno ao item; vazio quando o item ficou em branco"],
+]);
+campos("atividade", [
+  ["`id`", "inteiro", "Identificador"],
+  ["`titulo`", "texto", "Nome da atividade, por exemplo \"Revisão de Geografia\""],
+  ["`turma`", "texto", "Turma a que se destina (opcional)"],
+  ["`instrucoes`", "texto", "Instruções impressas no topo da folha do aluno (opcional)"],
+  ["`usuario_id`", "inteiro", "Quem criou a atividade"],
+  ["`criado_em`", "data e hora", "Momento da criação"],
+]);
+campos("atividade_questao", [
+  ["`id`", "inteiro", "Identificador"],
+  ["`atividade_id`", "inteiro", "Atividade"],
+  ["`questao_id`", "inteiro", "Questão incluída; a mesma questão aparece no máximo uma vez em cada atividade, mas pode estar em várias atividades"],
+  ["`ordem`", "inteiro", "Posição da questão na folha"],
 ]);
 campos("correcao", [
   ["`id`", "inteiro", "Identificador"],
@@ -735,6 +753,29 @@ tabela(["Elemento", "O que faz"], [
 h2("4.20 Primeiro administrador: scripts/criar_admin.py");
 p("Cria a primeira conta de administrador pela linha de comando, já que não existe cadastro aberto. A senha provisória aparece uma única vez no terminal e precisa ser trocada no primeiro acesso. As contas seguintes são criadas pela página Usuários.");
 
+h2("4.21 Atividades e impressão: app/atividades/router.py");
+p("Permite ao professor montar uma atividade com questões já cadastradas, para uma turma, e imprimi-la numa folha A4 pronta, sem precisar formatar o material num editor de texto. É uma ferramenta de uso do professor: as atividades não entram na correção, nas métricas nem na análise da pesquisa.");
+tabela(["Rota", "O que faz"], [
+  ["`GET /atividades`", "Mostra as atividades em blocos, da mais recente para a mais antiga, com turma, número de questões e quem criou, e o formulário de nova atividade"],
+  ["`POST /atividades`", "Cria a atividade com título (obrigatório), turma e instruções"],
+  ["`GET /atividades/{id}`", "Questões da atividade em ordem, com botões para subir, descer e remover, e uma busca para adicionar questões, que esconde as que já estão na atividade e mostra até 20 resultados"],
+  ["`POST /atividades/{id}/questoes`", "Adiciona uma questão ao fim; a mesma questão não entra duas vezes. Depois volta para a mesma busca, para adicionar várias em sequência"],
+  ["`POST /atividades/{id}/questoes/{questao}/mover`", "Troca a questão de lugar com a anterior ou a seguinte"],
+  ["`POST /atividades/{id}/questoes/{questao}/remover`", "Tira a questão da atividade e renumera as demais. A questão continua cadastrada"],
+  ["`POST /atividades/{id}/editar` e `/excluir`", "Altera título, turma e instruções, ou apaga a atividade, depois de confirmação. Apagar a atividade não apaga as questões"],
+  ["`GET /atividades/{id}/imprimir`", "Folha pronta para imprimir ou salvar em PDF pelo navegador. Com `gabarito=1`, é a versão do professor; `linhas` define quantas linhas cada resposta discursiva recebe (5, 8, 12 ou 16; padrão 8)"],
+], [4, 6]);
+h3("O que sai na folha");
+tabela(["Parte", "Folha do aluno", "Folha com gabarito"], [
+  ["Cabeçalho", "Título, turma e campos para nome, turma, data e nota", "Título, turma e a indicação \"Gabarito, uso do professor\""],
+  ["Instruções", "Impressas logo abaixo do cabeçalho", "Omitidas"],
+  ["Resumo", "Não há", "Lista das objetivas com a letra correta, pelo número da questão na folha"],
+  ["Objetivas", "Enunciado e alternativas com um círculo para marcar", "A alternativa correta com o círculo preenchido e em negrito"],
+  ["Discursivas", "Enunciado, valor em pontos e linhas para a resposta, separadas por item quando houver", "Enunciado, itens, resposta esperada e rubrica com os pontos de cada critério"],
+], [2, 4, 4]);
+p("A folha usa uma folha de estilo própria (`app/static/impressao.css`), sempre clara, com o tamanho de página A4 definido para a impressão. Uma questão de alternativas e o bloco de cada item não são quebrados entre páginas. A barra de controles do topo da tela não sai na impressão.");
+p("Um layout padronizado de folha também prepara a fase posterior de reconhecimento de texto manuscrito: com as respostas sempre nas mesmas áreas da página, fica mais simples localizar cada resposta na imagem digitalizada.");
+
 // ---------------------------------------------------------------------
 h1("5. Configuração e execução");
 
@@ -793,7 +834,7 @@ tabela(["Comando", "Para que serve"], [
 
 // ---------------------------------------------------------------------
 h1("6. Testes automatizados");
-p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 161 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
+p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 172 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
 tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_precos.py`", "Custo correto para o modelo em uso; preço de cache aplicado; nome com sufixo de versão; modelo desconhecido não gera custo inventado"],
   ["`tests/test_llm.py`", "Sucesso grava tokens, custo, latência, modelo e prompt; resposta sem formato válido vira falha com tokens; erro de rede vira falha com motivo; cliente sem novas tentativas automáticas"],
@@ -803,6 +844,7 @@ tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_itens.py`", "Cadastro com itens e critérios por item; itens fora de ordem, item único e critério ligado a item vazio; resposta com um campo por item e texto completo com itens em branco; prompt com e sem itens; trecho citado de outro item ou de item em branco; item inexistente ou diferente da rubrica; nota que não corresponde aos critérios, inclusive no empate; rótulos de professor e aluno e motivo da confiança na página; correção da v1 ainda legível"],
   ["`tests/test_discursiva.py`", "Trecho citado (seis casos, incluindo paráfrase e ordem invertida); prompt nas duas condições, sem vazar a resposta esperada; condição gravada na correção e na métrica; condição indisponível; nove tipos de saída inconsistente, incluindo nota diferente da conta pelos critérios; critérios livres sem rubrica; cadastro válido e inválido; registro de resposta; correção pela página com nota como sugestão; falhas exibidas"],
   ["`tests/test_revisao.py`", "Aceite e ajuste; mesma nota conta como aceite; nota fora do intervalo; segunda revisão recusada pela regra e pelo banco; correção sem nota; concordância e desvios por condição; resumo vazio sem divisão por zero; resumo de chamadas; formulário e ordem dos botões; erros da revisão; exportação das revisões"],
+  ["`tests/test_atividades.py`", "Criação e título obrigatório; adicionar sem repetir, mover e remover com renumeração; busca que esconde as já incluídas; retorno só para dentro da atividade; editar e excluir sem apagar questões; folha do aluno com ordem, itens, alternativas e linhas; número de linhas; folha com gabarito, resumo das objetivas, resposta esperada e rubrica; acesso só com login"],
   ["`tests/test_lista_questoes.py`", "Páginas de 50 e página fora do intervalo; cada filtro, inclusive situação pendente e sem correção; filtros mantidos ao trocar de página; filtro sem resultado; opções dos filtros vindas do banco"],
   ["`tests/test_importar_enem.py`", "Paginação; parada após recusas seguidas; exclusão de numeração fora da área e de repetidas; filtro de área e de imagens; montagem do enunciado; importação com gabarito e sem duplicar"],
 ], [3, 7]);
@@ -862,6 +904,8 @@ tabela(["Decisão", "Motivo"], [
   ["Sessão em cookie assinado, sem tabela de sessões", "Menos código e nenhuma tabela a limpar; a marca da senha no cookie permite derrubar sessões quando a senha muda ou a conta é desativada"],
   ["scrypt da biblioteca padrão do Python", "Algoritmo recomendado pela OWASP para senhas, sem dependência extra"],
   ["Limite diário de chamadas por pessoa", "Uma conta comprometida ou um uso por engano não consegue consumir o orçamento de um mês em um dia"],
+  ["Impressão pelo navegador, sem gerar PDF no servidor", "O navegador já imprime e salva em PDF; gerar o arquivo no servidor exigiria uma dependência pesada sem ganho para o uso"],
+  ["Atividades visíveis a todas as contas", "No protótipo, os avaliadores trabalham sobre o mesmo corpus. Num produto, cada professor veria só as suas, o que exige apenas filtrar por `usuario_id`"],
   ["Origem gravada em toda chamada, inclusive nas falhas", "Permite saber quanto custou cada questão e cada resposta, e onde ocorreram as falhas, sem depender de uma correção gravada"],
   ["Quem revisou e quem pediu a chamada gravados", "Permite separar os dados por avaliador na análise e conferir o uso de cada conta"],
   ["Métricas e custos só para administradores", "Os avaliadores da coleta não precisam ver custos, e ver a concordância acumulada poderia influenciar as suas decisões"],
@@ -934,6 +978,7 @@ tabela(["Termo", "Significado"], [
 // ---------------------------------------------------------------------
 h1("10. Histórico de versões");
 tabela(["Data", "Versão", "Referência", "Mudança"], [
+  ["24/10/2026", "0.12", "pull request das atividades", "Atividades com questões em ordem, aba própria na barra de navegação e folha de impressão em A4 para o aluno e com gabarito"],
   ["24/10/2026", "0.11", "pull request da lista de questões", "Lista de questões com 50 por página e filtros por palavra no enunciado, número, tipo, área, origem, ano e situação"],
   ["24/10/2026", "0.10", "pull request das métricas com origem", "Cada chamada ao modelo ligada à questão e à resposta de origem, inclusive nas falhas; links e filtro por questão ou resposta na página de métricas, com custo somado; colunas novas na exportação"],
   ["24/10/2026", "0.9", "pull request da objetiva_v3", "Explicação das objetivas mais curta: explicação única por alternativa com etiqueta do tipo de erro, pista do enunciado e pista de conteúdo para eliminar alternativas (prompt objetiva_v3)"],
