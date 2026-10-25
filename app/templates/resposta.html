@@ -1,7 +1,8 @@
 {% extends "base.html" %}
+{% from "_macros.html" import nota_circulada %}
 {% block titulo %}Resposta {{ submissao.id }}{% endblock %}
 {% block conteudo %}
-<p><a href="/questoes/{{ questao.id }}">&larr; Voltar para a questão {{ questao.id }}</a></p>
+<a class="voltar" href="/questoes/{{ questao.id }}">&larr; Voltar para a questão {{ questao.id }}</a>
 <h1>Resposta {{ submissao.id }}{% if submissao.codigo_corpus %} <span class="discreto">({{ submissao.codigo_corpus }})</span>{% endif %}</h1>
 <p class="discreto">Origem: {{ origens.get(submissao.origem or "", submissao.origem) }}</p>
 
@@ -41,16 +42,16 @@
   <div class="notas">
     <div class="nota-sugerida">
       <div class="rotulo">Nota sugerida pelo modelo</div>
-      <div class="valor">{{ a.nota_sugerida|num }} <span>de {{ a.nota_maxima|num }}</span></div>
+      <div class="valor">{{ a.nota_sugerida|num }} <span class="de">de {{ a.nota_maxima|num }}</span></div>
       <div class="discreto">É uma sugestão. A nota final é do professor. Confiança do modelo: {{ {"baixa": "baixa", "media": "média", "alta": "alta"}[a.confianca] }}.</div>
     </div>
     {% if r %}
     <div class="nota-final">
       <div class="rotulo">Nota final do professor</div>
-      <div class="valor">{{ r.nota_final|num }} <span>de {{ a.nota_maxima|num }}</span></div>
+      <div class="valor">{{ nota_circulada(r.nota_final, grande=True) }} <span class="de">de {{ a.nota_maxima|num }}</span></div>
       <div class="discreto">
-        {% if r.aceitou_sugestao %}Sugestão aceita{% else %}Ajustada de {{ r.nota_sugerida|num }} para {{ r.nota_final|num }} ({{ "+" if r.nota_final > r.nota_sugerida else "" }}{{ (r.nota_final - r.nota_sugerida)|num }}){% endif %}
-        em {{ r.criado_em.strftime("%d/%m/%Y %H:%M") }} (UTC).
+        {% if r.aceitou_sugestao %}Sugestão aceita{% else %}Ajustada de {{ r.nota_sugerida|num }} para {{ r.nota_final|num }} ({{ "+" if r.nota_final > r.nota_sugerida else "" }}{{ (r.nota_final - r.nota_sugerida)|num }}){% endif %}{% if item.autor %} por {{ item.autor.nome }}{% endif %},
+        em {{ r.criado_em|data_local }}.
       </div>
       {% if r.comentario %}<div class="comentario">“{{ r.comentario }}”</div>{% endif %}
     </div>

@@ -117,17 +117,6 @@ def test_saida_malformada_vira_falha(sessao):
 
 # ---------- páginas ----------
 
-@pytest.fixture
-def cliente_web(fabrica_sessao):
-    def sessao_de_teste():
-        with fabrica_sessao() as s:
-            yield s
-
-    app.dependency_overrides[obter_sessao] = sessao_de_teste
-    yield TestClient(app)
-    app.dependency_overrides.clear()
-
-
 def test_lista_e_detalhe_mostram_a_questao_e_o_gabarito(fabrica_sessao, cliente_web):
     with fabrica_sessao() as s:
         qid = criar_questao(s).id

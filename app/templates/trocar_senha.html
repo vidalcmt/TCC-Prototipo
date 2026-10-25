@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block titulo %}Trocar senha{% endblock %}
+{% block classe_pagina %} estreita{% endblock %}
+{% block conteudo %}
+{% set usuario = request.state.usuario %}
+<h1>Trocar senha</h1>
+{% if usuario.precisa_trocar_senha %}
+<p class="resumo">Você entrou com uma senha provisória. Escolha uma senha sua para continuar.</p>
+{% else %}
+<p class="resumo">A nova senha passa a valer agora, e as sessões abertas em outros navegadores são encerradas.</p>
+{% endif %}
+<form class="formulario" method="post" action="/trocar-senha" style="max-width: 460px; margin-top: 24px">
+  {% if erro %}<div class="aviso-erro" role="alert">{{ erro }}</div>{% endif %}
+  <label for="senha_atual">Senha atual</label>
+  <input id="senha_atual" name="senha_atual" type="password" autocomplete="current-password" required>
+  <label for="nova">Nova senha</label>
+  <input id="nova" name="nova" type="password" autocomplete="new-password" minlength="8" required>
+  <p class="ajuda">Pelo menos 8 caracteres.</p>
+  <label for="confirmacao">Repita a nova senha</label>
+  <input id="confirmacao" name="confirmacao" type="password" autocomplete="new-password" required>
+  <p style="margin-top: 20px"><button type="submit">Salvar nova senha</button></p>
+</form>
+{% endblock %}

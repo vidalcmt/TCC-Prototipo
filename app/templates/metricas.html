@@ -46,13 +46,13 @@
 {% else %}
 <table>
   <tr>
-    <th>#</th><th>Quando (UTC)</th><th>Tipo</th><th>Modelo</th><th>Prompt</th>
+    <th>#</th><th>Quando</th><th>Tipo</th><th>Modelo</th><th>Prompt</th>
     <th>Entrada</th><th>Saída</th><th>Custo (US$)</th><th>Latência (ms)</th><th>Resultado</th>
   </tr>
   {% for m in metricas %}
   <tr>
     <td>{{ m.id }}</td>
-    <td>{{ m.criado_em.strftime("%d/%m %H:%M:%S") if m.criado_em }}</td>
+    <td>{{ m.criado_em|data_local("%d/%m %H:%M") }}</td>
     <td>{{ m.tipo_questao or "" }}{% if m.usou_resposta_esperada is not none %} ({{ "com" if m.usou_resposta_esperada else "sem" }}){% endif %}</td>
     <td>{{ m.modelo or m.modelo_solicitado }}</td>
     <td>{{ m.prompt_versao }}</td>

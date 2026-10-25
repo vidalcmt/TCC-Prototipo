@@ -19,6 +19,26 @@ def agora() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class Usuario(Base):
+    """Conta de acesso. Criada pelo administrador; não há cadastro aberto."""
+
+    __tablename__ = "usuario"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nome: Mapped[str] = mapped_column(String(120))
+    email: Mapped[str] = mapped_column(String(200), unique=True)
+    senha_resumo: Mapped[str] = mapped_column(String(200))
+    papel: Mapped[str] = mapped_column(String(20), default="avaliador")  # "admin" ou "avaliador"
+    ativo: Mapped[bool] = mapped_column(Boolean, default=True)
+    precisa_trocar_senha: Mapped[bool] = mapped_column(Boolean, default=True)
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+    ultimo_acesso: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    @property
+    def eh_admin(self) -> bool:
+        return self.papel == "admin"
+
+
 class Questao(Base):
     __tablename__ = "questao"
 
@@ -118,6 +138,8 @@ class RevisaoProfessor(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     correcao_id: Mapped[int] = mapped_column(ForeignKey("correcao.id"))
+    # Quem decidiu. Vazio nas revisões feitas antes do login existir.
+    usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuario.id"))
     nota_sugerida: Mapped[float] = mapped_column(Float)
     nota_final: Mapped[float] = mapped_column(Float)
     aceitou_sugestao: Mapped[bool] = mapped_column(Boolean)
@@ -135,6 +157,8 @@ class MetricaRequisicao(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     correcao_id: Mapped[int | None] = mapped_column(ForeignKey("correcao.id"))
+    # Quem disparou a chamada; vazio em scripts e chamadas anteriores ao login.
+    usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuario.id"))
     tipo_questao: Mapped[str | None] = mapped_column(String(20))
     usou_resposta_esperada: Mapped[bool | None] = mapped_column(Boolean)
     modelo_solicitado: Mapped[str] = mapped_column(String(100))

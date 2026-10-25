@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% from "_macros.html" import nota_pendente %}
+{% block titulo %}Para revisar{% endblock %}
+{% block conteudo %}
+<h1>Para revisar</h1>
+<p class="resumo">Correções com nota sugerida que ainda esperam a decisão de um professor, da mais antiga para a mais recente.</p>
+<div class="pilha" style="margin-top: 24px">
+  {% for c, s, q in fila %}
+  <a class="pilha-item" href="/respostas/{{ s.id }}#correcao-{{ c.id }}">
+    {{ nota_pendente() }}
+    <div>
+      <div class="titulo">Resposta {{ s.codigo_corpus or s.id }}, questão {{ q.id }}{% if q.fonte %} ({{ q.fonte }}){% endif %}</div>
+      <div class="detalhe">{{ "Com" if c.usou_resposta_esperada else "Sem" }} resposta esperada. Nota sugerida: {{ c.nota_sugerida|num }} de {{ q.nota_maxima|num }}. Corrigida {{ c.criado_em|quando }}.</div>
+    </div>
+    <span class="acao">Revisar</span>
+  </a>
+  {% else %}
+  <p class="pilha-vazia">Tudo revisado. Quando uma resposta for corrigida, a correção aparece aqui.</p>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block titulo %}Questão {{ questao.id }}{% endblock %}
 {% block conteudo %}
-<p><a href="/questoes">&larr; Voltar para a lista</a></p>
+<a class="voltar" href="/questoes">&larr; Voltar para as questões</a>
 <h1>Questão {{ questao.id }}</h1>
 <p class="discreto">{{ questao.fonte or "" }}{% if questao.area %} · {{ questao.area }}{% endif %}</p>
 

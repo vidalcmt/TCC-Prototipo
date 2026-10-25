@@ -139,17 +139,6 @@ def test_sem_rubrica_aceita_criterios_definidos_pelo_modelo(sessao):
 
 # ---------- páginas ----------
 
-@pytest.fixture
-def cliente_web(fabrica_sessao):
-    def sessao_de_teste():
-        with fabrica_sessao() as s:
-            yield s
-
-    app.dependency_overrides[obter_sessao] = sessao_de_teste
-    yield TestClient(app)
-    app.dependency_overrides.clear()
-
-
 def test_cadastro_com_rubrica_e_resposta_esperada(fabrica_sessao, cliente_web):
     form = {"enunciado": "Explique o êxodo rural.", "nota_maxima": "10,0",
             "resposta_esperada": "Migração do campo para a cidade.",

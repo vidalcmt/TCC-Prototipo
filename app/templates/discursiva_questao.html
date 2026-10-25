@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block titulo %}Questão {{ questao.id }}{% endblock %}
 {% block conteudo %}
-<p><a href="/questoes">&larr; Voltar para a lista</a></p>
+<a class="voltar" href="/questoes">&larr; Voltar para as questões</a>
 <h1>Questão {{ questao.id }} <span class="discreto">(discursiva)</span></h1>
 <p class="discreto">{{ questao.fonte or "" }}{% if questao.area %} · {{ questao.area }}{% endif %} · nota máxima {{ questao.nota_maxima|num }}</p>
 
@@ -46,17 +46,17 @@
 {% endif %}
 
 <h3>Registrar resposta de aluno</h3>
-<form method="post" action="/questoes/{{ questao.id }}/respostas">
+<form class="formulario" method="post" action="/questoes/{{ questao.id }}/respostas">
   <label for="resposta_aluno">Resposta</label>
   <textarea id="resposta_aluno" name="resposta_aluno" rows="6" required></textarea>
-  <div style="display: flex; gap: 16px">
+  <div class="lado-a-lado">
     <div style="flex: 1">
       <label for="codigo_corpus">Código no corpus (opcional)</label>
       <input type="text" id="codigo_corpus" name="codigo_corpus" placeholder="R014">
     </div>
     <div style="flex: 1">
       <label for="origem">Origem</label>
-      <select id="origem" name="origem" style="width: 100%; padding: 6px; font: inherit">
+      <select id="origem" name="origem">
         {% for valor, rotulo in origens.items() %}<option value="{{ valor }}">{{ rotulo }}</option>{% endfor %}
       </select>
     </div>
