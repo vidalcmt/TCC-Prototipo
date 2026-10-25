@@ -113,7 +113,8 @@
 
   {% if m %}
   <p class="discreto">Gerada por {{ m.modelo or m.modelo_solicitado }} com o prompt {{ m.prompt_versao }},
-    em {{ "%.1f"|format(m.latencia_ms / 1000) }} s, custo de US$ {{ "%.6f"|format(m.custo_usd) if m.custo_usd is not none else "?" }}.</p>
+    em {{ "%.1f"|format(m.latencia_ms / 1000) }} s, custo de US$ {{ "%.6f"|format(m.custo_usd) if m.custo_usd is not none else "?" }}.
+    {% if request.state.usuario.eh_admin %}<a href="/metricas?resposta={{ submissao.id }}#chamadas">Chamadas desta resposta</a>{% endif %}</p>
   {% endif %}
 </section>
 {% else %}

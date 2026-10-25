@@ -106,7 +106,7 @@ function tabela(cabecalho, linhas, proporcoes) {
 // =====================================================================
 // CAPA
 // =====================================================================
-const VERSAO = "0.9";
+const VERSAO = "0.10";
 const DATA = "24/10/2026";
 
 conteudo.push(new Paragraph({ spacing: { before: 2400 }, children: [] }));
@@ -346,6 +346,8 @@ campos("revisao_professor", [
 campos("metrica_requisicao", [
   ["`id`", "inteiro", "Identificador"],
   ["`correcao_id`", "inteiro", "Correção gerada (vazio quando a chamada falha)"],
+  ["`questao_id`", "inteiro", "Questão que originou a chamada, gravada também nas falhas. Nas chamadas antigas, preenchida a partir da correção; falhas antigas ficam sem origem"],
+  ["`submissao_id`", "inteiro", "Resposta do aluno que originou a chamada, nas discursivas"],
   ["`usuario_id`", "inteiro", "Quem pediu a chamada (vazio nas chamadas por linha de comando e nas anteriores ao login); usado no limite diário"],
   ["`tipo_questao`", "texto", "`objetiva` ou `discursiva`"],
   ["`usou_resposta_esperada`", "verdadeiro ou falso", "Condição experimental"],
@@ -423,6 +425,7 @@ tabela(["Parâmetro", "Significado"], [
   ["`modelo`", "Permite trocar o modelo em um experimento; por padrão, o do .env"],
   ["`cliente`", "Permite usar um cliente falso nos testes"],
   ["`usuario_id`", "Quem pediu a chamada, gravado na métrica"],
+  ["`questao_id`, `submissao_id`", "Origem da chamada, gravada na métrica antes do envio, para que também as falhas fiquem ligadas à questão e à resposta"],
 ], [4, 6]);
 h3("Por que as novas tentativas automáticas estão desligadas");
 p("Por padrão, a biblioteca da OpenAI repete uma chamada que falhou até duas vezes, sem avisar. Com isso, a latência medida somaria várias tentativas e uma falha intermediária desapareceria dos dados. Com `max_retries=0`, cada linha de `metrica_requisicao` corresponde a exatamente uma tentativa. Quando for preciso tentar de novo, como na execução em lote, o código chama outra vez e a nova tentativa vira outra linha.");
@@ -635,7 +638,7 @@ tabela(["Número", "Como é calculado"], [
   ["Desvio absoluto médio", "Média do valor absoluto da diferença; mostra o tamanho do ajuste, sem que ajustes para cima e para baixo se anulem"],
 ], [3, 7]);
 tabela(["Rota", "O que faz"], [
-  ["`GET /metricas`", "Resumo das chamadas por tipo, concordância por condição e as 200 requisições mais recentes"],
+  ["`GET /metricas`", "Resumo das chamadas por tipo, concordância por condição e as 200 requisições mais recentes. Cada chamada mostra a origem, com links para a questão e a resposta, e quem a pediu. Com `?questao=` ou `?resposta=`, mostra só as chamadas daquela origem e o custo somado"],
   ["`GET /metricas/exportar.csv`", "Arquivo CSV com todas as requisições e todos os campos, para análise (RF14)"],
   ["`GET /metricas/revisoes.csv`", "Arquivo CSV com uma linha por revisão: resposta, origem, condição, prompt, nota sugerida, nota final, aceite e diferença"],
 ], [4, 6]);
@@ -790,11 +793,11 @@ tabela(["Comando", "Para que serve"], [
 
 // ---------------------------------------------------------------------
 h1("6. Testes automatizados");
-p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 148 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
+p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 149 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
 tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_precos.py`", "Custo correto para o modelo em uso; preço de cache aplicado; nome com sufixo de versão; modelo desconhecido não gera custo inventado"],
   ["`tests/test_llm.py`", "Sucesso grava tokens, custo, latência, modelo e prompt; resposta sem formato válido vira falha com tokens; erro de rede vira falha com motivo; cliente sem novas tentativas automáticas"],
-  ["`tests/test_app.py`", "Rota de verificação pública; página de métricas e exportação em CSV"],
+  ["`tests/test_app.py`", "Rota de verificação pública; página de métricas e exportação em CSV; origem de cada chamada com links, filtro por questão e por resposta e custo somado"],
   ["`tests/test_contas.py`", "Resumo de senha e parâmetros da OWASP; nenhuma rota aberta sem login (todas as rotas da aplicação são percorridas); volta à página pedida só se for interna; senha errada, conta desativada e bloqueio por tentativas; troca obrigatória da senha provisória e suas validações; troca de senha encerra outras sessões; avaliador sem acesso a métricas e usuários; criação de conta com senha provisória exibida uma vez; nova senha invalida a anterior; desativação derruba a sessão; regras do último administrador; revisão e chamada gravam quem fez; fila de revisão; limite diário sem chamar o modelo; datas relativas e saudação no horário de Brasília; nome com aspas exibido com segurança"],
   ["`tests/test_objetiva.py`", "Versão 3: pista do enunciado, explicação única, pista opcional e recusa de pista na alternativa correta; explicação da v2 ainda legível; prompt montado com enunciado, alternativas e gabarito; correção v2 gravada e ligada à métrica; seis tipos de resposta inconsistente viram falha sem correção, incluindo tipo de erro na alternativa correta ou ausente nas incorretas; explicação antiga da v1 continua legível; resposta malformada; lista, detalhe e página inexistente; cadastro válido e inválido; geração pela página; falha exibida com o motivo"],
   ["`tests/test_itens.py`", "Cadastro com itens e critérios por item; itens fora de ordem, item único e critério ligado a item vazio; resposta com um campo por item e texto completo com itens em branco; prompt com e sem itens; trecho citado de outro item ou de item em branco; item inexistente ou diferente da rubrica; nota que não corresponde aos critérios, inclusive no empate; rótulos de professor e aluno e motivo da confiança na página; correção da v1 ainda legível"],
@@ -858,6 +861,7 @@ tabela(["Decisão", "Motivo"], [
   ["Sessão em cookie assinado, sem tabela de sessões", "Menos código e nenhuma tabela a limpar; a marca da senha no cookie permite derrubar sessões quando a senha muda ou a conta é desativada"],
   ["scrypt da biblioteca padrão do Python", "Algoritmo recomendado pela OWASP para senhas, sem dependência extra"],
   ["Limite diário de chamadas por pessoa", "Uma conta comprometida ou um uso por engano não consegue consumir o orçamento de um mês em um dia"],
+  ["Origem gravada em toda chamada, inclusive nas falhas", "Permite saber quanto custou cada questão e cada resposta, e onde ocorreram as falhas, sem depender de uma correção gravada"],
   ["Quem revisou e quem pediu a chamada gravados", "Permite separar os dados por avaliador na análise e conferir o uso de cada conta"],
   ["Métricas e custos só para administradores", "Os avaliadores da coleta não precisam ver custos, e ver a concordância acumulada poderia influenciar as suas decisões"],
   ["Fontes servidas pelo próprio sistema", "As páginas não dependem de serviços externos e não enviam dados de acesso a terceiros"],
@@ -928,6 +932,7 @@ tabela(["Termo", "Significado"], [
 // ---------------------------------------------------------------------
 h1("10. Histórico de versões");
 tabela(["Data", "Versão", "Referência", "Mudança"], [
+  ["24/10/2026", "0.10", "pull request das métricas com origem", "Cada chamada ao modelo ligada à questão e à resposta de origem, inclusive nas falhas; links e filtro por questão ou resposta na página de métricas, com custo somado; colunas novas na exportação"],
   ["24/10/2026", "0.9", "pull request da objetiva_v3", "Explicação das objetivas mais curta: explicação única por alternativa com etiqueta do tipo de erro, pista do enunciado e pista de conteúdo para eliminar alternativas (prompt objetiva_v3)"],
   ["23/10/2026", "0.8", "pull request dos itens e da discursiva_v2", "Questões discursivas com itens e resposta por item; prompt discursiva_v2 após o teste piloto (feedback sem entregar a resposta e limitado à rubrica, confiança com motivo, análise para o professor); conferência do item de cada critério, do trecho por item e da conta da nota"],
   ["23/10/2026", "0.7", "pull request de login e visual", "Contas individuais criadas pelo administrador, senha provisória com troca obrigatória, papéis, bloqueio por tentativas, limite diário de chamadas, autoria de revisões e chamadas; página inicial com fila de revisão; novo visual com barra de navegação, tema claro e escuro e versão para celular"],

@@ -10,28 +10,51 @@ from sqlalchemy.orm import Session
 
 from app.database import obter_sessao
 from app.metricas.resumo import linhas_de_revisao, resumo_concordancia, resumo_requisicoes
-from app.models import MetricaRequisicao
+from app.models import MetricaRequisicao, Questao, Submissao, Usuario
 from app.templates_config import templates
 
 router = APIRouter(prefix="/metricas", tags=["metricas"])
 
 COLUNAS = [
-    "id", "criado_em", "usuario_id", "correcao_id", "tipo_questao", "usou_resposta_esperada",
+    "id", "criado_em", "usuario_id", "questao_id", "submissao_id", "correcao_id", "tipo_questao",
+    "usou_resposta_esperada",
     "modelo_solicitado", "modelo", "prompt_versao", "tokens_entrada",
     "tokens_entrada_cache", "tokens_escrita_cache", "tokens_saida",
     "tokens_raciocinio", "custo_usd", "latencia_ms", "sucesso", "motivo_falha",
 ]
 
 
+LIMITE_LINHAS = 200
+
+
+def _por_id(sessao: Session, modelo, ids: set[int]) -> dict:
+    if not ids:
+        return {}
+    return {obj.id: obj for obj in sessao.scalars(select(modelo).where(modelo.id.in_(ids)))}
+
+
 @router.get("", response_class=HTMLResponse)
-def listar(request: Request, sessao: Session = Depends(obter_sessao)):
-    metricas = sessao.scalars(
-        select(MetricaRequisicao).order_by(MetricaRequisicao.id.desc()).limit(200)
-    ).all()
+def listar(request: Request, questao: int | None = None, resposta: int | None = None,
+           sessao: Session = Depends(obter_sessao)):
+    """Resumo e últimas chamadas. Com ?questao= ou ?resposta=, mostra só as chamadas daquela origem."""
+    consulta = select(MetricaRequisicao).order_by(MetricaRequisicao.id.desc()).limit(LIMITE_LINHAS)
+    if questao is not None:
+        consulta = consulta.where(MetricaRequisicao.questao_id == questao)
+    if resposta is not None:
+        consulta = consulta.where(MetricaRequisicao.submissao_id == resposta)
+    metricas = sessao.scalars(consulta).all()
+
+    filtrando = questao is not None or resposta is not None
+    custo_filtrado = sum(m.custo_usd or 0 for m in metricas) if filtrando else None
     return templates.TemplateResponse(request, "metricas.html", {
         "metricas": metricas,
         "requisicoes": resumo_requisicoes(sessao),
         "concordancia": resumo_concordancia(sessao),
+        "questoes": _por_id(sessao, Questao, {m.questao_id for m in metricas if m.questao_id}),
+        "respostas": _por_id(sessao, Submissao, {m.submissao_id for m in metricas if m.submissao_id}),
+        "usuarios": _por_id(sessao, Usuario, {m.usuario_id for m in metricas if m.usuario_id}),
+        "filtro_questao": questao, "filtro_resposta": resposta, "custo_filtrado": custo_filtrado,
+        "limite": LIMITE_LINHAS,
     })
 
 

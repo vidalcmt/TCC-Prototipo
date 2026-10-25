@@ -109,7 +109,7 @@ def gerar_correcao(
         sessao, prompt, CONTRATO_POR_PROMPT[prompt.identificador],
         campos_do_prompt(questao, submissao, usar_resposta_esperada),
         tipo_questao="discursiva", usou_resposta_esperada=usar_resposta_esperada, cliente=cliente,
-        usuario_id=usuario_id,
+        usuario_id=usuario_id, questao_id=questao.id, submissao_id=submissao.id,
     )
     metrica = resultado.metrica
     if not resultado.sucesso:

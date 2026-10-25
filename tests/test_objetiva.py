@@ -105,6 +105,7 @@ def test_saida_valida_grava_correcao_ligada_a_metrica(sessao):
     c = sessao.query(Correcao).one()
     m = sessao.query(MetricaRequisicao).one()
     assert m.correcao_id == c.id and m.sucesso and m.tipo_questao == "objetiva"
+    assert m.questao_id == q.id and m.submissao_id is None
     assert c.prompt_versao == "objetiva_v3" and c.modelo == "gpt-6.1-sol"
     assert c.submissao_id is None
     lida = CorrecaoObjetivaV3.model_validate_json(c.feedback_json)
@@ -130,6 +131,7 @@ def test_saida_inconsistente_vira_falha_sem_correcao(sessao, saida, trecho_do_mo
     assert sessao.query(Correcao).count() == 0
     m = sessao.query(MetricaRequisicao).one()
     assert not m.sucesso and trecho_do_motivo in m.motivo_falha
+    assert m.questao_id == q.id  # a origem fica registrada também na falha
     assert m.tokens_entrada == 1500  # tokens cobrados continuam registrados
 
 

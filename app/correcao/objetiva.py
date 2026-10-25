@@ -52,7 +52,7 @@ def gerar_explicacao(
     formato = CONTRATO_POR_PROMPT[prompt.identificador]
     resultado = chamar_modelo(
         sessao, prompt, formato, campos_do_prompt(questao),
-        tipo_questao="objetiva", cliente=cliente, usuario_id=usuario_id,
+        tipo_questao="objetiva", cliente=cliente, usuario_id=usuario_id, questao_id=questao.id,
     )
     metrica = resultado.metrica
     if not resultado.sucesso:

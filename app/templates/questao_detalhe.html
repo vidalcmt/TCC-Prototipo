@@ -60,6 +60,7 @@
   Gerada por {{ metrica.modelo or metrica.modelo_solicitado }} com o prompt {{ metrica.prompt_versao }},
   em {{ "%.1f"|format(metrica.latencia_ms / 1000) }} s, custo de US$ {{ "%.6f"|format(metrica.custo_usd) if metrica.custo_usd is not none else "?" }}.
   {% endif %}
+  {% if request.state.usuario.eh_admin %}<a href="/metricas?questao={{ questao.id }}#chamadas">Chamadas desta questão</a>.{% endif %}
   {% if total_explicacoes > 1 %}Esta é a mais recente de {{ total_explicacoes }} explicações geradas.{% endif %}
 </p>
 {% endif %}
