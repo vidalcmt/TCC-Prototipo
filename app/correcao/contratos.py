@@ -178,10 +178,59 @@ class CorrecaoDiscursiva(BaseModel):
     )
 
 
+class AnaliseCriterioV2(BaseModel):
+    criterio: str = Field(
+        description="O critério avaliado. Com rubrica, repita o texto do critério do professor."
+    )
+    item: str | None = Field(
+        description=(
+            "Letra do item a que o critério se refere, quando a questão tem itens. Null quando o "
+            "critério vale para a resposta inteira ou a questão não tem itens."
+        )
+    )
+    peso: float = Field(description="Peso do critério. Com rubrica, o mesmo peso informado pelo professor.")
+    status: StatusCriterio
+    justificativa: str = Field(
+        description=(
+            "Para o professor: por que o critério foi atendido, parcialmente atendido ou não "
+            "atendido, referindo-se ao que o aluno escreveu e ao conteúdo esperado."
+        )
+    )
+    trecho_citado: str | None = Field(
+        description=(
+            "Trecho copiado literalmente da resposta do aluno (do item indicado, quando houver) que "
+            "sustenta a avaliação, sem alterar nenhuma palavra. Null quando o aluno não escreveu "
+            "nada sobre o critério."
+        )
+    )
+
+
+class CorrecaoDiscursivaV2(BaseModel):
+    questao_id: str
+    usou_resposta_esperada: bool
+    analise_criterios: list[AnaliseCriterioV2]
+    feedback_elaborado: str = Field(
+        description=(
+            "Para o aluno: o que ele acertou, o que faltou e onde procurar, sem escrever o conteúdo "
+            "que atende ao pedido e sem cobrar o que a rubrica não exige."
+        )
+    )
+    nota_sugerida: float
+    nota_maxima: float
+    confianca: Literal["baixa", "media", "alta"] = Field(
+        description=(
+            "Certeza de que a nota está correta, e não a qualidade da resposta. Resposta claramente "
+            "errada ou em branco tem confiança alta."
+        )
+    )
+    motivo_confianca: str = Field(description="Uma frase com o motivo do nível de confiança.")
+
+
 CONTRATO_POR_PROMPT: dict[str, type[BaseModel]] = {
     "objetiva_v1": CorrecaoObjetiva,
     "objetiva_v2": CorrecaoObjetivaV2,
     "discursiva_v1": CorrecaoDiscursiva,
+    "discursiva_v2": CorrecaoDiscursivaV2,
 }
 
 
@@ -248,15 +297,33 @@ def trecho_existe(trecho: str, resposta: str) -> bool:
     return True
 
 
+FATOR_STATUS = {"atendido": 1.0, "parcial": 0.5, "nao_atendido": 0.0}
+
+
+def nota_pelos_criterios(criterios, nota_maxima: float) -> float | None:
+    """Nota pela regra do prompt, antes do arredondamento: atendido vale o peso,
+    parcial metade e não atendido zero, proporcional à soma dos pesos."""
+    soma = sum(c.peso for c in criterios)
+    if soma <= 0:
+        return None
+    return sum(c.peso * FATOR_STATUS[c.status] for c in criterios) / soma * nota_maxima
+
+
 def problemas_da_discursiva(
-    saida: CorrecaoDiscursiva,
+    saida: CorrecaoDiscursiva | CorrecaoDiscursivaV2,
     questao_id: int,
     resposta_aluno: str,
     usou_resposta_esperada: bool,
     nota_maxima: float,
     pesos_rubrica: list[float] | None,
+    respostas_por_item: dict[str, str] | None = None,
+    itens_rubrica: list[str | None] | None = None,
 ) -> list[str]:
-    """Confere a correção discursiva com a questão e a resposta. Lista vazia significa consistente."""
+    """Confere a correção discursiva com a questão e a resposta. Lista vazia significa consistente.
+
+    Na versão 2, confere também a letra do item de cada critério, procura o
+    trecho citado só na resposta daquele item e refaz a conta da nota.
+    """
     problemas = []
     if saida.questao_id != str(questao_id):
         problemas.append(f"questao_id {saida.questao_id!r} diferente de {questao_id}")
@@ -279,7 +346,35 @@ def problemas_da_discursiva(
         elif any(abs(a - b) > 1e-9 for a, b in zip(pesos, pesos_rubrica)):
             problemas.append(f"pesos {pesos} diferentes da rubrica {pesos_rubrica}")
 
+    v2 = isinstance(saida, CorrecaoDiscursivaV2)
+    letras = set(respostas_por_item or {})
+    if v2:
+        for c in saida.analise_criterios:
+            if c.item is not None and c.item not in letras:
+                problemas.append(
+                    f"critério {c.criterio!r} ligado ao item {c.item!r}, que a questão não tem"
+                    if letras else f"critério {c.criterio!r} ligado ao item {c.item!r} em questão sem itens"
+                )
+        if itens_rubrica is not None and pesos_rubrica and len(saida.analise_criterios) == len(itens_rubrica):
+            recebidos = [c.item for c in saida.analise_criterios]
+            if recebidos != itens_rubrica:
+                problemas.append(f"itens dos critérios {recebidos} diferentes da rubrica {itens_rubrica}")
+
+        bruta = nota_pelos_criterios(saida.analise_criterios, nota_maxima)
+        multiplo = abs(saida.nota_sugerida * 2 - round(saida.nota_sugerida * 2)) < 1e-9
+        if bruta is not None and (not multiplo or abs(saida.nota_sugerida - bruta) > 0.25 + 1e-9):
+            problemas.append(
+                f"nota_sugerida {saida.nota_sugerida} não corresponde aos critérios "
+                f"(a conta dá {bruta:.2f}, arredondada para múltiplo de 0,5)"
+            )
+
     for c in saida.analise_criterios:
-        if c.trecho_citado and not trecho_existe(c.trecho_citado, resposta_aluno):
+        if not c.trecho_citado:
+            continue
+        item = getattr(c, "item", None)
+        if item in letras:
+            if not trecho_existe(c.trecho_citado, respostas_por_item[item]):
+                problemas.append(f"trecho citado no critério {c.criterio!r} não existe na resposta do item {item}")
+        elif not trecho_existe(c.trecho_citado, resposta_aluno):
             problemas.append(f"trecho citado no critério {c.criterio!r} não existe na resposta do aluno")
     return problemas
