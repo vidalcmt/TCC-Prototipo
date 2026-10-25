@@ -1,20 +1,59 @@
 {% extends "base.html" %}
 {% block titulo %}Métricas{% endblock %}
 {% block conteudo %}
-<h1>Métricas por requisição</h1>
-<p><a href="/metricas/exportar.csv">Exportar tudo em CSV</a></p>
+<h1>Métricas</h1>
+
+<h2>Chamadas ao modelo</h2>
+<table>
+  <tr><th>Tipo</th><th>Chamadas</th><th>Falhas</th><th>Taxa de falha</th><th>Custo médio (US$)</th><th>Tempo médio (s)</th></tr>
+  {% for g in requisicoes %}
+  <tr>
+    <td>{{ g.grupo }}</td>
+    <td>{{ g.total }}</td>
+    <td>{{ g.falhas }}</td>
+    <td>{{ ("%.1f"|format(g.taxa_falha * 100))|replace(".", ",") ~ "%" if g.taxa_falha is not none else "" }}</td>
+    <td>{{ ("%.6f"|format(g.custo_medio))|replace(".", ",") if g.custo_medio is not none else "" }}</td>
+    <td>{{ ("%.1f"|format(g.latencia_media_ms / 1000))|replace(".", ",") if g.latencia_media_ms is not none else "" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+<p class="discreto">O tempo médio considera só as chamadas com sucesso; o custo médio, todas as que consumiram tokens.</p>
+
+<h2>Concordância entre modelo e professor</h2>
+<table>
+  <tr><th>Condição</th><th>Revisões</th><th>Notas aceitas</th><th>Concordância</th><th>Desvio médio</th><th>Desvio absoluto médio</th></tr>
+  {% for g in concordancia %}
+  <tr>
+    <td>{{ g.grupo }}</td>
+    <td>{{ g.revisoes }}</td>
+    <td>{{ g.aceitas }}</td>
+    <td>{{ ("%.1f"|format(g.taxa_concordancia * 100))|replace(".", ",") ~ "%" if g.taxa_concordancia is not none else "" }}</td>
+    <td>{{ ("%+.2f"|format(g.desvio_medio))|replace(".", ",") if g.desvio_medio is not none else "" }}</td>
+    <td>{{ ("%.2f"|format(g.desvio_absoluto_medio))|replace(".", ",") if g.desvio_absoluto_medio is not none else "" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+<p class="discreto">Desvio = nota final menos nota sugerida. Positivo: o professor deu mais que o modelo.</p>
+
+<p>
+  <a href="/metricas/exportar.csv">Exportar chamadas em CSV</a> ·
+  <a href="/metricas/revisoes.csv">Exportar revisões em CSV</a>
+</p>
+
+<h2>Últimas chamadas</h2>
 {% if not metricas %}
 <p class="discreto">Nenhuma requisição registrada ainda.</p>
 {% else %}
 <table>
   <tr>
-    <th>#</th><th>Quando (UTC)</th><th>Modelo</th><th>Prompt</th>
+    <th>#</th><th>Quando (UTC)</th><th>Tipo</th><th>Modelo</th><th>Prompt</th>
     <th>Entrada</th><th>Saída</th><th>Custo (US$)</th><th>Latência (ms)</th><th>Resultado</th>
   </tr>
   {% for m in metricas %}
   <tr>
     <td>{{ m.id }}</td>
     <td>{{ m.criado_em.strftime("%d/%m %H:%M:%S") if m.criado_em }}</td>
+    <td>{{ m.tipo_questao or "" }}{% if m.usou_resposta_esperada is not none %} ({{ "com" if m.usou_resposta_esperada else "sem" }}){% endif %}</td>
     <td>{{ m.modelo or m.modelo_solicitado }}</td>
     <td>{{ m.prompt_versao }}</td>
     <td>{{ m.tokens_entrada if m.tokens_entrada is not none }}</td>

@@ -9,7 +9,7 @@ Duas tabelas existem por razão metodológica e não devem ser simplificadas:
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -107,9 +107,14 @@ class Correcao(Base):
 
 
 class RevisaoProfessor(Base):
-    """A nota final só existe aqui, depois da ação do professor (RF10 e RF11)."""
+    """A nota final só existe aqui, depois da ação do professor (RF10 e RF11).
+
+    Cada correção recebe no máximo uma revisão, e ela não é alterada depois:
+    a decisão registrada é o dado da pesquisa.
+    """
 
     __tablename__ = "revisao_professor"
+    __table_args__ = (UniqueConstraint("correcao_id", name="uq_revisao_professor_correcao"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     correcao_id: Mapped[int] = mapped_column(ForeignKey("correcao.id"))
