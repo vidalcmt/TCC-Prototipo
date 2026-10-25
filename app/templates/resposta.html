@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block titulo %}Resposta {{ submissao.id }}{% endblock %}
+{% block conteudo %}
+<p><a href="/questoes/{{ questao.id }}">&larr; Voltar para a questão {{ questao.id }}</a></p>
+<h1>Resposta {{ submissao.id }}{% if submissao.codigo_corpus %} <span class="discreto">({{ submissao.codigo_corpus }})</span>{% endif %}</h1>
+<p class="discreto">Origem: {{ origens.get(submissao.origem or "", submissao.origem) }}</p>
+
+<details>
+  <summary>Enunciado da questão</summary>
+  <div class="enunciado">{{ questao.enunciado }}</div>
+</details>
+
+<h2>Resposta do aluno</h2>
+<div class="enunciado">{{ submissao.resposta_aluno }}</div>
+
+{% if falha %}
+<div class="aviso-erro">
+  <strong>Não foi possível corrigir.</strong>
+  <div class="discreto">{{ falha.motivo_falha }}</div>
+  <div class="discreto">A tentativa foi registrada nas métricas (#{{ falha.id }}).</div>
+</div>
+{% endif %}
+
+<form method="post" action="/respostas/{{ submissao.id }}/corrigir" class="acoes-correcao"
+      onsubmit="setTimeout(() => { this.querySelectorAll('button').forEach(b => b.disabled = true); this.querySelector('.aguarde').hidden = false; }, 0);">
+  <button type="submit" name="condicao" value="sem">Corrigir sem resposta esperada</button>
+  {% if questao.resposta_esperada %}
+  <button type="submit" name="condicao" value="com">Corrigir com resposta esperada</button>
+  {% else %}
+  <span class="discreto">A questão não tem resposta esperada cadastrada.</span>
+  {% endif %}
+  <span class="discreto aguarde" hidden>Corrigindo, aguarde alguns segundos...</span>
+</form>
+
+{% for item in correcoes %}
+{% set c = item.correcao %}{% set a = item.analise %}{% set m = item.metrica %}
+<section class="correcao">
+  <h2>Correção {{ c.id }}
+    <span class="condicao">{{ "com resposta esperada" if c.usou_resposta_esperada else "sem resposta esperada" }}</span>
+  </h2>
+  <div class="nota-sugerida">
+    <div class="rotulo">Nota sugerida pelo modelo</div>
+    <div class="valor">{{ a.nota_sugerida|num }} <span>de {{ a.nota_maxima|num }}</span></div>
+    <div class="discreto">É uma sugestão. A nota final é do professor. Confiança do modelo: {{ {"baixa": "baixa", "media": "média", "alta": "alta"}[a.confianca] }}.</div>
+  </div>
+
+  <h3>Análise por critério</h3>
+  {% for cr in a.analise_criterios %}
+  <div class="criterio">
+    <div><strong>{{ cr.criterio }}</strong> <span class="discreto">(peso {{ cr.peso|num }})</span>
+      <span class="status status-{{ cr.status }}">{{ rotulos_status[cr.status] }}</span></div>
+    <div class="explicacao">{{ cr.justificativa }}</div>
+    {% if cr.trecho_citado %}
+    <blockquote class="trecho">“{{ cr.trecho_citado }}”</blockquote>
+    {% else %}
+    <div class="discreto">Sem trecho citado: o aluno não abordou este critério.</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  <h3>Feedback para o aluno</h3>
+  <p style="white-space: pre-wrap">{{ a.feedback_elaborado }}</p>
+
+  {% if m %}
+  <p class="discreto">Gerada por {{ m.modelo or m.modelo_solicitado }} com o prompt {{ m.prompt_versao }},
+    em {{ "%.1f"|format(m.latencia_ms / 1000) }} s, custo de US$ {{ "%.6f"|format(m.custo_usd) if m.custo_usd is not none else "?" }}.</p>
+  {% endif %}
+</section>
+{% else %}
+<p class="discreto">Esta resposta ainda não foi corrigida.</p>
+{% endfor %}
+{% endblock %}

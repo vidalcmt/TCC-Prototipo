@@ -4,6 +4,18 @@ Cada versão usada na coleta fica congelada. Uma mudança gera um arquivo novo
 (v2, v3...) e uma entrada aqui, com a data e o motivo. A coluna prompt_versao
 da tabela metrica_requisicao aponta para estas versões.
 
+## discursiva_v1 (21/10/2026)
+
+Primeira versão do prompt das questões discursivas. Um único texto atende às
+duas condições experimentais (com e sem resposta esperada, RF08): o que muda
+é o conteúdo dos campos {resposta_esperada} e {condicao}. Regras principais:
+- com rubrica, avaliar exatamente os critérios e pesos do professor; sem
+  rubrica, definir de 3 a 5 critérios;
+- citar literalmente o trecho da resposta do aluno (RF06);
+- nota calculada pelos pesos: atendido vale o peso, parcial metade,
+  nao_atendido zero, arredondada para múltiplo de 0,5 (RF07);
+- feedback que mostra o caminho para a resposta completa sem entregá-la.
+
 ## objetiva_v2 (20/10/2026)
 
 Pedido do autor após a revisão da v1: a explicação de cada alternativa errada
