@@ -106,8 +106,8 @@ function tabela(cabecalho, linhas, proporcoes) {
 // =====================================================================
 // CAPA
 // =====================================================================
-const VERSAO = "0.8";
-const DATA = "23/10/2026";
+const VERSAO = "0.9";
+const DATA = "24/10/2026";
 
 conteudo.push(new Paragraph({ spacing: { before: 2400 }, children: [] }));
 conteudo.push(new Paragraph({
@@ -178,7 +178,7 @@ tabela(
   ["Etapa", "Conteúdo", "Situação"],
   [
     ["1", "Esqueleto, banco de dados e medição", "Concluída em 16/10/2026"],
-    ["2", "Módulo objetivo", "Concluída em 19/10/2026; explicação v2 (tipo de erro) em 21/10/2026"],
+    ["2", "Módulo objetivo", "Concluída em 19/10/2026; explicação v2 (tipo de erro) em 21/10/2026; v3 (explicação única e pistas) em 24/10/2026"],
     ["3", "Módulo discursivo", "Implementada em 21/10/2026; versão 2 do prompt e questões com itens em 23/10/2026, após o teste piloto"],
     ["4", "Tela de aceite do professor", "Implementada em 22/10/2026; aguardando revisão"],
     ["Apoio", "Login, contas, página inicial e novo visual com tema escuro", "Implementado em 23/10/2026; aguardando revisão"],
@@ -431,14 +431,25 @@ h2("4.5 Contrato de saída objetivo: app/correcao/contratos.py");
 p("Define, em Pydantic, o formato que a API é obrigada a seguir na resposta, conforme a seção \"Contrato de saída da IA\" da especificação. As descrições dos campos são enviadas junto com o formato e orientam o modelo. Cada versão de prompt tem o seu contrato, registrado em `CONTRATO_POR_PROMPT`; as versões antigas permanecem no código para que as correções já gravadas continuem legíveis.");
 tabela(["Elemento", "O que faz"], [
   ["`ExplicacaoAlternativa`, `CorrecaoObjetiva`", "Versão 1 (prompt `objetiva_v1`): por alternativa, `letra`, `correta`, `por_que` e `conceito_envolvido`"],
-  ["`ExplicacaoAlternativaV2`, `CorrecaoObjetivaV2`", "Versão 2 (prompt `objetiva_v2`, em uso): acrescenta `tipo_de_erro`, `elemento_incorreto` e `como_verificar` a cada alternativa"],
+  ["`ExplicacaoAlternativaV2`, `CorrecaoObjetivaV2`", "Versão 2 (prompt `objetiva_v2`): acrescenta `tipo_de_erro`, `elemento_incorreto` e `como_verificar` a cada alternativa"],
+  ["`ExplicacaoAlternativaV3`, `CorrecaoObjetivaV3`", "Versão 3 (prompt `objetiva_v3`, em uso): uma `explicacao` única e uma `pista` opcional por alternativa, e uma `pista_do_enunciado` para a questão"],
   ["Campos comuns da resposta", "`questao_id`, `alternativa_correta`, lista de `explicacoes`, `explicacao_correta` e `nivel_dificuldade_estimado` (baixo, medio ou alto)"],
   ["`ROTULOS_TIPO_DE_ERRO`", "Texto exibido na página para cada tipo de erro"],
   ["`CONTRATO_POR_PROMPT`", "Associa cada versão de prompt ao seu contrato"],
   ["`problemas_de_consistencia(...)`", "Confere a resposta com a questão cadastrada e devolve a lista de problemas; lista vazia significa resposta consistente"],
 ], [4, 6]);
 p("O formato já é garantido pela API. A conferência verifica o conteúdo: a resposta precisa repetir o identificador da questão, concordar com o gabarito do professor, explicar cada alternativa exatamente uma vez e marcar como correta apenas a alternativa do gabarito.");
-p("Na versão 2, a conferência também exige que só as alternativas incorretas tenham `tipo_de_erro`; a correta deve vir com esse campo vazio.");
+p("Nas versões 2 e 3, a conferência também exige que só as alternativas incorretas tenham `tipo_de_erro`; a correta deve vir com esse campo vazio. Na versão 3, a correta também não pode ter pista para eliminá-la.");
+h3("Campos da versão 3");
+p("A versão 3 nasceu da avaliação do autor de que a v2 era cansativa de ler: três blocos de texto por alternativa (\"O que está errado\", \"Por quê\" e \"Como perceber sem o gabarito\"). Ela junta os dois primeiros numa explicação curta e troca o terceiro por pistas de conteúdo que ajudam o estudante a resolver mais depressa, já que no vestibular o tempo conta.");
+tabela(["Campo", "Conteúdo"], [
+  ["`pista_do_enunciado`", "Da questão: a palavra, expressão ou dado do enunciado que indica o caminho da resolução e o que ele sinaliza. Exemplo: uma quantidade que se repete a cada dia, ao longo de vários dias, indica multiplicação"],
+  ["`explicacoes[].tipo_de_erro`", "O mesmo da versão 2, exibido como etiqueta ao lado da explicação"],
+  ["`explicacoes[].explicacao`", "Em até duas frases: o que está errado e por quê, ou, na correta, por que ela é a resposta"],
+  ["`explicacoes[].pista`", "Só nas incorretas e só quando existir: a pista de conteúdo que permite eliminar a alternativa sem saber a resposta, como um elemento de outra época ou sistema. Exemplo: relações feudais numa questão sobre monarquia absolutista"],
+  ["`explicacoes[].conceito_envolvido`", "O mesmo das versões anteriores"],
+], [3, 7]);
+p("O prompt proíbe pistas genéricas de prova, que não dependem do conteúdo, como o tamanho da alternativa, palavras absolutas (\"sempre\", \"nunca\") ou a posição da letra. Também permite deixar a pista vazia, para não forçar o modelo a inventar uma.");
 h3("Campos da versão 2 por alternativa");
 tabela(["Campo", "Na alternativa incorreta", "Na alternativa correta"], [
   ["`tipo_de_erro`", "A natureza do erro, escolhida na lista abaixo", "Vazio"],
@@ -463,7 +474,7 @@ p("Os campos `conceito_envolvido` e `tipo_de_erro` existem por razão metodológ
 
 h2("4.6 Explicação de questões objetivas: app/correcao/objetiva.py");
 tabela(["Elemento", "O que faz"], [
-  ["`PROMPT_OBJETIVA`", "Prompt em uso: `objetiva`, versão 2. O contrato é escolhido pela versão"],
+  ["`PROMPT_OBJETIVA`", "Prompt em uso: `objetiva`, versão 3. O contrato é escolhido pela versão"],
   ["`gabarito_da(questao)`", "Devolve a letra correta; recusa questão sem gabarito ou com mais de um"],
   ["`campos_do_prompt(questao)`", "Prepara identificador, enunciado, alternativas no formato `A) texto` e gabarito"],
   ["`gerar_explicacao(sessao, questao)`", "Chama o modelo, confere a resposta e grava a correção"],
@@ -471,15 +482,26 @@ tabela(["Elemento", "O que faz"], [
 ], [4, 6]);
 h3("Passos de gerar_explicacao");
 numerada([
-  "Carrega o prompt em uso (`objetiva_v2`) e chama `chamar_modelo` com o contrato da mesma versão (`CorrecaoObjetivaV2`).",
+  "Carrega o prompt em uso (`objetiva_v3`) e chama `chamar_modelo` com o contrato da mesma versão (`CorrecaoObjetivaV3`).",
   "Se a chamada falhou, devolve a falha; a métrica já foi gravada por `chamar_modelo`.",
   "Se a resposta veio, confere a consistência com a questão.",
   "Se houver problema, não grava a correção, marca a métrica como falha e registra o motivo, por exemplo `saida inconsistente: alternativa_correta B diferente do gabarito D`.",
   "Se estiver tudo certo, grava a correção em `correcao` e liga a métrica a ela pelo campo `correcao_id`.",
 ]);
 p("A explicação de uma objetiva pertence à questão, e não à resposta de um aluno. Por isso, nessas correções, o campo `submissao_id` fica vazio.");
-h3("Prompt objetiva_v2");
-p("O texto fica em `prompts/objetiva/v2.md`. A versão 1 continua em `prompts/objetiva/v1.md` e não é mais alterada. Em resumo, a versão 2 instrui o modelo a:");
+h3("Prompt objetiva_v3 (em uso)");
+p("O texto fica em `prompts/objetiva/v3.md`. Em resumo, ele instrui o modelo a:");
+marcadores([
+  "nunca questionar ou alterar o gabarito informado pelo professor;",
+  "apontar a pista do enunciado que indica o caminho da resolução;",
+  "explicar cada alternativa em até duas frases, juntando o que está errado e por quê;",
+  "dar, quando houver, uma pista de conteúdo para eliminar cada alternativa incorreta, sem pistas genéricas de prova e sem forçar uma pista quando ela não existir;",
+  "descrever o caminho até a resposta em até quatro passos curtos;",
+  "afirmar numa pista só o que é verdadeiro para aquela questão, e não inventar dados, datas, autores ou citações.",
+]);
+p("Na página da questão, a pista do enunciado aparece num quadro antes das alternativas. Em cada alternativa aparecem a etiqueta do tipo de erro, a explicação e, quando houver, a pista para eliminar. Explicações geradas com as versões 1 e 2 continuam exibidas no formato original.");
+h3("Prompt objetiva_v2 (substituído)");
+p("O texto fica em `prompts/objetiva/v2.md`. A versão 1 continua em `prompts/objetiva/v1.md`. Nenhuma das duas é mais alterada. Em resumo, a versão 2 instrui o modelo a:");
 marcadores([
   "nunca questionar ou alterar o gabarito informado pelo professor;",
   "para cada alternativa incorreta, classificar o tipo de erro, apontar o elemento exato que está errado e explicar o raciocínio plausível que levaria um estudante a escolhê-la (RF02 e RF03);",
@@ -768,13 +790,13 @@ tabela(["Comando", "Para que serve"], [
 
 // ---------------------------------------------------------------------
 h1("6. Testes automatizados");
-p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 146 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
+p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 148 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
 tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_precos.py`", "Custo correto para o modelo em uso; preço de cache aplicado; nome com sufixo de versão; modelo desconhecido não gera custo inventado"],
   ["`tests/test_llm.py`", "Sucesso grava tokens, custo, latência, modelo e prompt; resposta sem formato válido vira falha com tokens; erro de rede vira falha com motivo; cliente sem novas tentativas automáticas"],
   ["`tests/test_app.py`", "Rota de verificação pública; página de métricas e exportação em CSV"],
   ["`tests/test_contas.py`", "Resumo de senha e parâmetros da OWASP; nenhuma rota aberta sem login (todas as rotas da aplicação são percorridas); volta à página pedida só se for interna; senha errada, conta desativada e bloqueio por tentativas; troca obrigatória da senha provisória e suas validações; troca de senha encerra outras sessões; avaliador sem acesso a métricas e usuários; criação de conta com senha provisória exibida uma vez; nova senha invalida a anterior; desativação derruba a sessão; regras do último administrador; revisão e chamada gravam quem fez; fila de revisão; limite diário sem chamar o modelo; datas relativas e saudação no horário de Brasília; nome com aspas exibido com segurança"],
-  ["`tests/test_objetiva.py`", "Prompt montado com enunciado, alternativas e gabarito; correção v2 gravada e ligada à métrica; seis tipos de resposta inconsistente viram falha sem correção, incluindo tipo de erro na alternativa correta ou ausente nas incorretas; explicação antiga da v1 continua legível; resposta malformada; lista, detalhe e página inexistente; cadastro válido e inválido; geração pela página; falha exibida com o motivo"],
+  ["`tests/test_objetiva.py`", "Versão 3: pista do enunciado, explicação única, pista opcional e recusa de pista na alternativa correta; explicação da v2 ainda legível; prompt montado com enunciado, alternativas e gabarito; correção v2 gravada e ligada à métrica; seis tipos de resposta inconsistente viram falha sem correção, incluindo tipo de erro na alternativa correta ou ausente nas incorretas; explicação antiga da v1 continua legível; resposta malformada; lista, detalhe e página inexistente; cadastro válido e inválido; geração pela página; falha exibida com o motivo"],
   ["`tests/test_itens.py`", "Cadastro com itens e critérios por item; itens fora de ordem, item único e critério ligado a item vazio; resposta com um campo por item e texto completo com itens em branco; prompt com e sem itens; trecho citado de outro item ou de item em branco; item inexistente ou diferente da rubrica; nota que não corresponde aos critérios, inclusive no empate; rótulos de professor e aluno e motivo da confiança na página; correção da v1 ainda legível"],
   ["`tests/test_discursiva.py`", "Trecho citado (seis casos, incluindo paráfrase e ordem invertida); prompt nas duas condições, sem vazar a resposta esperada; condição gravada na correção e na métrica; condição indisponível; nove tipos de saída inconsistente, incluindo nota diferente da conta pelos critérios; critérios livres sem rubrica; cadastro válido e inválido; registro de resposta; correção pela página com nota como sugestão; falhas exibidas"],
   ["`tests/test_revisao.py`", "Aceite e ajuste; mesma nota conta como aceite; nota fora do intervalo; segunda revisão recusada pela regra e pelo banco; correção sem nota; concordância e desvios por condição; resumo vazio sem divisão por zero; resumo de chamadas; formulário e ordem dos botões; erros da revisão; exportação das revisões"],
@@ -824,6 +846,8 @@ tabela(["Decisão", "Motivo"], [
   ["Mesmo prompt nas duas condições, mudando só o campo da resposta esperada", "A diferença entre as condições fica restrita ao insumo do professor, o que torna a comparação válida"],
   ["Trecho citado conferido na resposta do aluno", "Um trecho inventado é uma alucinação e tornaria o feedback enganoso"],
   ["Nota calculada pelos pesos da rubrica", "Torna a nota sugerida explicável e verificável pelo professor a partir da análise por critério"],
+  ["Pistas de conteúdo, e não pistas genéricas de prova", "A pista precisa ensinar algo da disciplina e valer para aquela questão; truques como \"a mais longa é a certa\" falham com frequência e não ensinam"],
+  ["Pista opcional por alternativa", "Forçar uma pista em toda alternativa levaria o modelo a inventar pistas falsas"],
   ["Tipo de erro em categoria fechada", "Permite contar e comparar os tipos de erro na análise, o que um texto livre não permitiria"],
   ["Análise para o professor, feedback para o aluno", "O professor precisa ver o conteúdo esperado para conferir a nota; o aluno precisa ser orientado sem receber a resposta"],
   ["Nota recalculada pelo sistema", "A nota sugerida precisa ser explicável pela análise; uma conta errada do modelo tornaria a nota inconsistente com a própria justificativa"],
@@ -848,6 +872,7 @@ marcadores([
   "**Tokens gravados em cache:** o cálculo supõe que esses tokens já estão incluídos no total de entrada, como acontece com os tokens lidos do cache. A suposição ainda deve ser confirmada na documentação da OpenAI; ela só afeta requisições que usam cache.",
   "**Ancoragem:** o professor vê a nota sugerida antes de decidir, o que pode puxar a sua nota em direção à do modelo. A concordância medida é, portanto, a concordância nas condições de uso do sistema, e não uma comparação com uma correção independente. Isso deve ser declarado no artigo.",
   "**Duas correções da mesma resposta:** se o mesmo avaliador revisar as duas condições de uma resposta, a segunda decisão é influenciada pela primeira. O protocolo da coleta com especialistas deve definir quem revisa qual condição.",
+  "**Pistas incorretas:** uma pista pode soar convincente e não valer para a questão. Não há conferência automática possível; a correção das pistas deve ser um dos aspectos avaliados pelos especialistas.",
   "**Feedback que entrega a resposta:** a regra da v2 reduz o problema, mas não há conferência automática possível, porque decidir se um texto revela a resposta exige interpretação. Convém incluir essa pergunta no instrumento dos especialistas e contar os casos na análise.",
   "**Correções do teste piloto:** as correções feitas com a v1 continuam no banco e identificadas pela versão do prompt. A comparação entre condições deve usar apenas correções da mesma versão.",
   "**Critérios sem rubrica:** quando o professor não informa rubrica, o modelo define os critérios a cada correção, e eles podem variar entre correções da mesma questão. Para comparar condições, o corpus deve usar questões com rubrica.",
@@ -903,6 +928,7 @@ tabela(["Termo", "Significado"], [
 // ---------------------------------------------------------------------
 h1("10. Histórico de versões");
 tabela(["Data", "Versão", "Referência", "Mudança"], [
+  ["24/10/2026", "0.9", "pull request da objetiva_v3", "Explicação das objetivas mais curta: explicação única por alternativa com etiqueta do tipo de erro, pista do enunciado e pista de conteúdo para eliminar alternativas (prompt objetiva_v3)"],
   ["23/10/2026", "0.8", "pull request dos itens e da discursiva_v2", "Questões discursivas com itens e resposta por item; prompt discursiva_v2 após o teste piloto (feedback sem entregar a resposta e limitado à rubrica, confiança com motivo, análise para o professor); conferência do item de cada critério, do trecho por item e da conta da nota"],
   ["23/10/2026", "0.7", "pull request de login e visual", "Contas individuais criadas pelo administrador, senha provisória com troca obrigatória, papéis, bloqueio por tentativas, limite diário de chamadas, autoria de revisões e chamadas; página inicial com fila de revisão; novo visual com barra de navegação, tema claro e escuro e versão para celular"],
   ["22/10/2026", "0.6", "pull request da etapa 4", "Aceite ou ajuste da nota com uma revisão por correção (restrição no banco e migração), proteção contra aceite por engano, concordância e desvios na página de métricas, exportação das revisões"],

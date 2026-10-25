@@ -10,7 +10,7 @@ from app.correcao.llm import chamar_modelo
 from app.correcao.prompts import carregar_prompt
 from app.models import Correcao, MetricaRequisicao, Questao
 
-PROMPT_OBJETIVA = ("objetiva", 2)
+PROMPT_OBJETIVA = ("objetiva", 3)
 
 
 @dataclass
