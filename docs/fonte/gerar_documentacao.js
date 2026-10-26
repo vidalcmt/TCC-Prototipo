@@ -106,7 +106,7 @@ function tabela(cabecalho, linhas, proporcoes) {
 // =====================================================================
 // CAPA
 // =====================================================================
-const VERSAO = "0.10";
+const VERSAO = "0.11";
 const DATA = "24/10/2026";
 
 conteudo.push(new Paragraph({ spacing: { before: 2400 }, children: [] }));
@@ -517,7 +517,7 @@ marcadores([
 
 h2("4.7 Páginas de questões: app/questoes/router.py");
 tabela(["Rota", "O que faz"], [
-  ["`GET /questoes`", "Lista as questões objetivas, com origem, área, início do enunciado e número de explicações geradas"],
+  ["`GET /questoes`", "Lista todas as questões, objetivas e discursivas, 50 por página, com origem, área, início do enunciado e número de correções. Aceita os filtros `busca` (palavra no enunciado), `numero`, `tipo`, `area`, `fonte`, `ano` e `situacao` (`pendente`: tem correção esperando revisão; `sem_correcao`: nenhuma correção ainda) e o parâmetro `pagina`. As opções de área, origem e ano vêm do próprio banco, e os filtros se mantêm ao trocar de página"],
   ["`GET /questoes/nova`", "Formulário de cadastro manual (RF01)"],
   ["`POST /questoes`", "Valida e grava a questão: enunciado, as cinco alternativas e exatamente uma correta. Com erro, devolve o formulário preenchido e a lista de problemas"],
   ["`GET /questoes/{id}`", "Enunciado, alternativas com o gabarito destacado e, se existir, a explicação mais recente: tipo de erro, o que está errado, por quê, como perceber sem o gabarito, além de modelo, prompt, tempo e custo. Cada explicação é lida com o contrato da versão que a gerou"],
@@ -793,7 +793,7 @@ tabela(["Comando", "Para que serve"], [
 
 // ---------------------------------------------------------------------
 h1("6. Testes automatizados");
-p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 149 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
+p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 161 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
 tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_precos.py`", "Custo correto para o modelo em uso; preço de cache aplicado; nome com sufixo de versão; modelo desconhecido não gera custo inventado"],
   ["`tests/test_llm.py`", "Sucesso grava tokens, custo, latência, modelo e prompt; resposta sem formato válido vira falha com tokens; erro de rede vira falha com motivo; cliente sem novas tentativas automáticas"],
@@ -803,6 +803,7 @@ tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_itens.py`", "Cadastro com itens e critérios por item; itens fora de ordem, item único e critério ligado a item vazio; resposta com um campo por item e texto completo com itens em branco; prompt com e sem itens; trecho citado de outro item ou de item em branco; item inexistente ou diferente da rubrica; nota que não corresponde aos critérios, inclusive no empate; rótulos de professor e aluno e motivo da confiança na página; correção da v1 ainda legível"],
   ["`tests/test_discursiva.py`", "Trecho citado (seis casos, incluindo paráfrase e ordem invertida); prompt nas duas condições, sem vazar a resposta esperada; condição gravada na correção e na métrica; condição indisponível; nove tipos de saída inconsistente, incluindo nota diferente da conta pelos critérios; critérios livres sem rubrica; cadastro válido e inválido; registro de resposta; correção pela página com nota como sugestão; falhas exibidas"],
   ["`tests/test_revisao.py`", "Aceite e ajuste; mesma nota conta como aceite; nota fora do intervalo; segunda revisão recusada pela regra e pelo banco; correção sem nota; concordância e desvios por condição; resumo vazio sem divisão por zero; resumo de chamadas; formulário e ordem dos botões; erros da revisão; exportação das revisões"],
+  ["`tests/test_lista_questoes.py`", "Páginas de 50 e página fora do intervalo; cada filtro, inclusive situação pendente e sem correção; filtros mantidos ao trocar de página; filtro sem resultado; opções dos filtros vindas do banco"],
   ["`tests/test_importar_enem.py`", "Paginação; parada após recusas seguidas; exclusão de numeração fora da área e de repetidas; filtro de área e de imagens; montagem do enunciado; importação com gabarito e sem duplicar"],
 ], [3, 7]);
 
@@ -883,6 +884,7 @@ marcadores([
   "**Geração na própria requisição da página:** o navegador espera a resposta do modelo, o que leva alguns segundos. É adequado para um usuário por vez; a execução em lote da etapa 5 roda por linha de comando.",
   "**Explicações anteriores:** a página mostra só a explicação mais recente. As anteriores continuam no banco e entram na análise.",
   "**Latência e rede:** a latência inclui o tempo de rede do computador onde o sistema roda. Medições comparadas entre si devem vir da mesma máquina e conexão.",
+  "**Busca no enunciado:** o SQLite só ignora a diferença entre maiúsculas e minúsculas em letras sem acento. Buscar \"REVOLUÇÃO\" não encontra \"revolução\"; buscar em minúsculas, ou por parte da palavra sem acento (\"revolu\"), encontra.",
   "**Bloqueio por tentativas em memória:** a contagem de senhas erradas fica na memória do servidor e recomeça quando ele reinicia. É suficiente para um único servidor; com vários, precisaria ir para o banco.",
   "**Limite diário conta também as falhas:** uma chamada que falhou também foi cobrada pela OpenAI, por isso entra na contagem.",
   "**Chave de sessão:** sem `SECRET_KEY` no .env, cada reinício do servidor encerra todas as sessões. No servidor publicado, a chave é obrigatória e `COOKIE_SEGURO` deve estar ligado.",
@@ -932,6 +934,7 @@ tabela(["Termo", "Significado"], [
 // ---------------------------------------------------------------------
 h1("10. Histórico de versões");
 tabela(["Data", "Versão", "Referência", "Mudança"], [
+  ["24/10/2026", "0.11", "pull request da lista de questões", "Lista de questões com 50 por página e filtros por palavra no enunciado, número, tipo, área, origem, ano e situação"],
   ["24/10/2026", "0.10", "pull request das métricas com origem", "Cada chamada ao modelo ligada à questão e à resposta de origem, inclusive nas falhas; links e filtro por questão ou resposta na página de métricas, com custo somado; colunas novas na exportação"],
   ["24/10/2026", "0.9", "pull request da objetiva_v3", "Explicação das objetivas mais curta: explicação única por alternativa com etiqueta do tipo de erro, pista do enunciado e pista de conteúdo para eliminar alternativas (prompt objetiva_v3)"],
   ["23/10/2026", "0.8", "pull request dos itens e da discursiva_v2", "Questões discursivas com itens e resposta por item; prompt discursiva_v2 após o teste piloto (feedback sem entregar a resposta e limitado à rubrica, confiança com motivo, análise para o professor); conferência do item de cada critério, do trecho por item e da conta da nota"],

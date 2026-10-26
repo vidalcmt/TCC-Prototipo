@@ -136,7 +136,7 @@ button:disabled { opacity: 0.6; cursor: wait; }
 .botao.bloco, button.bloco { display: block; width: 100%; }
 button.pequeno { font-size: 14px; padding: 5px 10px; }
 label { font-weight: 700; display: block; margin: 16px 0 6px; font-size: 15px; }
-input[type=text], input[type=email], input[type=password], textarea, select {
+input[type=text], input[type=search], input[type=email], input[type=password], textarea, select {
   width: 100%; padding: 10px 12px; font: inherit; color: var(--tinta); background: var(--folha);
   border: 1.5px solid var(--pauta); border-radius: 8px;
 }
@@ -288,3 +288,17 @@ td.origem { white-space: nowrap; }
 .so-estas { display: block; font-size: 12px; color: var(--lapis); }
 .rolagem { overflow-x: auto; }
 .sem-quebra { white-space: nowrap; }
+
+/* Filtros e paginação da lista de questões */
+.filtros { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; background: var(--folha); border: 1px solid var(--pauta); border-radius: 10px; padding: 14px 16px; margin: 8px 0 12px; }
+.filtros .campo { display: flex; flex-direction: column; gap: 4px; flex: 1 1 150px; min-width: 0; }
+.filtros .campo.largo { flex: 3 1 260px; }
+.filtros .campo.estreito { flex: 0 1 100px; }
+.filtros .campo.botoes { flex: 0 0 auto; flex-direction: row; align-items: center; gap: 12px; }
+.filtros label { font-size: 13px; font-weight: 700; margin: 0; }
+.filtros input, .filtros select { width: 100%; }
+.contagem { margin: 0 0 8px; }
+.paginacao { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 16px 0; }
+.paginacao a, .paginacao span { min-width: 36px; text-align: center; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--pauta); background: var(--folha); text-decoration: none; }
+.paginacao .atual { background: var(--caneta-azul); color: var(--texto-no-azul); border-color: var(--caneta-azul); font-weight: 700; }
+.paginacao .reticencias { border: none; background: none; }
