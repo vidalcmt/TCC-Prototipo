@@ -79,6 +79,9 @@ def chamar_modelo(
     usou_resposta_esperada: bool | None = None,
     modelo: str | None = None,
     cliente: OpenAI | None = None,
+    usuario_id: int | None = None,
+    questao_id: int | None = None,
+    submissao_id: int | None = None,
 ) -> ResultadoChamada[Formato]:
     modelo = modelo or config.modelo
     metrica = MetricaRequisicao(
@@ -86,6 +89,9 @@ def chamar_modelo(
         usou_resposta_esperada=usou_resposta_esperada,
         modelo_solicitado=modelo,
         prompt_versao=prompt.identificador,
+        usuario_id=usuario_id,
+        questao_id=questao_id,
+        submissao_id=submissao_id,
         sucesso=False,
         latencia_ms=0.0,
     )

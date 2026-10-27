@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block titulo %}{{ atividade.titulo }}{% endblock %}
+{% block conteudo %}
+<a class="voltar" href="/atividades">&larr; Voltar para as atividades</a>
+<div class="cabecalho-pagina">
+  <div>
+    <h1>{{ atividade.titulo }}</h1>
+    <p class="resumo">
+      {% if atividade.turma %}{{ atividade.turma }} · {% endif %}{{ atividade.itens|length }} {{ "questão" if atividade.itens|length == 1 else "questões" }}{% if autor %} · criada por {{ autor.nome }}{% endif %}
+    </p>
+  </div>
+  {% if atividade.itens %}
+  <div class="acoes">
+    <a class="botao" href="/atividades/{{ atividade.id }}/imprimir" target="_blank" rel="noopener">Imprimir para o aluno</a>
+    <a class="botao contorno" href="/atividades/{{ atividade.id }}/imprimir?gabarito=1" target="_blank" rel="noopener">Imprimir com gabarito</a>
+  </div>
+  {% endif %}
+</div>
+
+{% if atividade.instrucoes %}<div class="enunciado">{{ atividade.instrucoes }}</div>{% endif %}
+
+<details class="editar-atividade">
+  <summary>Editar título, turma e instruções</summary>
+  <form class="formulario" method="post" action="/atividades/{{ atividade.id }}/editar">
+    <label for="titulo">Título</label>
+    <input type="text" id="titulo" name="titulo" value="{{ atividade.titulo }}" required>
+    <label for="turma">Turma</label>
+    <input type="text" id="turma" name="turma" value="{{ atividade.turma or '' }}">
+    <label for="instrucoes">Instruções para o aluno</label>
+    <textarea id="instrucoes" name="instrucoes" rows="3">{{ atividade.instrucoes or '' }}</textarea>
+    <p><button type="submit">Salvar</button></p>
+  </form>
+  <form method="post" action="/atividades/{{ atividade.id }}/excluir"
+        data-pergunta="Excluir a atividade {{ atividade.titulo }}? As questões continuam cadastradas." onsubmit="return confirm(this.dataset.pergunta)">
+    <button type="submit" class="secundario pequeno">Excluir atividade</button>
+  </form>
+</details>
+
+<h2 id="questoes">Questões da atividade</h2>
+{% if atividade.itens %}
+<ol class="lista-atividade">
+  {% for item in atividade.itens %}
+  {% set q = item.questao %}
+  <li>
+    <div class="conteudo-item">
+      <div class="discreto">{{ "Discursiva" if q.tipo == "discursiva" else "Objetiva" }} · <a href="/questoes/{{ q.id }}">questão {{ q.id }}</a>{% if q.fonte %} · {{ q.fonte }}{% endif %}{% if q.itens %} · itens {{ q.itens|map(attribute="letra")|join(", ") }}{% endif %}</div>
+      <div>{{ q.enunciado[:180] }}{% if q.enunciado|length > 180 %}…{% endif %}</div>
+    </div>
+    <div class="acoes-item">
+      <form method="post" action="/atividades/{{ atividade.id }}/questoes/{{ q.id }}/mover">
+        <button type="submit" name="direcao" value="cima" class="secundario pequeno" aria-label="Subir" {% if loop.first %}disabled{% endif %}>&uarr;</button>
+        <button type="submit" name="direcao" value="baixo" class="secundario pequeno" aria-label="Descer" {% if loop.last %}disabled{% endif %}>&darr;</button>
+      </form>
+      <form method="post" action="/atividades/{{ atividade.id }}/questoes/{{ q.id }}/remover">
+        <button type="submit" class="secundario pequeno">Remover</button>
+      </form>
+    </div>
+  </li>
+  {% endfor %}
+</ol>
+{% else %}
+<p class="pilha-vazia">Nenhuma questão ainda. Busque abaixo e clique em "Adicionar".</p>
+{% endif %}
+
+<h2 id="adicionar">Adicionar questões</h2>
+<form class="filtros" method="get" action="/atividades/{{ atividade.id }}#adicionar" role="search">
+  <div class="campo largo">
+    <label for="busca">Buscar no enunciado</label>
+    <input type="search" id="busca" name="busca" value="{{ filtros.busca }}" placeholder="Ex.: escravidão">
+  </div>
+  <div class="campo estreito">
+    <label for="numero">Número</label>
+    <input type="text" id="numero" name="numero" value="{{ filtros.numero }}" inputmode="numeric">
+  </div>
+  <div class="campo">
+    <label for="tipo">Tipo</label>
+    <select id="tipo" name="tipo">
+      {% for valor, rotulo in [("", "Todos"), ("objetiva", "Objetiva"), ("discursiva", "Discursiva")] %}
+      <option value="{{ valor }}"{% if filtros.tipo == valor %} selected{% endif %}>{{ rotulo }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="campo botoes">
+    <button type="submit">Buscar</button>
+  </div>
+</form>
+
+{% if buscando %}
+{% if resultados %}
+{% set voltar = request.url.path ~ "?" ~ request.url.query %}
+<div class="rolagem">
+<table>
+  <tr><th>#</th><th>Tipo</th><th>Origem</th><th>Início do enunciado</th><th></th></tr>
+  {% for q in resultados %}
+  <tr>
+    <td><a href="/questoes/{{ q.id }}">{{ q.id }}</a></td>
+    <td>{{ "Discursiva" if q.tipo == "discursiva" else "Objetiva" }}</td>
+    <td>{{ q.fonte or "" }}</td>
+    <td>{{ q.enunciado[:120] }}{% if q.enunciado|length > 120 %}…{% endif %}</td>
+    <td>
+      <form method="post" action="/atividades/{{ atividade.id }}/questoes">
+        <input type="hidden" name="questao_id" value="{{ q.id }}">
+        <input type="hidden" name="voltar" value="{{ voltar }}#adicionar">
+        <button type="submit" class="pequeno">Adicionar</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% if mais %}<p class="discreto">Mostrando as {{ limite }} primeiras. Refine a busca para encontrar outras.</p>{% endif %}
+{% else %}
+<p class="discreto">Nenhuma questão encontrada fora das que já estão na atividade.</p>
+{% endif %}
+{% else %}
+<p class="discreto">Busque por uma palavra, um número ou um tipo de questão. As que já estão na atividade não aparecem.</p>
+{% endif %}
+{% endblock %}

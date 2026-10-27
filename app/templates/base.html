@@ -1,71 +1,40 @@
+{% from "_macros.html" import icone_marca, botao_tema %}
 <!doctype html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block titulo %}Protótipo TCC{% endblock %}</title>
-  <style>
-    :root { --texto: #1f2328; --discreto: #59636e; --borda: #d0d7de; --fundo-claro: #f6f8fa;
-            --destaque: #1a7f37; --destaque-fundo: #e6f4ea; --erro: #b42318; --erro-fundo: #fdecea; --acao: #0b5cad; }
-    body { font-family: system-ui, sans-serif; max-width: 1000px; margin: 0 auto; padding: 16px; color: var(--texto); line-height: 1.5; }
-    nav { border-bottom: 1px solid var(--borda); padding-bottom: 8px; margin-bottom: 16px; }
-    nav a { margin-right: 16px; color: var(--acao); text-decoration: none; font-weight: 600; }
-    a { color: var(--acao); }
-    table { border-collapse: collapse; width: 100%; font-size: 14px; }
-    th, td { border-bottom: 1px solid var(--borda); padding: 6px 8px; text-align: left; vertical-align: top; }
-    th { background: var(--fundo-claro); }
-    .falha { color: var(--erro); }
-    .discreto { color: var(--discreto); font-size: 14px; }
-    .aviso-erro { background: var(--erro-fundo); border: 1px solid var(--erro); padding: 8px 12px; border-radius: 6px; margin: 12px 0; }
-    .enunciado { white-space: pre-wrap; background: var(--fundo-claro); padding: 12px; border-radius: 6px; }
-    .alternativa { border: 1px solid var(--borda); border-radius: 6px; padding: 10px 12px; margin: 8px 0; }
-    .alternativa.correta { border-color: var(--destaque); background: var(--destaque-fundo); }
-    .selo { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 10px; background: var(--destaque); color: #fff; margin-left: 6px; }
-    .conceito { font-size: 13px; color: var(--discreto); }
-    .explicacao { margin-top: 6px; }
-    .explicacao.verificar { background: #eef4fb; border-left: 3px solid var(--acao); padding: 6px 10px; border-radius: 4px; }
-    .tipo-erro { display: inline-block; margin-top: 6px; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 10px; background: #fff4e5; color: #8a4b00; border: 1px solid #f0c27a; }
-    button, .botao { background: var(--acao); color: #fff; border: 0; border-radius: 6px; padding: 8px 14px; font-size: 15px; cursor: pointer; text-decoration: none; display: inline-block; }
-    button:disabled { opacity: 0.6; cursor: wait; }
-    label { font-weight: 600; display: block; margin-top: 12px; }
-    input[type=text], textarea { width: 100%; box-sizing: border-box; padding: 6px 8px; font: inherit; border: 1px solid var(--borda); border-radius: 6px; }
-    .linha-alternativa { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
-    .linha-alternativa input[type=text] { flex: 1; }
-    .acoes-correcao { margin: 16px 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .correcao { border-top: 2px solid var(--borda); margin-top: 24px; padding-top: 4px; }
-    .condicao { font-size: 13px; font-weight: 600; color: var(--discreto); background: var(--fundo-claro); border: 1px solid var(--borda); padding: 1px 8px; border-radius: 10px; vertical-align: middle; }
-    .nota-sugerida { border: 1px dashed var(--acao); border-radius: 8px; padding: 10px 14px; background: #f5f9fe; max-width: 520px; }
-    .nota-sugerida .rotulo { font-size: 13px; font-weight: 600; color: var(--acao); text-transform: uppercase; letter-spacing: 0.03em; }
-    .nota-sugerida .valor { font-size: 28px; font-weight: 700; }
-    .nota-sugerida .valor span { font-size: 16px; font-weight: 400; color: var(--discreto); }
-    .criterio { border: 1px solid var(--borda); border-radius: 6px; padding: 10px 12px; margin: 8px 0; }
-    .status { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 10px; margin-left: 6px; }
-    .status-atendido { background: var(--destaque-fundo); color: var(--destaque); border: 1px solid var(--destaque); }
-    .status-parcial { background: #fff4e5; color: #8a4b00; border: 1px solid #f0c27a; }
-    .status-nao_atendido { background: var(--erro-fundo); color: var(--erro); border: 1px solid var(--erro); }
-    .trecho { margin: 8px 0 0; padding: 6px 10px; border-left: 3px solid var(--discreto); background: var(--fundo-claro); font-style: italic; }
-    details summary { cursor: pointer; color: var(--acao); margin: 8px 0; }
-    .notas { display: flex; gap: 12px; flex-wrap: wrap; }
-    .notas > div { flex: 1 1 260px; max-width: 420px; }
-    .nota-final { border: 2px solid var(--destaque); border-radius: 8px; padding: 10px 14px; background: var(--destaque-fundo); }
-    .nota-final .rotulo, .nota-pendente .rotulo { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--destaque); }
-    .nota-final .valor { font-size: 28px; font-weight: 700; }
-    .nota-final .valor span { font-size: 16px; font-weight: 400; color: var(--discreto); }
-    .nota-pendente { border: 1px dashed var(--borda); border-radius: 8px; padding: 10px 14px; }
-    .nota-pendente .rotulo { color: var(--discreto); }
-    .nota-pendente .valor { font-size: 22px; font-weight: 600; color: var(--discreto); margin: 4px 0; }
-    .comentario { margin-top: 6px; font-style: italic; }
-    .decisao { border: 1px solid var(--acao); border-radius: 8px; padding: 4px 14px 8px; margin: 16px 0; background: #f5f9fe; }
-    .acoes-decisao { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
-    button.secundario { background: #fff; color: var(--acao); border: 1px solid var(--acao); }
-  </style>
+  {% include "_cabeca.html" %}
+  <title>{% block titulo %}Início{% endblock %} | {{ nome_sistema }}</title>
 </head>
 <body>
-  <nav>
-    <a href="/">Início</a>
-    <a href="/questoes">Questões</a>
-    <a href="/metricas">Métricas</a>
-  </nav>
-  <main>{% block conteudo %}{% endblock %}</main>
+{% set usuario = request.state.usuario if request.state.usuario is defined else none %}
+{% set caminho = request.url.path %}
+<header class="barra">
+  <div class="barra-interna">
+    <a class="marca" href="/">{{ icone_marca() }}{{ nome_sistema }}</a>
+    {% if usuario %}
+    <nav class="menu" aria-label="Principal" id="menu-principal">
+      <a href="/"{% if caminho == "/" %} aria-current="page"{% endif %}>Início</a>
+      <a href="/questoes"{% if caminho.startswith("/questoes") or caminho.startswith("/respostas") %} aria-current="page"{% endif %}>Questões</a>
+      <a href="/atividades"{% if caminho.startswith("/atividades") %} aria-current="page"{% endif %}>Atividades</a>
+      <a href="/revisar"{% if caminho == "/revisar" %} aria-current="page"{% endif %}>Para revisar{% if request.state.pendentes %}<span class="contador" aria-label="{{ request.state.pendentes }} pendentes">{{ request.state.pendentes }}</span>{% endif %}</a>
+      {% if usuario.eh_admin %}
+      <a href="/metricas"{% if caminho.startswith("/metricas") %} aria-current="page"{% endif %}>Métricas</a>
+      <a href="/usuarios"{% if caminho.startswith("/usuarios") %} aria-current="page"{% endif %}>Usuários</a>
+      {% endif %}
+    </nav>
+    <div class="usuario">
+      <span class="texto-usuario"><span class="nome">{{ usuario.nome }}</span><span class="papel">{{ "Administrador" if usuario.eh_admin else "Avaliador" }}</span></span>
+      {{ botao_tema() }}
+      <form method="post" action="/sair"><button type="submit" class="botao-leve">Sair</button></form>
+    </div>
+    <button type="button" class="botao-leve abrir-menu" data-abrir-menu aria-controls="menu-principal" aria-expanded="false">Menu</button>
+    {% else %}
+    <div class="usuario" style="margin-left: auto">{{ botao_tema() }}</div>
+    {% endif %}
+  </div>
+</header>
+<main class="pagina{% block classe_pagina %}{% endblock %}">
+{% block conteudo %}{% endblock %}
+</main>
 </body>
 </html>

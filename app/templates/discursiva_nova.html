@@ -5,9 +5,19 @@
 {% if erros %}
 <div class="aviso-erro">{% for e in erros %}<div>{{ e }}</div>{% endfor %}</div>
 {% endif %}
-<form method="post" action="/questoes/discursivas">
+<form class="formulario" method="post" action="/questoes/discursivas">
   <label for="enunciado">Enunciado</label>
+  <p class="discreto" style="margin: 2px 0 6px">Em questão com itens, coloque aqui o texto-base e o que vale para todos os itens.</p>
   <textarea id="enunciado" name="enunciado" rows="7">{{ dados.get("enunciado", "") }}</textarea>
+
+  <label>Itens (opcional)</label>
+  <p class="discreto" style="margin: 2px 0 6px">Para questões como as da Fuvest, com itens a, b, c. Preencha em ordem; deixe todos em branco para uma resposta única. A resposta do aluno terá um campo por item.</p>
+  {% for letra in letras %}
+  <div class="linha-item">
+    <span class="letra-item">{{ letra }})</span>
+    <textarea name="item_{{ letra }}" rows="2" aria-label="Item {{ letra }}">{{ dados.get('item_' ~ letra, '') }}</textarea>
+  </div>
+  {% endfor %}
 
   <label for="nota_maxima">Nota máxima</label>
   <input type="text" id="nota_maxima" name="nota_maxima" value="{{ dados.get('nota_maxima', '') }}" inputmode="decimal" style="max-width: 120px">
@@ -17,13 +27,18 @@
   <textarea id="resposta_esperada" name="resposta_esperada" rows="6">{{ dados.get("resposta_esperada", "") }}</textarea>
 
   <label>Rubrica (opcional)</label>
-  <p class="discreto" style="margin: 2px 0 6px">Deixe em branco para o modelo definir os critérios. Linhas vazias são ignoradas.</p>
+  <p class="discreto" style="margin: 2px 0 6px">Deixe em branco para o modelo definir os critérios. Linhas vazias são ignoradas. Em questão com itens, indique o item de cada critério; o trecho citado pelo modelo será conferido na resposta desse item.</p>
   <table>
-    <tr><th style="width: 40px">#</th><th>Critério</th><th style="width: 110px">Peso</th></tr>
+    <tr><th style="width: 40px">#</th><th>Critério</th><th style="width: 120px">Item</th><th style="width: 100px">Peso</th></tr>
     {% for i in linhas %}
+    {% set escolhido = dados.get('criterio_item_' ~ i, '') %}
     <tr>
       <td>{{ i }}</td>
       <td><input type="text" name="criterio_{{ i }}" value="{{ dados.get('criterio_' ~ i, '') }}" aria-label="Critério {{ i }}"></td>
+      <td><select name="criterio_item_{{ i }}" aria-label="Item do critério {{ i }}">
+        <option value="">Todos</option>
+        {% for letra in letras %}<option value="{{ letra }}"{% if escolhido == letra %} selected{% endif %}>{{ letra }}</option>{% endfor %}
+      </select></td>
       <td><input type="text" name="peso_{{ i }}" value="{{ dados.get('peso_' ~ i, '') }}" inputmode="decimal" aria-label="Peso do critério {{ i }}"></td>
     </tr>
     {% endfor %}

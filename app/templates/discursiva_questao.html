@@ -1,11 +1,16 @@
 {% extends "base.html" %}
 {% block titulo %}Questão {{ questao.id }}{% endblock %}
 {% block conteudo %}
-<p><a href="/questoes">&larr; Voltar para a lista</a></p>
+<a class="voltar" href="/questoes">&larr; Voltar para as questões</a>
 <h1>Questão {{ questao.id }} <span class="discreto">(discursiva)</span></h1>
 <p class="discreto">{{ questao.fonte or "" }}{% if questao.area %} · {{ questao.area }}{% endif %} · nota máxima {{ questao.nota_maxima|num }}</p>
 
 <div class="enunciado">{{ questao.enunciado }}</div>
+{% if questao.itens %}
+<div class="itens">
+  {% for item in questao.itens %}<div class="linha-item"><span class="letra-item">{{ item.letra }})</span><div>{{ item.enunciado }}</div></div>{% endfor %}
+</div>
+{% endif %}
 
 <h2>Resposta esperada</h2>
 {% if questao.resposta_esperada %}
@@ -17,9 +22,9 @@
 <h2>Rubrica</h2>
 {% if questao.criterios %}
 <table>
-  <tr><th>#</th><th>Critério</th><th>Peso</th></tr>
+  <tr><th>#</th><th>Critério</th>{% if questao.itens %}<th>Item</th>{% endif %}<th>Peso</th></tr>
   {% for c in questao.criterios %}
-  <tr><td>{{ loop.index }}</td><td>{{ c.descricao }}</td><td>{{ c.peso|num }}</td></tr>
+  <tr><td>{{ loop.index }}</td><td>{{ c.descricao }}</td>{% if questao.itens %}<td>{{ c.item.letra if c.item else "Todos" }}</td>{% endif %}<td>{{ c.peso|num }}</td></tr>
   {% endfor %}
 </table>
 {% else %}
@@ -46,17 +51,25 @@
 {% endif %}
 
 <h3>Registrar resposta de aluno</h3>
-<form method="post" action="/questoes/{{ questao.id }}/respostas">
+<form class="formulario" method="post" action="/questoes/{{ questao.id }}/respostas">
+  {% if questao.itens %}
+  <p class="discreto">Um campo por item. Deixe vazio o item que o aluno não respondeu: ele será corrigido como em branco.</p>
+  {% for item in questao.itens %}
+  <label for="resposta_{{ item.letra }}">Resposta do item {{ item.letra }}</label>
+  <textarea id="resposta_{{ item.letra }}" name="resposta_{{ item.letra }}" rows="4"></textarea>
+  {% endfor %}
+  {% else %}
   <label for="resposta_aluno">Resposta</label>
   <textarea id="resposta_aluno" name="resposta_aluno" rows="6" required></textarea>
-  <div style="display: flex; gap: 16px">
+  {% endif %}
+  <div class="lado-a-lado">
     <div style="flex: 1">
       <label for="codigo_corpus">Código no corpus (opcional)</label>
       <input type="text" id="codigo_corpus" name="codigo_corpus" placeholder="R014">
     </div>
     <div style="flex: 1">
       <label for="origem">Origem</label>
-      <select id="origem" name="origem" style="width: 100%; padding: 6px; font: inherit">
+      <select id="origem" name="origem">
         {% for valor, rotulo in origens.items() %}<option value="{{ valor }}">{{ rotulo }}</option>{% endfor %}
       </select>
     </div>

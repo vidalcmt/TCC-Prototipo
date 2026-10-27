@@ -4,6 +4,48 @@ Cada versão usada na coleta fica congelada. Uma mudança gera um arquivo novo
 (v2, v3...) e uma entrada aqui, com a data e o motivo. A coluna prompt_versao
 da tabela metrica_requisicao aponta para estas versões.
 
+## objetiva_v3 (24/10/2026)
+
+Pedido do autor após usar a v2: a explicação ficou cansativa, com três blocos
+por alternativa (o que está errado, por quê, como perceber sem o gabarito).
+Mudanças em relação à v2:
+- explicacao única por alternativa, em até duas frases, no lugar de
+  elemento_incorreto e por_que; tipo_de_erro continua, exibido como etiqueta;
+- como_verificar sai e entra pista: pista de conteúdo para eliminar a
+  alternativa sem saber a resposta (elemento de outra época, sistema ou
+  conceito incompatível com o enunciado), opcional para não forçar invenção;
+- novo campo pista_do_enunciado: o que no enunciado indica o caminho da
+  resolução, como os professores ensinam para ganhar tempo na prova;
+- proibidas as pistas genéricas de prova (tamanho da alternativa, palavras
+  absolutas, posição da letra);
+- caminho até a resposta limitado a quatro passos curtos.
+
+## discursiva_v2 (23/10/2026)
+
+Mudanças após o teste piloto do autor com a questão Hereges (Fuvest 2025),
+em que a v1 mostrou quatro problemas causados pelas próprias regras:
+- o feedback entregava a resposta (ex.: "retome o conceito de Inquisição"),
+  porque a regra 9 da v1 mandava indicar os conceitos a mobilizar. Agora o
+  feedback pode repetir o que o enunciado pede, mas não o conteúdo que
+  atende ao pedido, e orienta com perguntas e trechos a reler;
+- o feedback cobrava conteúdo fora do gabarito (autoridades civis), porque
+  a v1 mandava mostrar o caminho para a resposta completa sem limite. Agora
+  só cobra o que algum critério da rubrica exige;
+- a confiança era baixa em respostas curtas e claramente erradas, porque a
+  regra 8 da v1 misturava a qualidade da resposta com a certeza da nota.
+  Agora a confiança mede só a certeza sobre a nota, com níveis definidos, e
+  vem acompanhada de motivo_confianca;
+- a saída passa a separar os leitores: a análise por critério é para o
+  professor e pode citar o conteúdo esperado; o feedback é para o aluno.
+
+Mudanças ligadas aos itens (a, b, c) das questões discursivas:
+- novo campo {itens} no prompt e resposta do aluno identificada por item;
+- cada critério informa o item a que se refere (campo item do contrato
+  CorrecaoDiscursivaV2), e o sistema procura o trecho citado só na resposta
+  desse item;
+- o sistema refaz a conta da nota pelos pesos e status e recusa a correção
+  se a nota não corresponder (no empate, aceita os dois arredondamentos).
+
 ## discursiva_v1 (21/10/2026)
 
 Primeira versão do prompt das questões discursivas. Um único texto atende às

@@ -10,7 +10,7 @@ from app.correcao.llm import chamar_modelo
 from app.correcao.prompts import carregar_prompt
 from app.models import Correcao, MetricaRequisicao, Questao
 
-PROMPT_OBJETIVA = ("objetiva", 2)
+PROMPT_OBJETIVA = ("objetiva", 3)
 
 
 @dataclass
@@ -40,7 +40,7 @@ def campos_do_prompt(questao: Questao) -> dict[str, str]:
 
 
 def gerar_explicacao(
-    sessao: Session, questao: Questao, cliente: OpenAI | None = None
+    sessao: Session, questao: Questao, cliente: OpenAI | None = None, usuario_id: int | None = None
 ) -> ResultadoExplicacao:
     """Chama o modelo, confere a saída com o gabarito e grava a correção.
 
@@ -52,7 +52,7 @@ def gerar_explicacao(
     formato = CONTRATO_POR_PROMPT[prompt.identificador]
     resultado = chamar_modelo(
         sessao, prompt, formato, campos_do_prompt(questao),
-        tipo_questao="objetiva", cliente=cliente,
+        tipo_questao="objetiva", cliente=cliente, usuario_id=usuario_id, questao_id=questao.id,
     )
     metrica = resultado.metrica
     if not resultado.sucesso:

@@ -19,6 +19,26 @@ def agora() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class Usuario(Base):
+    """Conta de acesso. Criada pelo administrador; não há cadastro aberto."""
+
+    __tablename__ = "usuario"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nome: Mapped[str] = mapped_column(String(120))
+    email: Mapped[str] = mapped_column(String(200), unique=True)
+    senha_resumo: Mapped[str] = mapped_column(String(200))
+    papel: Mapped[str] = mapped_column(String(20), default="avaliador")  # "admin" ou "avaliador"
+    ativo: Mapped[bool] = mapped_column(Boolean, default=True)
+    precisa_trocar_senha: Mapped[bool] = mapped_column(Boolean, default=True)
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+    ultimo_acesso: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    @property
+    def eh_admin(self) -> bool:
+        return self.papel == "admin"
+
+
 class Questao(Base):
     __tablename__ = "questao"
 
@@ -35,7 +55,12 @@ class Questao(Base):
         back_populates="questao", cascade="all, delete-orphan", order_by="Alternativa.letra"
     )
     criterios: Mapped[list["CriterioRubrica"]] = relationship(
-        back_populates="questao", cascade="all, delete-orphan"
+        back_populates="questao", cascade="all, delete-orphan", order_by="CriterioRubrica.id"
+    )
+    # Itens de uma discursiva (a, b, c...), como nas provas da Fuvest. Vazio
+    # quando a questão tem uma resposta única.
+    itens: Mapped[list["ItemQuestao"]] = relationship(
+        back_populates="questao", cascade="all, delete-orphan", order_by="ItemQuestao.letra"
     )
     resposta_esperada: Mapped["RespostaEsperada | None"] = relationship(
         back_populates="questao", cascade="all, delete-orphan", uselist=False
@@ -54,6 +79,20 @@ class Alternativa(Base):
     questao: Mapped[Questao] = relationship(back_populates="alternativas")
 
 
+class ItemQuestao(Base):
+    """Um item de uma questão discursiva, com o seu próprio comando."""
+
+    __tablename__ = "item_questao"
+    __table_args__ = (UniqueConstraint("questao_id", "letra", name="uq_item_questao_letra"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    questao_id: Mapped[int] = mapped_column(ForeignKey("questao.id"))
+    letra: Mapped[str] = mapped_column(String(1))
+    enunciado: Mapped[str] = mapped_column(Text)
+
+    questao: Mapped[Questao] = relationship(back_populates="itens")
+
+
 class CriterioRubrica(Base):
     """Opcional: a questão discursiva pode ou não ter rubrica (RF04)."""
 
@@ -61,10 +100,14 @@ class CriterioRubrica(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     questao_id: Mapped[int] = mapped_column(ForeignKey("questao.id"))
+    # Item a que o critério se refere. Vazio em questão sem itens ou em
+    # critério que vale para a resposta inteira.
+    item_id: Mapped[int | None] = mapped_column(ForeignKey("item_questao.id"))
     descricao: Mapped[str] = mapped_column(Text)
     peso: Mapped[float] = mapped_column(Float, default=1.0)
 
     questao: Mapped[Questao] = relationship(back_populates="criterios")
+    item: Mapped["ItemQuestao | None"] = relationship()
 
 
 class RespostaEsperada(Base):
@@ -90,6 +133,30 @@ class Submissao(Base):
     codigo_corpus: Mapped[str | None] = mapped_column(String(50))
     origem: Mapped[str | None] = mapped_column(String(30))
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+
+    # Em questão com itens, a resposta de cada item fica aqui, e resposta_aluno
+    # guarda o texto completo, com os itens identificados pela letra.
+    respostas_itens: Mapped[list["RespostaItem"]] = relationship(
+        cascade="all, delete-orphan", order_by="RespostaItem.id"
+    )
+
+    def resposta_do_item(self, letra: str) -> str:
+        for r in self.respostas_itens:
+            if r.item.letra == letra:
+                return r.texto
+        return ""
+
+
+class RespostaItem(Base):
+    __tablename__ = "resposta_item"
+    __table_args__ = (UniqueConstraint("submissao_id", "item_id", name="uq_resposta_item"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    submissao_id: Mapped[int] = mapped_column(ForeignKey("submissao.id"))
+    item_id: Mapped[int] = mapped_column(ForeignKey("item_questao.id"))
+    texto: Mapped[str] = mapped_column(Text, default="")  # vazio: item em branco
+
+    item: Mapped[ItemQuestao] = relationship()
 
 
 class Correcao(Base):
@@ -118,6 +185,8 @@ class RevisaoProfessor(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     correcao_id: Mapped[int] = mapped_column(ForeignKey("correcao.id"))
+    # Quem decidiu. Vazio nas revisões feitas antes do login existir.
+    usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuario.id"))
     nota_sugerida: Mapped[float] = mapped_column(Float)
     nota_final: Mapped[float] = mapped_column(Float)
     aceitou_sugestao: Mapped[bool] = mapped_column(Boolean)
@@ -129,12 +198,18 @@ class MetricaRequisicao(Base):
     """Uma linha por chamada ao modelo, com sucesso ou falha (RF12).
 
     correcao_id fica vazio quando a chamada falha antes de gerar uma correção.
+    questao_id e submissao_id dizem de onde veio a chamada mesmo nas falhas,
+    o que permite ligar cada custo à questão e à resposta que o geraram.
     """
 
     __tablename__ = "metrica_requisicao"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     correcao_id: Mapped[int | None] = mapped_column(ForeignKey("correcao.id"))
+    questao_id: Mapped[int | None] = mapped_column(ForeignKey("questao.id"))
+    submissao_id: Mapped[int | None] = mapped_column(ForeignKey("submissao.id"))
+    # Quem disparou a chamada; vazio em scripts e chamadas anteriores ao login.
+    usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuario.id"))
     tipo_questao: Mapped[str | None] = mapped_column(String(20))
     usou_resposta_esperada: Mapped[bool | None] = mapped_column(Boolean)
     modelo_solicitado: Mapped[str] = mapped_column(String(100))
@@ -151,3 +226,37 @@ class MetricaRequisicao(Base):
     sucesso: Mapped[bool] = mapped_column(Boolean)
     motivo_falha: Mapped[str | None] = mapped_column(Text)
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+
+
+class Atividade(Base):
+    """Um conjunto de questões montado pelo professor para uma turma, que pode
+    ser impresso em folha A4. Não interfere na correção nem nas métricas."""
+
+    __tablename__ = "atividade"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    titulo: Mapped[str] = mapped_column(String(200))
+    turma: Mapped[str | None] = mapped_column(String(100))
+    instrucoes: Mapped[str | None] = mapped_column(Text)
+    usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuario.id"))
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+
+    itens: Mapped[list["AtividadeQuestao"]] = relationship(
+        back_populates="atividade", cascade="all, delete-orphan", order_by="AtividadeQuestao.ordem"
+    )
+
+
+class AtividadeQuestao(Base):
+    """Uma questão dentro de uma atividade, na posição definida pelo professor.
+    A mesma questão pode estar em várias atividades."""
+
+    __tablename__ = "atividade_questao"
+    __table_args__ = (UniqueConstraint("atividade_id", "questao_id", name="uq_atividade_questao"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    atividade_id: Mapped[int] = mapped_column(ForeignKey("atividade.id"))
+    questao_id: Mapped[int] = mapped_column(ForeignKey("questao.id"))
+    ordem: Mapped[int] = mapped_column(Integer)
+
+    atividade: Mapped[Atividade] = relationship(back_populates="itens")
+    questao: Mapped[Questao] = relationship()

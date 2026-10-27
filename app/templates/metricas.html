@@ -40,21 +40,36 @@
   <a href="/metricas/revisoes.csv">Exportar revisões em CSV</a>
 </p>
 
-<h2>Últimas chamadas</h2>
-{% if not metricas %}
-<p class="discreto">Nenhuma requisição registrada ainda.</p>
+<h2 id="chamadas">{% if filtro_questao is not none %}Chamadas da questão {{ filtro_questao }}{% elif filtro_resposta is not none %}Chamadas da resposta {{ filtro_resposta }}{% else %}Últimas chamadas{% endif %}</h2>
+{% if custo_filtrado is not none %}
+<p class="discreto">{{ metricas|length }} {{ "chamada" if metricas|length == 1 else "chamadas" }}, custo total de US$ {{ ("%.6f"|format(custo_filtrado))|replace(".", ",") }}. <a href="/metricas#chamadas">Ver todas as chamadas</a></p>
 {% else %}
+<p class="discreto">As {{ limite }} mais recentes. Clique na origem para abrir a questão ou a resposta, ou em "só estas" para ver todas as chamadas de uma questão e o custo somado.</p>
+{% endif %}
+{% if not metricas %}
+<p class="discreto">Nenhuma requisição registrada{% if custo_filtrado is not none %} para esta origem{% endif %}.</p>
+{% else %}
+<div class="rolagem">
 <table>
   <tr>
-    <th>#</th><th>Quando (UTC)</th><th>Tipo</th><th>Modelo</th><th>Prompt</th>
+    <th>#</th><th>Quando</th><th>Origem</th><th>Quem</th><th>Tipo</th><th>Modelo</th><th>Prompt</th>
     <th>Entrada</th><th>Saída</th><th>Custo (US$)</th><th>Latência (ms)</th><th>Resultado</th>
   </tr>
   {% for m in metricas %}
+  {% set q = questoes.get(m.questao_id) %}{% set s = respostas.get(m.submissao_id) %}{% set u = usuarios.get(m.usuario_id) %}
   <tr>
     <td>{{ m.id }}</td>
-    <td>{{ m.criado_em.strftime("%d/%m %H:%M:%S") if m.criado_em }}</td>
+    <td>{{ m.criado_em|data_local("%d/%m %H:%M") }}</td>
+    <td class="origem">
+      {% if q %}
+      <a href="/questoes/{{ q.id }}">Questão {{ q.id }}</a>{% if s %}, <a href="/respostas/{{ s.id }}{% if m.correcao_id %}#correcao-{{ m.correcao_id }}{% endif %}">{{ s.codigo_corpus or "resposta " ~ s.id }}</a>{% endif %}
+      {% if filtro_questao is none %}<a class="so-estas" href="/metricas?questao={{ q.id }}#chamadas">só estas</a>{% endif %}
+      {% elif m.prompt_versao.startswith("teste") %}<span class="discreto">teste de conexão</span>
+      {% else %}<span class="discreto">sem registro</span>{% endif %}
+    </td>
+    <td>{{ u.nome.split()[0] if u else "" }}</td>
     <td>{{ m.tipo_questao or "" }}{% if m.usou_resposta_esperada is not none %} ({{ "com" if m.usou_resposta_esperada else "sem" }}){% endif %}</td>
-    <td>{{ m.modelo or m.modelo_solicitado }}</td>
+    <td class="sem-quebra">{{ m.modelo or m.modelo_solicitado }}</td>
     <td>{{ m.prompt_versao }}</td>
     <td>{{ m.tokens_entrada if m.tokens_entrada is not none }}</td>
     <td>{{ m.tokens_saida if m.tokens_saida is not none }}</td>
@@ -64,5 +79,6 @@
   </tr>
   {% endfor %}
 </table>
+</div>
 {% endif %}
 {% endblock %}

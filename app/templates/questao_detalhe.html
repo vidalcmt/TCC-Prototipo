@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block titulo %}Questão {{ questao.id }}{% endblock %}
 {% block conteudo %}
-<p><a href="/questoes">&larr; Voltar para a lista</a></p>
+<a class="voltar" href="/questoes">&larr; Voltar para as questões</a>
 <h1>Questão {{ questao.id }}</h1>
 <p class="discreto">{{ questao.fonte or "" }}{% if questao.area %} · {{ questao.area }}{% endif %}</p>
 
@@ -15,12 +15,27 @@
 </div>
 {% endif %}
 
+{% if explicacao and explicacao.pista_do_enunciado %}
+<div class="pista-enunciado">
+  <div class="rotulo">Pista do enunciado</div>
+  <div>{{ explicacao.pista_do_enunciado }}</div>
+</div>
+{% endif %}
+
 <h2>Alternativas</h2>
 {% for a in questao.alternativas %}
 <div class="alternativa {% if a.correta %}correta{% endif %}">
   <strong>{{ a.letra }})</strong> {{ a.texto }}{% if a.correta %}<span class="selo">Gabarito</span>{% endif %}
   {% set e = por_letra.get(a.letra) %}
-  {% if e %}
+  {% if e and e.explicacao is defined %}
+  {# Versão 3: etiqueta do erro, explicação única e pista para eliminar #}
+  <div class="explicacao">
+    {% if e.tipo_de_erro %}<span class="tipo-erro">{{ rotulos_erro.get(e.tipo_de_erro, e.tipo_de_erro) }}</span>{% endif %}
+    {{ e.explicacao }}
+  </div>
+  {% if e.pista %}<div class="pista"><strong>Pista para eliminar:</strong> {{ e.pista }}</div>{% endif %}
+  <div class="conceito">{{ e.conceito_envolvido }}</div>
+  {% elif e %}
   {% if e.tipo_de_erro %}
   <div class="tipo-erro">{{ rotulos_erro.get(e.tipo_de_erro, e.tipo_de_erro) }}</div>
   {% endif %}
@@ -45,6 +60,7 @@
   Gerada por {{ metrica.modelo or metrica.modelo_solicitado }} com o prompt {{ metrica.prompt_versao }},
   em {{ "%.1f"|format(metrica.latencia_ms / 1000) }} s, custo de US$ {{ "%.6f"|format(metrica.custo_usd) if metrica.custo_usd is not none else "?" }}.
   {% endif %}
+  {% if request.state.usuario.eh_admin %}<a href="/metricas?questao={{ questao.id }}#chamadas">Chamadas desta questão</a>.{% endif %}
   {% if total_explicacoes > 1 %}Esta é a mais recente de {{ total_explicacoes }} explicações geradas.{% endif %}
 </p>
 {% endif %}

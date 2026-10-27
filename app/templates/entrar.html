@@ -1,0 +1,32 @@
+{% from "_macros.html" import icone_marca, botao_tema %}
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  {% include "_cabeca.html" %}
+  <title>Entrar | {{ nome_sistema }}</title>
+</head>
+<body>
+<main class="tela-entrar">
+  <section class="caderno" aria-hidden="false">
+    <a class="marca" href="/entrar">{{ icone_marca() }}{{ nome_sistema }}</a>
+    <p class="caderno-texto">Correção de questões com um feedback que o professor revisa antes de valer.</p>
+    <p class="caderno-rodape">Protótipo do TCC de Engenharia de Software, UniAmérica.</p>
+  </section>
+  <section class="lado-form">
+    {{ botao_tema() }}
+    <form class="cartao-entrar" method="post" action="/entrar">
+      <h1>Entrar</h1>
+      <p class="resumo">Use a conta que o administrador criou para você.</p>
+      {% if erro %}<div class="aviso-erro" role="alert">{{ erro }}</div>{% endif %}
+      <input type="hidden" name="proximo" value="{{ proximo }}">
+      <label for="email">E-mail</label>
+      <input id="email" name="email" type="email" value="{{ email }}" autocomplete="username" required autofocus>
+      <label for="senha">Senha</label>
+      <input id="senha" name="senha" type="password" autocomplete="current-password" required>
+      <button type="submit">Entrar</button>
+      <p class="convite">Ainda não tem conta? As contas são criadas pelo administrador do sistema.</p>
+    </form>
+  </section>
+</main>
+</body>
+</html>

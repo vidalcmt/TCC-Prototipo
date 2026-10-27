@@ -8,7 +8,9 @@ antigas continuam aqui para que as correções já gravadas possam ser lidas.
 
 Campos com razão metodológica, que não devem ser removidos:
 - conceito_envolvido: permite agrupar erros por conceito na análise;
-- tipo_de_erro (v2): permite contar quais tipos de erro os distratores exploram;
+- tipo_de_erro (v2 e v3): permite contar quais tipos de erro os distratores exploram;
+- pista (v3): permite contar em quantas alternativas há uma pista de conteúdo
+  para eliminá-las;
 - trecho_citado (discursiva): distingue feedback específico de genérico, e a
   proporção de critérios com trecho citado é métrica de qualidade;
 - usou_resposta_esperada (discursiva): separa as duas condições experimentais.
@@ -135,6 +137,58 @@ class CorrecaoObjetivaV2(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Versão 3 (prompt objetiva_v3): explicação única, pista do enunciado e pista
+# para eliminar cada alternativa
+# ---------------------------------------------------------------------------
+
+class ExplicacaoAlternativaV3(BaseModel):
+    letra: Letra
+    correta: bool = Field(description="Verdadeiro apenas para a alternativa indicada como correta.")
+    tipo_de_erro: TipoDeErro | None = Field(
+        description=(
+            "Para alternativa incorreta, a natureza do erro: anacronismo, contexto_historico, "
+            "conceito_trocado, leitura_parcial, extrapolacao, causa_efeito, fato_incorreto, "
+            "nao_responde ou outro. Para a alternativa correta: null."
+        )
+    )
+    explicacao: str = Field(
+        description=(
+            "Em até duas frases. Para alternativa incorreta: o que está errado e por quê, numa só "
+            "passagem. Para a correta: por que ela é a resposta."
+        )
+    )
+    pista: str | None = Field(
+        description=(
+            "Só para alternativa incorreta, em uma frase: a pista de conteúdo que permite eliminá-la "
+            "sem saber a resposta, como um elemento de outra época, sistema ou conceito incompatível "
+            "com o enunciado. Null quando não houver uma pista assim, e sempre null na correta. Nunca "
+            "uma pista genérica de prova (tamanho, palavras absolutas, posição da letra)."
+        )
+    )
+    conceito_envolvido: str = Field(
+        description="Conceito central mobilizado pela alternativa, em 2 a 6 palavras."
+    )
+
+
+class CorrecaoObjetivaV3(BaseModel):
+    questao_id: str
+    alternativa_correta: Letra
+    pista_do_enunciado: str = Field(
+        description=(
+            "A palavra, expressão ou dado do enunciado que indica o caminho da resolução e o que ele "
+            "sinaliza, em até duas frases."
+        )
+    )
+    explicacoes: list[ExplicacaoAlternativaV3] = Field(
+        description="Uma explicação por alternativa, em ordem alfabética, de A até a última."
+    )
+    explicacao_correta: str = Field(
+        description="O caminho do enunciado até a resposta correta, em até quatro passos curtos."
+    )
+    nivel_dificuldade_estimado: Dificuldade
+
+
+# ---------------------------------------------------------------------------
 # Questão discursiva (prompt discursiva_v1)
 # ---------------------------------------------------------------------------
 
@@ -178,10 +232,60 @@ class CorrecaoDiscursiva(BaseModel):
     )
 
 
+class AnaliseCriterioV2(BaseModel):
+    criterio: str = Field(
+        description="O critério avaliado. Com rubrica, repita o texto do critério do professor."
+    )
+    item: str | None = Field(
+        description=(
+            "Letra do item a que o critério se refere, quando a questão tem itens. Null quando o "
+            "critério vale para a resposta inteira ou a questão não tem itens."
+        )
+    )
+    peso: float = Field(description="Peso do critério. Com rubrica, o mesmo peso informado pelo professor.")
+    status: StatusCriterio
+    justificativa: str = Field(
+        description=(
+            "Para o professor: por que o critério foi atendido, parcialmente atendido ou não "
+            "atendido, referindo-se ao que o aluno escreveu e ao conteúdo esperado."
+        )
+    )
+    trecho_citado: str | None = Field(
+        description=(
+            "Trecho copiado literalmente da resposta do aluno (do item indicado, quando houver) que "
+            "sustenta a avaliação, sem alterar nenhuma palavra. Null quando o aluno não escreveu "
+            "nada sobre o critério."
+        )
+    )
+
+
+class CorrecaoDiscursivaV2(BaseModel):
+    questao_id: str
+    usou_resposta_esperada: bool
+    analise_criterios: list[AnaliseCriterioV2]
+    feedback_elaborado: str = Field(
+        description=(
+            "Para o aluno: o que ele acertou, o que faltou e onde procurar, sem escrever o conteúdo "
+            "que atende ao pedido e sem cobrar o que a rubrica não exige."
+        )
+    )
+    nota_sugerida: float
+    nota_maxima: float
+    confianca: Literal["baixa", "media", "alta"] = Field(
+        description=(
+            "Certeza de que a nota está correta, e não a qualidade da resposta. Resposta claramente "
+            "errada ou em branco tem confiança alta."
+        )
+    )
+    motivo_confianca: str = Field(description="Uma frase com o motivo do nível de confiança.")
+
+
 CONTRATO_POR_PROMPT: dict[str, type[BaseModel]] = {
     "objetiva_v1": CorrecaoObjetiva,
     "objetiva_v2": CorrecaoObjetivaV2,
+    "objetiva_v3": CorrecaoObjetivaV3,
     "discursiva_v1": CorrecaoDiscursiva,
+    "discursiva_v2": CorrecaoDiscursivaV2,
 }
 
 
@@ -190,13 +294,15 @@ CONTRATO_POR_PROMPT: dict[str, type[BaseModel]] = {
 # ---------------------------------------------------------------------------
 
 def problemas_de_consistencia(
-    saida: CorrecaoObjetiva | CorrecaoObjetivaV2, questao_id: int, letras: list[str], gabarito: str
+    saida: CorrecaoObjetiva | CorrecaoObjetivaV2 | CorrecaoObjetivaV3,
+    questao_id: int, letras: list[str], gabarito: str,
 ) -> list[str]:
     """Confere a saída com a questão cadastrada. Lista vazia significa saída consistente.
 
     O formato já foi garantido pela API; aqui se verifica o conteúdo: a resposta
     não pode contrariar o gabarito informado pelo professor nem pular ou repetir
-    alternativas. Na versão 2, só as alternativas incorretas têm tipo de erro.
+    alternativas. Nas versões 2 e 3, só as alternativas incorretas têm tipo de
+    erro; na versão 3, a correta também não pode ter pista para eliminá-la.
     """
     problemas = []
     if saida.questao_id != str(questao_id):
@@ -212,7 +318,11 @@ def problemas_de_consistencia(
     if marcadas != [gabarito]:
         problemas.append(f"alternativas marcadas como corretas {marcadas}, esperado [{gabarito}]")
 
-    if isinstance(saida, CorrecaoObjetivaV2):
+    if isinstance(saida, CorrecaoObjetivaV3):
+        for e in saida.explicacoes:
+            if e.correta and e.pista is not None:
+                problemas.append(f"alternativa correta {e.letra} com pista para eliminá-la")
+    if isinstance(saida, (CorrecaoObjetivaV2, CorrecaoObjetivaV3)):
         for e in saida.explicacoes:
             if e.correta and e.tipo_de_erro is not None:
                 problemas.append(f"alternativa correta {e.letra} com tipo_de_erro {e.tipo_de_erro}")
@@ -248,15 +358,33 @@ def trecho_existe(trecho: str, resposta: str) -> bool:
     return True
 
 
+FATOR_STATUS = {"atendido": 1.0, "parcial": 0.5, "nao_atendido": 0.0}
+
+
+def nota_pelos_criterios(criterios, nota_maxima: float) -> float | None:
+    """Nota pela regra do prompt, antes do arredondamento: atendido vale o peso,
+    parcial metade e não atendido zero, proporcional à soma dos pesos."""
+    soma = sum(c.peso for c in criterios)
+    if soma <= 0:
+        return None
+    return sum(c.peso * FATOR_STATUS[c.status] for c in criterios) / soma * nota_maxima
+
+
 def problemas_da_discursiva(
-    saida: CorrecaoDiscursiva,
+    saida: CorrecaoDiscursiva | CorrecaoDiscursivaV2,
     questao_id: int,
     resposta_aluno: str,
     usou_resposta_esperada: bool,
     nota_maxima: float,
     pesos_rubrica: list[float] | None,
+    respostas_por_item: dict[str, str] | None = None,
+    itens_rubrica: list[str | None] | None = None,
 ) -> list[str]:
-    """Confere a correção discursiva com a questão e a resposta. Lista vazia significa consistente."""
+    """Confere a correção discursiva com a questão e a resposta. Lista vazia significa consistente.
+
+    Na versão 2, confere também a letra do item de cada critério, procura o
+    trecho citado só na resposta daquele item e refaz a conta da nota.
+    """
     problemas = []
     if saida.questao_id != str(questao_id):
         problemas.append(f"questao_id {saida.questao_id!r} diferente de {questao_id}")
@@ -279,7 +407,35 @@ def problemas_da_discursiva(
         elif any(abs(a - b) > 1e-9 for a, b in zip(pesos, pesos_rubrica)):
             problemas.append(f"pesos {pesos} diferentes da rubrica {pesos_rubrica}")
 
+    v2 = isinstance(saida, CorrecaoDiscursivaV2)
+    letras = set(respostas_por_item or {})
+    if v2:
+        for c in saida.analise_criterios:
+            if c.item is not None and c.item not in letras:
+                problemas.append(
+                    f"critério {c.criterio!r} ligado ao item {c.item!r}, que a questão não tem"
+                    if letras else f"critério {c.criterio!r} ligado ao item {c.item!r} em questão sem itens"
+                )
+        if itens_rubrica is not None and pesos_rubrica and len(saida.analise_criterios) == len(itens_rubrica):
+            recebidos = [c.item for c in saida.analise_criterios]
+            if recebidos != itens_rubrica:
+                problemas.append(f"itens dos critérios {recebidos} diferentes da rubrica {itens_rubrica}")
+
+        bruta = nota_pelos_criterios(saida.analise_criterios, nota_maxima)
+        multiplo = abs(saida.nota_sugerida * 2 - round(saida.nota_sugerida * 2)) < 1e-9
+        if bruta is not None and (not multiplo or abs(saida.nota_sugerida - bruta) > 0.25 + 1e-9):
+            problemas.append(
+                f"nota_sugerida {saida.nota_sugerida} não corresponde aos critérios "
+                f"(a conta dá {bruta:.2f}, arredondada para múltiplo de 0,5)"
+            )
+
     for c in saida.analise_criterios:
-        if c.trecho_citado and not trecho_existe(c.trecho_citado, resposta_aluno):
+        if not c.trecho_citado:
+            continue
+        item = getattr(c, "item", None)
+        if item in letras:
+            if not trecho_existe(c.trecho_citado, respostas_por_item[item]):
+                problemas.append(f"trecho citado no critério {c.criterio!r} não existe na resposta do item {item}")
+        elif not trecho_existe(c.trecho_citado, resposta_aluno):
             problemas.append(f"trecho citado no critério {c.criterio!r} não existe na resposta do aluno")
     return problemas

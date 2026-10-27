@@ -48,7 +48,8 @@ async def revisar(request: Request, correcao_id: int, sessao: Session = Depends(
         raise HTTPException(status_code=400, detail="Ação deve ser 'aceitar' ou 'ajustar'.")
 
     try:
-        registrar_revisao(sessao, correcao, nota_final, formulario.get("comentario"))
+        registrar_revisao(sessao, correcao, nota_final, formulario.get("comentario"),
+                          usuario_id=request.state.usuario.id)
     except RevisaoInvalida as erro:
         return _voltar_com_erro(destino, correcao_id, str(erro))
     return RedirectResponse(f"{destino}#correcao-{correcao_id}", status_code=303)

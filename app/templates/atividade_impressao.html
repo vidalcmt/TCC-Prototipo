@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>{{ atividade.titulo }}{% if gabarito %} (gabarito){% endif %}</title>
+  <link rel="stylesheet" href="/static/impressao.css">
+</head>
+<body>
+{% set base = "/atividades/" ~ atividade.id ~ "/imprimir" %}
+<div class="controles">
+  <a href="/atividades/{{ atividade.id }}">&larr; Voltar</a>
+  <button type="button" onclick="window.print()">Imprimir ou salvar em PDF</button>
+  {% if gabarito %}
+  <a href="{{ base }}?linhas={{ linhas }}">Ver a folha do aluno</a>
+  {% else %}
+  <a href="{{ base }}?gabarito=1&linhas={{ linhas }}">Ver com gabarito</a>
+  <label>Linhas por resposta
+    <select onchange="location.href='{{ base }}?linhas=' + this.value">
+      {% for n in opcoes_linhas %}<option value="{{ n }}"{% if n == linhas %} selected{% endif %}>{{ n }}</option>{% endfor %}
+    </select>
+  </label>
+  {% endif %}
+  <span class="dica">Para gerar o PDF, escolha "Salvar como PDF" na janela de impressão.</span>
+</div>
+
+<div class="folha">
+  <header class="cabecalho">
+    <h1>{{ atividade.titulo }}</h1>
+    {% if atividade.turma %}<div class="turma">{{ atividade.turma }}</div>{% endif %}
+    {% if gabarito %}
+    <div class="faixa-gabarito">Gabarito, uso do professor</div>
+    {% else %}
+    <div class="campos">
+      <div>Nome:</div><div>Turma:</div><div>Data:</div><div>Nota:</div>
+    </div>
+    {% endif %}
+  </header>
+
+  {% if atividade.instrucoes and not gabarito %}<div class="instrucoes">{{ atividade.instrucoes }}</div>{% endif %}
+
+  {% if gabarito and resumo_objetivas %}
+  <p class="resumo-gabarito"><strong>Objetivas:</strong>
+    {% for numero, letra in resumo_objetivas %}<span>{{ numero }}: {{ letra }}</span>{% endfor %}
+  </p>
+  {% endif %}
+
+  {% for item in atividade.itens %}
+  {% set q = item.questao %}
+  <section class="questao">
+    <div class="questao-cabecalho">Questão {{ loop.index }}{% if q.tipo == "discursiva" and q.nota_maxima %} <span class="valor">(valor: {{ q.nota_maxima|num }} {{ "ponto" if q.nota_maxima == 1 else "pontos" }})</span>{% endif %}</div>
+    <div class="enunciado">{{ q.enunciado }}</div>
+
+    {% if q.tipo == "objetiva" %}
+    <ol class="alternativas">
+      {% for a in q.alternativas %}
+      <li class="{% if gabarito and a.correta %}correta{% endif %}"><span class="bolha">{{ a.letra }}</span><span class="texto">{{ a.texto }}</span></li>
+      {% endfor %}
+    </ol>
+
+    {% else %}
+    {% if q.itens %}
+    {% for it in q.itens %}
+    <div class="item">
+      <div class="item-comando"><span class="letra">{{ it.letra }})</span> {{ it.enunciado }}</div>
+      {% if not gabarito %}<div class="linhas">{% for _ in range(linhas) %}<div></div>{% endfor %}</div>{% endif %}
+    </div>
+    {% endfor %}
+    {% elif not gabarito %}
+    <div class="linhas">{% for _ in range(linhas) %}<div></div>{% endfor %}</div>
+    {% endif %}
+
+    {% if gabarito %}
+    <div class="resposta-gabarito">
+      <div class="rotulo">Resposta esperada</div>
+      <div class="texto">{{ q.resposta_esperada.texto if q.resposta_esperada else "Não cadastrada." }}</div>
+      {% if q.criterios %}
+      <div class="rotulo" style="margin-top: 2mm">Rubrica</div>
+      <table>
+        {% for c in q.criterios %}
+        <tr><td>{% if c.item %}{{ c.item.letra }}) {% endif %}{{ c.descricao }}</td><td class="peso">{{ c.peso|num }} {{ "ponto" if c.peso == 1 else "pontos" }}</td></tr>
+        {% endfor %}
+      </table>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% endif %}
+  </section>
+  {% endfor %}
+</div>
+</body>
+</html>

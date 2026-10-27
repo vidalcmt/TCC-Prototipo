@@ -1,15 +1,19 @@
 """Lista de questões e páginas das objetivas: cadastro (RF01), detalhe e explicação (RF02, RF03)."""
 
+from math import ceil
+from urllib.parse import urlencode
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from openai import OpenAI
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session
 
 from app.correcao.contratos import CONTRATO_POR_PROMPT, ROTULOS_TIPO_DE_ERRO
 from app.correcao.objetiva import gerar_explicacao
 from app.database import obter_sessao
-from app.models import Alternativa, Correcao, MetricaRequisicao, Questao
+from app.models import Alternativa, Correcao, MetricaRequisicao, Questao, RevisaoProfessor
+from app.contas.sessao import verificar_limite_diario
 from app.questoes.cliente import obter_cliente_llm
 from app.questoes.discursivas import pagina_da_questao
 from app.templates_config import templates
@@ -26,17 +30,73 @@ def buscar_questao(sessao: Session, questao_id: int) -> Questao:
     return questao
 
 
+POR_PAGINA = 50
+FILTROS = ("busca", "numero", "tipo", "area", "fonte", "ano", "situacao")
+SITUACOES = {"": "Todas", "pendente": "Com correção para revisar", "sem_correcao": "Ainda sem correção"}
+
+
+def _filtrar(consulta, f: dict[str, str]):
+    """Aplica à consulta de questões os filtros preenchidos na lista."""
+    if f["busca"]:
+        consulta = consulta.where(Questao.enunciado.ilike(f"%{f['busca']}%"))
+    if f["numero"].isdigit():
+        consulta = consulta.where(Questao.id == int(f["numero"]))
+    if f["tipo"] in ("objetiva", "discursiva"):
+        consulta = consulta.where(Questao.tipo == f["tipo"])
+    if f["area"]:
+        consulta = consulta.where(Questao.area == f["area"])
+    if f["fonte"]:
+        consulta = consulta.where(Questao.fonte == f["fonte"])
+    if f["ano"].isdigit():
+        consulta = consulta.where(Questao.ano == int(f["ano"]))
+    if f["situacao"] == "pendente":
+        sem_revisao = ~exists().where(RevisaoProfessor.correcao_id == Correcao.id)
+        consulta = consulta.where(exists().where(
+            Correcao.questao_id == Questao.id, Correcao.nota_sugerida.is_not(None), sem_revisao))
+    elif f["situacao"] == "sem_correcao":
+        consulta = consulta.where(~exists().where(Correcao.questao_id == Questao.id))
+    return consulta
+
+
+def _valores(sessao: Session, coluna) -> list:
+    return [v for v in sessao.scalars(select(coluna).distinct().where(coluna.is_not(None)).order_by(coluna))]
+
+
 @router.get("", response_class=HTMLResponse)
-def listar(request: Request, sessao: Session = Depends(obter_sessao)):
-    total_explicacoes = (
+def listar(request: Request, pagina: int = 1, sessao: Session = Depends(obter_sessao)):
+    """Todas as questões, 50 por página, com filtros que se mantêm ao trocar de página."""
+    filtros = {nome: (request.query_params.get(nome) or "").strip() for nome in FILTROS}
+    total = sessao.scalar(_filtrar(select(func.count(Questao.id)), filtros))
+    paginas = max(1, ceil(total / POR_PAGINA))
+    pagina = min(max(1, pagina), paginas)
+
+    total_correcoes = (
         select(Correcao.questao_id, func.count().label("n")).group_by(Correcao.questao_id).subquery()
     )
     linhas = sessao.execute(
-        select(Questao, func.coalesce(total_explicacoes.c.n, 0))
-        .outerjoin(total_explicacoes, total_explicacoes.c.questao_id == Questao.id)
+        _filtrar(select(Questao, func.coalesce(total_correcoes.c.n, 0)), filtros)
+        .outerjoin(total_correcoes, total_correcoes.c.questao_id == Questao.id)
         .order_by(Questao.id)
+        .limit(POR_PAGINA).offset((pagina - 1) * POR_PAGINA)
     ).all()
-    return templates.TemplateResponse(request, "questoes_lista.html", {"linhas": linhas})
+
+    ativos = {nome: valor for nome, valor in filtros.items() if valor}
+
+    def link_pagina(numero: int) -> str:
+        return "/questoes?" + urlencode({**ativos, "pagina": numero})
+
+    return templates.TemplateResponse(request, "questoes_lista.html", {
+        "linhas": linhas, "filtros": filtros, "filtrando": bool(ativos),
+        "total": total, "pagina": pagina, "paginas": paginas, "link_pagina": link_pagina,
+        "primeira": (pagina - 1) * POR_PAGINA + 1 if total else 0,
+        "ultima": min(pagina * POR_PAGINA, total),
+        "opcoes": {
+            "area": _valores(sessao, Questao.area),
+            "fonte": _valores(sessao, Questao.fonte),
+            "ano": _valores(sessao, Questao.ano),
+        },
+        "situacoes": SITUACOES,
+    })
 
 
 @router.get("/nova", response_class=HTMLResponse)
@@ -113,12 +173,14 @@ def detalhe(request: Request, questao_id: int, falha: int | None = None,
 
 
 @router.post("/{questao_id}/explicar")
-def explicar(questao_id: int, sessao: Session = Depends(obter_sessao),
+def explicar(request: Request, questao_id: int, sessao: Session = Depends(obter_sessao),
              cliente: OpenAI | None = Depends(obter_cliente_llm)):
     questao = buscar_questao(sessao, questao_id)
     if questao.tipo != "objetiva":
         raise HTTPException(status_code=400, detail="Explicação de alternativas só existe em questões objetivas.")
-    resultado = gerar_explicacao(sessao, questao, cliente=cliente)
+    usuario = request.state.usuario
+    verificar_limite_diario(sessao, usuario)
+    resultado = gerar_explicacao(sessao, questao, cliente=cliente, usuario_id=usuario.id)
     if resultado.sucesso:
         return RedirectResponse(f"/questoes/{questao_id}", status_code=303)
     return RedirectResponse(
