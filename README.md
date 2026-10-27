@@ -77,6 +77,18 @@ modelo e versão do prompt desde a primeira requisição.
    pytest
    ```
 
+Esqueceu a senha? Gere uma provisória nova:
+
+```bash
+python -m scripts.redefinir_senha --listar
+python -m scripts.redefinir_senha --email voce@exemplo.com
+```
+
+## Publicação
+
+O passo a passo para colocar o sistema no ar no Google Cloud, com HTTPS e
+cópia diária do banco, está em [`deploy/README.md`](deploy/README.md).
+
 ## Estrutura
 
 ```
@@ -95,6 +107,7 @@ app/
     router.py        página de métricas e exportação em CSV
   questoes/          cadastro de questões (etapas 2 e 3)
   revisao/           tela de aceite do professor (etapa 4)
+  atividades/        atividades e impressão em A4
   templates/         páginas HTML
   static/            estilo, fontes e script do tema claro/escuro
 config/precos.toml   preços por modelo, com fonte e data de acesso
@@ -102,7 +115,8 @@ prompts/             prompts versionados e registro de mudanças
 alembic/             migrações do banco
 baseline/            similaridade vetorial, fora do produto (etapa 5)
 dados/               corpus congelado (etapa 5)
-scripts/             utilitários de linha de comando
+scripts/             utilitários de linha de comando (admin, senha, cópia do banco)
+deploy/              instalação no servidor: scripts, serviços e Caddyfile
 tests/               testes automatizados
 ```
 

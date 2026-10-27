@@ -1,0 +1,9 @@
+[Unit]
+Description=Cópia de segurança diária do banco da Devolutiva
+
+[Service]
+Type=oneshot
+User=devolutiva
+Group=devolutiva
+WorkingDirectory=/opt/devolutiva
+ExecStart=/opt/devolutiva/.venv/bin/python -m scripts.copia_banco --destino /var/backups/devolutiva --dias 30

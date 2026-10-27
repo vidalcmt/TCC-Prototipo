@@ -1,0 +1,9 @@
+[Unit]
+Description=Roda a cópia de segurança do banco todo dia de madrugada
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 America/Sao_Paulo
+Persistent=true
+
+[Install]
+WantedBy=timers.target

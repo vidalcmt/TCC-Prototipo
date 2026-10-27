@@ -1,0 +1,13 @@
+# O instalador troca DOMINIO pelo endereço do site. O Caddy obtém e renova
+# sozinho o certificado HTTPS (Let's Encrypt) e redireciona HTTP para HTTPS.
+DOMINIO {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8000
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "same-origin"
+		-Server
+	}
+}

@@ -106,8 +106,8 @@ function tabela(cabecalho, linhas, proporcoes) {
 // =====================================================================
 // CAPA
 // =====================================================================
-const VERSAO = "0.12";
-const DATA = "24/10/2026";
+const VERSAO = "0.13";
+const DATA = "26/10/2026";
 
 conteudo.push(new Paragraph({ spacing: { before: 2400 }, children: [] }));
 conteudo.push(new Paragraph({
@@ -183,7 +183,7 @@ tabela(
     ["3", "Módulo discursivo", "Implementada em 21/10/2026; versão 2 do prompt e questões com itens em 23/10/2026, após o teste piloto"],
     ["4", "Tela de aceite do professor", "Implementada em 22/10/2026; aguardando revisão"],
     ["Apoio", "Login, contas, página inicial e novo visual com tema escuro", "Implementado em 23/10/2026; aguardando revisão"],
-    ["Apoio", "Publicação no Google Cloud", "Pendente; depende do login"],
+    ["Apoio", "Publicação no Google Cloud", "Scripts e guia prontos em 26/10/2026; instalação feita pelo autor"],
     ["5", "Execução em lote e baseline", "Pendente"],
     ["6", "Análise e coleta com especialistas", "Pendente"],
   ],
@@ -245,6 +245,7 @@ tabela(
     ["`alembic/`", "Migrações do banco"],
     ["`scripts/`", "Utilitários de linha de comando"],
     ["`dados/`", "Corpus e cópias congeladas de questões"],
+    ["`deploy/`", "Publicação no servidor: instalador, atualização, troca de banco, serviços do sistema, Caddyfile e o guia passo a passo"],
     ["`baseline/`", "Comparação por similaridade de textos (etapa 5)"],
     ["`tests/`", "Testes automatizados"],
     ["`docs/`", "Esta documentação e o seu gerador"],
@@ -777,6 +778,13 @@ p("A folha usa uma folha de estilo própria (`app/static/impressao.css`), sempre
 p("Um layout padronizado de folha também prepara a fase posterior de reconhecimento de texto manuscrito: com as respostas sempre nas mesmas áreas da página, fica mais simples localizar cada resposta na imagem digitalizada.");
 
 // ---------------------------------------------------------------------
+h2("4.22 Utilitários de manutenção: scripts/");
+tabela(["Script", "O que faz"], [
+  ["`redefinir_senha.py`", "Com `--listar`, mostra as contas cadastradas; com `--email`, gera uma senha provisória nova para a conta, que precisa ser trocada no primeiro acesso. Serve para quando o próprio administrador esquece a senha, já que a senha não pode ser lida no banco"],
+  ["`copia_banco.py`", "Copia o banco com a função de cópia do próprio SQLite, que gera um arquivo consistente mesmo com o sistema no ar, compacta com gzip, nomeia pela data e hora de Brasília e apaga as cópias mais antigas que o prazo informado (padrão 30 dias). Opcionalmente envia a cópia para um bucket do Cloud Storage"],
+], [3, 7]);
+
+// ---------------------------------------------------------------------
 h1("5. Configuração e execução");
 
 h2("5.1 Arquivo .env");
@@ -833,8 +841,28 @@ tabela(["Comando", "Para que serve"], [
 ], [5, 5]);
 
 // ---------------------------------------------------------------------
+h2("5.5 Publicação no Google Cloud");
+p("O guia completo, para ser seguido pelo navegador, está em `deploy/README.md`. A publicação usa uma máquina virtual do Compute Engine, e não um serviço sem servidor como o Cloud Run, porque o banco é um arquivo SQLite: no Cloud Run, o disco é apagado a cada nova instância, e os dados da coleta se perderiam.");
+tabela(["Parte", "Escolha", "Motivo"], [
+  ["Máquina", "e2-small, Debian 12, região de São Paulo", "Memória suficiente para a aplicação e para o resumo de senha (cerca de 128 MB por login), com folga, coberta pelos créditos"],
+  ["HTTPS", "Caddy, com certificado do Let's Encrypt", "Obtém e renova o certificado sozinho, sem configuração manual"],
+  ["Endereço", "IP da máquina no formato `34-95-10-20.sslip.io`", "Dispensa a compra de um domínio; um domínio próprio pode ser passado ao instalador"],
+  ["Aplicação", "Serviço do sistema com um processo do uvicorn, num usuário sem privilégios", "Um processo só, por causa do SQLite e do bloqueio de tentativas em memória; o serviço volta sozinho se cair"],
+  ["Cópia do banco", "Diária, às 3h30 de Brasília, guardada por 30 dias, mais snapshots diários do disco", "As cópias no disco protegem contra erros de uso; os snapshots, contra a perda do disco"],
+], [2, 4, 4]);
+h3("Scripts de deploy/");
+tabela(["Arquivo", "O que faz"], [
+  ["`instalar.sh`", "Instala pacotes e o Caddy, cria o usuário da aplicação, o ambiente Python e o `.env` (pede a chave da OpenAI sem mostrá-la e gera a `SECRET_KEY`), aplica as migrações, instala os serviços e confere se a aplicação respondeu. Pode ser rodado de novo sem perder o `.env`"],
+  ["`atualizar.sh`", "Faz uma cópia do banco, traz o código novo da `main`, instala dependências, aplica migrações e reinicia"],
+  ["`usar_banco.sh`", "Troca o banco do servidor por um `tcc.db` enviado do computador, guardando antes o banco anterior"],
+  ["`devolutiva.service`", "Serviço da aplicação, com restrições de segurança do systemd (sem novos privilégios, sistema e pastas pessoais protegidos)"],
+  ["`devolutiva-copia.service` e `.timer`", "Cópia diária do banco"],
+  ["`Caddyfile`", "HTTPS, compressão e cabeçalhos de segurança (HSTS, proibição de abrir o site dentro de outro, sem revelar o servidor)"],
+], [3, 7]);
+
+// ---------------------------------------------------------------------
 h1("6. Testes automatizados");
-p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 172 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
+p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 175 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
 tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_precos.py`", "Custo correto para o modelo em uso; preço de cache aplicado; nome com sufixo de versão; modelo desconhecido não gera custo inventado"],
   ["`tests/test_llm.py`", "Sucesso grava tokens, custo, latência, modelo e prompt; resposta sem formato válido vira falha com tokens; erro de rede vira falha com motivo; cliente sem novas tentativas automáticas"],
@@ -844,6 +872,7 @@ tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_itens.py`", "Cadastro com itens e critérios por item; itens fora de ordem, item único e critério ligado a item vazio; resposta com um campo por item e texto completo com itens em branco; prompt com e sem itens; trecho citado de outro item ou de item em branco; item inexistente ou diferente da rubrica; nota que não corresponde aos critérios, inclusive no empate; rótulos de professor e aluno e motivo da confiança na página; correção da v1 ainda legível"],
   ["`tests/test_discursiva.py`", "Trecho citado (seis casos, incluindo paráfrase e ordem invertida); prompt nas duas condições, sem vazar a resposta esperada; condição gravada na correção e na métrica; condição indisponível; nove tipos de saída inconsistente, incluindo nota diferente da conta pelos critérios; critérios livres sem rubrica; cadastro válido e inválido; registro de resposta; correção pela página com nota como sugestão; falhas exibidas"],
   ["`tests/test_revisao.py`", "Aceite e ajuste; mesma nota conta como aceite; nota fora do intervalo; segunda revisão recusada pela regra e pelo banco; correção sem nota; concordância e desvios por condição; resumo vazio sem divisão por zero; resumo de chamadas; formulário e ordem dos botões; erros da revisão; exportação das revisões"],
+  ["`tests/test_copia_banco.py`", "Cópia compactada, com nome pela data, que pode ser restaurada; apagamento só das cópias antigas; recusa de banco que não seja SQLite"],
   ["`tests/test_atividades.py`", "Criação e título obrigatório; adicionar sem repetir, mover e remover com renumeração; busca que esconde as já incluídas; retorno só para dentro da atividade; editar e excluir sem apagar questões; folha do aluno com ordem, itens, alternativas e linhas; número de linhas; folha com gabarito, resumo das objetivas, resposta esperada e rubrica; acesso só com login"],
   ["`tests/test_lista_questoes.py`", "Páginas de 50 e página fora do intervalo; cada filtro, inclusive situação pendente e sem correção; filtros mantidos ao trocar de página; filtro sem resultado; opções dos filtros vindas do banco"],
   ["`tests/test_importar_enem.py`", "Paginação; parada após recusas seguidas; exclusão de numeração fora da área e de repetidas; filtro de área e de imagens; montagem do enunciado; importação com gabarito e sem duplicar"],
@@ -904,6 +933,7 @@ tabela(["Decisão", "Motivo"], [
   ["Sessão em cookie assinado, sem tabela de sessões", "Menos código e nenhuma tabela a limpar; a marca da senha no cookie permite derrubar sessões quando a senha muda ou a conta é desativada"],
   ["scrypt da biblioteca padrão do Python", "Algoritmo recomendado pela OWASP para senhas, sem dependência extra"],
   ["Limite diário de chamadas por pessoa", "Uma conta comprometida ou um uso por engano não consegue consumir o orçamento de um mês em um dia"],
+  ["Máquina virtual em vez de Cloud Run", "O banco SQLite precisa de disco persistente"],
   ["Impressão pelo navegador, sem gerar PDF no servidor", "O navegador já imprime e salva em PDF; gerar o arquivo no servidor exigiria uma dependência pesada sem ganho para o uso"],
   ["Atividades visíveis a todas as contas", "No protótipo, os avaliadores trabalham sobre o mesmo corpus. Num produto, cada professor veria só as suas, o que exige apenas filtrar por `usuario_id`"],
   ["Origem gravada em toda chamada, inclusive nas falhas", "Permite saber quanto custou cada questão e cada resposta, e onde ocorreram as falhas, sem depender de uma correção gravada"],
@@ -942,9 +972,12 @@ tabela(["Termo", "Significado"], [
   ["API", "Interface pela qual um programa usa serviços de outro; aqui, a forma de enviar textos ao modelo da OpenAI e de buscar questões do ENEM"],
   ["Baseline", "Método simples usado como referência de comparação nos resultados"],
   ["Branch", "Linha paralela de desenvolvimento no Git, que não afeta a principal até ser incorporada"],
+  ["Caddy", "Servidor web que recebe as conexões HTTPS e as repassa para a aplicação, obtendo o certificado sozinho"],
   ["Cache de prompt", "Reaproveitamento, pela OpenAI, de trechos iniciais repetidos entre requisições, cobrados mais barato"],
+  ["Cloud Run", "Serviço do Google Cloud que roda aplicações sem máquina fixa, com disco temporário"],
   ["Commit", "Registro de um conjunto de mudanças no histórico do Git"],
   ["CSV", "Arquivo de texto com valores separados por vírgula, aberto por planilhas e pelo pandas"],
+  ["Compute Engine", "Serviço do Google Cloud de máquinas virtuais"],
   ["Concordância", "Proporção de correções em que o professor aceitou a nota sugerida pelo modelo"],
   ["Cookie", "Pequeno texto que o site guarda no navegador e que volta a cada página; aqui, identifica a sessão de login"],
   ["Condição experimental", "Cada uma das formas de rodar a correção comparadas na pesquisa: com e sem resposta esperada"],
@@ -955,6 +988,7 @@ tabela(["Termo", "Significado"], [
   ["HTTPS", "Conexão criptografada entre o navegador e o servidor"],
   ["JSON", "Formato de texto para dados estruturados em campos e valores"],
   ["Latência", "Tempo entre o envio da requisição e a chegada da resposta completa"],
+  ["Let's Encrypt", "Autoridade que emite gratuitamente os certificados usados no HTTPS"],
   ["Migração", "Arquivo que descreve uma mudança na estrutura do banco e permite aplicá-la de forma repetível"],
   ["OWASP", "Fundação aberta que publica guias de segurança para aplicações web"],
   ["Papel", "Conjunto de permissões de uma conta: administrador ou avaliador"],
@@ -963,14 +997,17 @@ tabela(["Termo", "Significado"], [
   ["Item", "Parte de uma questão discursiva com comando próprio, identificada por letra (a, b, c), que compartilha o texto-base com as demais"],
   ["Rubrica", "Lista de critérios de correção de uma questão discursiva, cada um com seu peso na nota"],
   ["Rota", "Endereço da aplicação web associado a uma ação, como `GET /questoes`, que lista as questões"],
+  ["Proxy reverso", "Servidor que fica na frente da aplicação e repassa a ela as requisições, aqui o Caddy"],
   ["Pull request", "Pedido para incorporar uma branch à principal, com espaço para revisão e comentários"],
   ["Pydantic", "Biblioteca que valida se dados têm os campos e tipos esperados"],
   ["Sal", "Valor aleatório misturado a cada senha antes do resumo, para que senhas iguais tenham resumos diferentes"],
   ["Saída estruturada", "Recurso da API que obriga o modelo a responder em JSON com um formato definido"],
   ["scrypt", "Função de resumo de senhas que exige muito processamento e memória, o que torna caro adivinhar senhas"],
   ["Sessão", "Período em que a pessoa fica conectada depois do login, sem digitar a senha de novo; aqui, até 12 horas"],
+  ["Snapshot", "Cópia de um disco inteiro num momento, guardada fora da máquina"],
   ["SQLAlchemy", "Biblioteca que permite manipular tabelas do banco como classes Python"],
   ["SQLite", "Banco de dados guardado em um único arquivo, sem servidor"],
+  ["systemd", "Programa do Linux que inicia os serviços, os reinicia quando caem e roda tarefas programadas"],
   ["Tema", "Conjunto de cores das páginas: claro ou escuro"],
   ["Token", "Unidade de texto (em geral parte de uma palavra) usada pela API para contar e cobrar o uso"],
 ], [3, 7]);
@@ -978,6 +1015,7 @@ tabela(["Termo", "Significado"], [
 // ---------------------------------------------------------------------
 h1("10. Histórico de versões");
 tabela(["Data", "Versão", "Referência", "Mudança"], [
+  ["26/10/2026", "0.13", "pull request da publicação", "Guia e scripts para publicar no Google Cloud com HTTPS, serviço do sistema e cópia diária do banco; utilitários de redefinição de senha e de cópia do banco"],
   ["24/10/2026", "0.12", "pull request das atividades", "Atividades com questões em ordem, aba própria na barra de navegação e folha de impressão em A4 para o aluno e com gabarito"],
   ["24/10/2026", "0.11", "pull request da lista de questões", "Lista de questões com 50 por página e filtros por palavra no enunciado, número, tipo, área, origem, ano e situação"],
   ["24/10/2026", "0.10", "pull request das métricas com origem", "Cada chamada ao modelo ligada à questão e à resposta de origem, inclusive nas falhas; links e filtro por questão ou resposta na página de métricas, com custo somado; colunas novas na exportação"],

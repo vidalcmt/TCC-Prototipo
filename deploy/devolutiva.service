@@ -1,0 +1,21 @@
+[Unit]
+Description=Devolutiva (aplicação FastAPI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=devolutiva
+Group=devolutiva
+WorkingDirectory=/opt/devolutiva
+# Um único processo: o banco é SQLite e o bloqueio de tentativas de login fica
+# na memória. O Caddy recebe o HTTPS e repassa para esta porta, só local.
+ExecStart=/opt/devolutiva/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips 127.0.0.1
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
