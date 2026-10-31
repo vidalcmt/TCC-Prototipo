@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Folhas de resposta: {{ atividade.titulo }}</title>
+  <link rel="stylesheet" href="/static/folhas.css">
+</head>
+<body>
+{# Todas as posições vêm de app/folhas/layout.py, em milímetros. A leitura das
+   folhas digitalizadas usa as mesmas posições, por isso nada aqui é calculado
+   pelo navegador. #}
+<div class="controles">
+  <a href="/atividades/{{ atividade.id }}#folhas">&larr; Voltar</a>
+  <button type="button" onclick="window.print()">Imprimir ou salvar em PDF</button>
+  <span class="dica">Na janela de impressão: papel A4, escala 100% (ou "Tamanho real") e margens "Nenhuma". {{ folhas|length }} {{ "folha" if folhas|length == 1 else "folhas" }}, {{ paginas|length }} {{ "página" if paginas|length == 1 else "páginas" }} cada.</span>
+</div>
+
+{% for folha in folhas %}
+{% for pagina in paginas %}
+<section class="pagina">
+  {% for x, y in L.MARCAS %}<div class="marca" style="left: {{ x }}mm; top: {{ y }}mm; width: {{ L.MARCA }}mm; height: {{ L.MARCA }}mm"></div>{% endfor %}
+
+  <div class="cabecalho" style="left: 24mm; top: 12mm; width: 132mm">
+    <div class="titulo">{{ atividade.titulo }}</div>
+    <div class="subtitulo">{% if atividade.turma %}{{ atividade.turma }} · {% endif %}Folha de respostas · página {{ pagina.numero }} de {{ paginas|length }}</div>
+    <div class="codigo"><span>Código da folha</span> {{ folha.codigo }}</div>
+  </div>
+  <div class="qr" style="left: {{ L.QR_X }}mm; top: {{ L.QR_Y }}mm; width: {{ L.QR_LADO }}mm; height: {{ L.QR_LADO }}mm">{{ qr(folha.codigo, pagina.numero)|safe }}</div>
+
+  {% for r in pagina.rotulos %}<div class="rotulo" style="left: {{ r.x }}mm; top: {{ r.y }}mm">{{ r.texto }}</div>{% endfor %}
+
+  {% for b in pagina.bolhas %}
+  <div class="bolha" style="left: {{ b.x - b.r }}mm; top: {{ b.y - b.r }}mm; width: {{ 2 * b.r }}mm; height: {{ 2 * b.r }}mm">{{ b.letra }}</div>
+  {% endfor %}
+
+  {% for c in pagina.caixas %}
+  <div class="rotulo-caixa" style="left: {{ c.x }}mm; top: {{ c.y - 6 }}mm">{{ c.rotulo }}</div>
+  <div class="caixa" style="left: {{ c.x }}mm; top: {{ c.y }}mm; width: {{ c.largura }}mm; height: {{ c.altura }}mm">
+    {% for _ in range(c.linhas - 1) %}<div class="linha" style="top: {{ (loop.index) * L.LINHA_RESPOSTA }}mm"></div>{% endfor %}
+  </div>
+  {% endfor %}
+
+  {% if pagina.numero == 1 %}
+  <div class="recorte" style="top: {{ L.CANHOTO_Y - 4 }}mm">recorte e guarde a parte de baixo</div>
+  <div class="canhoto" style="top: {{ L.CANHOTO_Y }}mm">
+    <div><strong>{{ atividade.titulo }}</strong></div>
+    <div>Seu código: <span class="codigo-canhoto">{{ folha.codigo }}</span></div>
+    <div>Para ver a sua nota e o feedback, acesse {{ endereco }} e digite o código.</div>
+  </div>
+  {% endif %}
+</section>
+{% endfor %}
+{% endfor %}
+</body>
+</html>

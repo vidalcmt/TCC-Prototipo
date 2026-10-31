@@ -1,0 +1,47 @@
+/* Folha de respostas em A4. Posições absolutas em milímetros, definidas em
+   app/folhas/layout.py; este arquivo só cuida da aparência. */
+@font-face { font-family: "Atkinson"; src: url("fontes/atkinson-hyperlegible-latin-400-normal.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: "Atkinson"; src: url("fontes/atkinson-hyperlegible-latin-700-normal.woff2") format("woff2"); font-weight: 700; }
+
+@page { size: A4; margin: 0; }
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #E9EDF3; color: #000; font-family: "Atkinson", Arial, sans-serif; }
+
+.controles { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center;
+  padding: 10px 16px; background: #1A2540; color: #fff; font-size: 14px; }
+.controles a { color: #fff; }
+.controles button { font: inherit; font-weight: 700; border: 0; border-radius: 8px; padding: 8px 14px; background: #fff; color: #1A2540; cursor: pointer; }
+.controles .dica { opacity: .85; }
+
+.pagina { position: relative; width: 210mm; height: 297mm; margin: 12px auto; background: #fff; overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0,0,0,.15); break-after: page; page-break-after: always; }
+.pagina > * { position: absolute; }
+
+.marca { background: #000; }
+.qr svg { width: 100%; height: 100%; display: block; }
+.qr path { fill: #000; }
+
+.cabecalho .titulo { font-size: 13pt; font-weight: 700; line-height: 1.2; max-height: 11mm; overflow: hidden; }
+.cabecalho .subtitulo { font-size: 9pt; color: #333; margin-top: 1mm; }
+.cabecalho .codigo { font-size: 15pt; font-weight: 700; letter-spacing: .08em; margin-top: 2mm; }
+.cabecalho .codigo span { font-size: 8pt; font-weight: 400; letter-spacing: 0; color: #333; margin-right: 2mm; }
+
+.rotulo { font-size: 9pt; transform: translateY(-50%); white-space: nowrap; }
+.rotulo-caixa { font-size: 9pt; font-weight: 700; }
+
+.bolha { border: 0.35mm solid #000; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 6.5pt; color: #666; line-height: 1; }
+
+.caixa { border: 0.3mm solid #000; }
+.caixa .linha { position: absolute; left: 3mm; right: 3mm; border-top: 0.2mm solid #B5BCC8; }
+
+.recorte { left: 10mm; right: 10mm; border-top: 0.3mm dashed #000; font-size: 7pt; color: #444; text-align: center; padding-top: 0.5mm; }
+.canhoto { left: 20mm; right: 20mm; font-size: 9pt; line-height: 1.5; }
+.codigo-canhoto { font-size: 12pt; font-weight: 700; letter-spacing: .08em; }
+
+@media print {
+  html, body { background: #fff; }
+  .controles { display: none; }
+  .pagina { margin: 0; box-shadow: none; }
+}
