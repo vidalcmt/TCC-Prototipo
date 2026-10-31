@@ -22,6 +22,7 @@ QR_X, QR_Y, QR_LADO = 160.0, 12.0, 26.0
 AREA_X0, AREA_X1 = 20.0, 190.0
 AREA_Y0, AREA_Y1 = 44.0, 250.0  # entre o cabeçalho e as marcas de baixo
 CANHOTO_Y = 268.0  # abaixo da linha de recorte, só na primeira página
+QR_CANHOTO_X, QR_CANHOTO_LADO = 170.0, 20.0  # link para a página do aluno, fica com ele
 
 LINHA_RESPOSTA = 8.0  # altura de uma linha de escrita
 RAIO_BOLHA = 2.6

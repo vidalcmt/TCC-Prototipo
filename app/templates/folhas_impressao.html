@@ -47,8 +47,9 @@
   <div class="canhoto" style="top: {{ L.CANHOTO_Y }}mm">
     <div><strong>{{ atividade.titulo }}</strong></div>
     <div>Seu código: <span class="codigo-canhoto">{{ folha.codigo }}</span></div>
-    <div>Para ver a sua nota e o feedback, acesse {{ endereco }} e digite o código.</div>
+    <div>Para ver a sua nota e o feedback, aponte a câmera para o QR code ao lado ou acesse {{ endereco }} e digite o código.</div>
   </div>
+  <div class="qr qr-canhoto" style="left: {{ L.QR_CANHOTO_X }}mm; top: {{ L.CANHOTO_Y }}mm; width: {{ L.QR_CANHOTO_LADO }}mm; height: {{ L.QR_CANHOTO_LADO }}mm">{{ qr_link(folha.codigo)|safe }}</div>
   {% endif %}
 </section>
 {% endfor %}
