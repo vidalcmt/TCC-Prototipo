@@ -16,6 +16,8 @@ class Configuracao(BaseSettings):
     openai_api_key: str = ""
     modelo: str = "gpt-6.1-sol"
     database_url: str = f"sqlite:///{RAIZ / 'tcc.db'}"
+    # Onde ficam as imagens das folhas digitalizadas. Fora do repositório.
+    pasta_arquivos: Path = RAIZ / "arquivos"
 
     nome_sistema: str = "Devolutiva"
 
