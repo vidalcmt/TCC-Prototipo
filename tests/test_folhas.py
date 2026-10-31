@@ -115,7 +115,7 @@ def test_folhas_impressas_com_codigo_qr_e_canhoto(fabrica_sessao, cliente_web):
     for c in codigos:
         assert html.count(c) >= 2  # no cabeçalho e no canhoto
     assert html.count('class="pagina"') == 3  # uma página por folha nesta atividade
-    assert html.count("<svg") == 3 and html.count('class="marca"') == 12
+    assert html.count("<svg") == 6 and html.count('class="marca"') == 12  # QR da folha e do canhoto
     assert html.count('class="bolha"') == 30 and html.count('class="caixa"') == 6
     assert "Nome" not in html and "/resultado" in html
 
