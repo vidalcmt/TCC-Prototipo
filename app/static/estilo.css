@@ -347,3 +347,17 @@ td.origem { white-space: nowrap; }
 .questao-aluno h2 { font-size: 18px; margin: 0 0 8px; }
 .questao-aluno p { margin: 6px 0; }
 .feedback-aluno { white-space: pre-line; line-height: 1.55; }
+
+/* Folhas digitalizadas */
+.paginas-pendentes { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+.pagina-pendente { margin: 0; background: var(--folha); border: 1px solid var(--pauta); border-radius: 10px; padding: 10px; }
+.pagina-pendente img { width: 100%; height: auto; border: 1px solid var(--pauta); background: #fff; display: block; }
+.pagina-pendente figcaption { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.pagina-pendente .atribuir { display: flex; gap: 6px; flex-wrap: wrap; }
+.pagina-pendente .atribuir input { flex: 1 1 110px; min-width: 0; }
+.folha-com-imagem { display: grid; gap: 20px; }
+.imagens-folha img { width: 100%; height: auto; border: 1px solid var(--pauta); background: #fff; display: block; margin-bottom: 10px; }
+@media (min-width: 1100px) {
+  .folha-com-imagem { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+  .imagens-folha { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; }
+}

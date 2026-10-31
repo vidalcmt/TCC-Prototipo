@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block titulo %}Digitalizações: {{ atividade.titulo }}{% endblock %}
+{% block conteudo %}
+<a class="voltar" href="/atividades/{{ atividade.id }}/resultados">&larr; Voltar para os resultados</a>
+<h1>Folhas digitalizadas</h1>
+<p class="resumo">{{ atividade.titulo }}{% if atividade.turma %} · {{ atividade.turma }}{% endif %}</p>
+
+{% if aviso %}<div class="aviso aviso-info" role="status">{{ aviso }}</div>{% endif %}
+
+<div class="numeros-resultados">
+  <div><strong>{{ por_folha|length }}</strong> de {{ atividade.folhas|length }} folhas com digitalização</div>
+  <div><strong>{{ completas }}</strong> com todas as {{ paginas_por_folha }} {{ "página" if paginas_por_folha == 1 else "páginas" }}</div>
+  <div><strong>{{ pendentes|length }}</strong> {{ "página sem folha" if pendentes|length == 1 else "páginas sem folha" }}</div>
+</div>
+
+<h2>Enviar</h2>
+<p class="discreto">Envie um PDF com as folhas digitalizadas (pode ser a turma toda num arquivo só, em qualquer ordem) ou fotos em PNG ou JPG. Cada página é identificada pelo QR code do canto. Para melhores resultados: digitalize em 200 a 300 dpi, em tons de cinza, com a folha reta; numa foto, enquadre a folha inteira, com os quatro quadrados pretos visíveis. Se a mesma página for enviada de novo, a mais nova substitui a anterior.</p>
+<form class="filtros" method="post" action="/atividades/{{ atividade.id }}/digitalizacoes" enctype="multipart/form-data"
+      onsubmit="setTimeout(() => { this.querySelector('button').disabled = true; this.querySelector('.aguarde').hidden = false; }, 0);">
+  <div class="campo largo">
+    <label for="arquivos">Arquivos</label>
+    <input type="file" id="arquivos" name="arquivos" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" multiple required>
+  </div>
+  <div class="campo botoes">
+    <button type="submit">Enviar</button>
+    <span class="discreto aguarde" hidden>Lendo as páginas...</span>
+  </div>
+</form>
+
+<h2 id="pendentes">Páginas sem folha</h2>
+{% if pendentes %}
+<p class="discreto">O QR code destas páginas não foi lido, ou é de outra atividade. Confira o código no cabeçalho da imagem e indique a folha, ou exclua a página.</p>
+<div class="paginas-pendentes">
+{% for p in pendentes %}
+  <figure class="pagina-pendente" id="pagina-{{ p.id }}">
+    <a href="/atividades/{{ atividade.id }}/digitalizacoes/{{ p.id }}/imagem" target="_blank" rel="noopener">
+      <img src="/atividades/{{ atividade.id }}/digitalizacoes/{{ p.id }}/imagem" alt="Página {{ p.pagina_do_arquivo }} de {{ p.nome_original }}" loading="lazy">
+    </a>
+    <figcaption>
+      <div><strong>{{ rotulos[p.situacao] }}</strong></div>
+      <div class="discreto">{{ p.nome_original }}, página {{ p.pagina_do_arquivo }}</div>
+      <form class="atribuir" method="post" action="/atividades/{{ atividade.id }}/digitalizacoes/{{ p.id }}/atribuir">
+        <label for="codigo-{{ p.id }}" class="so-leitor">Código da folha</label>
+        <input type="text" id="codigo-{{ p.id }}" name="codigo" placeholder="XXXX-XXXX" required autocomplete="off" autocapitalize="characters">
+        {% if paginas_por_folha > 1 %}
+        <label for="pag-{{ p.id }}" class="so-leitor">Página</label>
+        <select id="pag-{{ p.id }}" name="pagina">{% for n in range(1, paginas_por_folha + 1) %}<option value="{{ n }}">pág. {{ n }}</option>{% endfor %}</select>
+        {% else %}<input type="hidden" name="pagina" value="1">{% endif %}
+        <button type="submit" class="pequeno">Ligar</button>
+      </form>
+      <form method="post" action="/atividades/{{ atividade.id }}/digitalizacoes/{{ p.id }}/excluir"
+            data-pergunta="Excluir esta página?" onsubmit="return confirm(this.dataset.pergunta)">
+        <button type="submit" class="secundario pequeno">Excluir</button>
+      </form>
+    </figcaption>
+  </figure>
+{% endfor %}
+</div>
+{% else %}
+<p class="discreto">Nenhuma. Todas as páginas enviadas foram ligadas a uma folha.</p>
+{% endif %}
+
+<h2>Folhas</h2>
+<div class="rolagem">
+<table>
+  <tr><th>Folha</th><th>Código</th><th>Páginas digitalizadas</th><th></th></tr>
+  {% for f in atividade.folhas %}
+  {% set recebidas = por_folha.get(f.id, [])|unique|sort|list %}
+  <tr>
+    <td>{{ f.numero }}</td>
+    <td class="sem-quebra">{{ f.codigo }}</td>
+    <td>{% if recebidas %}{{ recebidas|join(", ") }}{% if recebidas|length < paginas_por_folha %} <span class="status status-parcial">faltam páginas</span>{% endif %}{% else %}<span class="discreto">nenhuma</span>{% endif %}</td>
+    <td>{% if recebidas %}<a href="/atividades/{{ atividade.id }}/folhas/{{ f.id }}">Abrir</a>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

@@ -8,6 +8,9 @@
     <h1>Resultados</h1>
     <p class="resumo">{{ atividade.titulo }}{% if atividade.turma %} · {{ atividade.turma }}{% endif %}</p>
   </div>
+  {% if atividade.folhas %}
+  <div class="acoes"><a class="botao" href="/atividades/{{ atividade.id }}/digitalizacoes">Folhas digitalizadas</a></div>
+  {% endif %}
 </div>
 
 {% if aviso %}<div class="aviso aviso-info" role="status">{{ aviso }}</div>{% endif %}
