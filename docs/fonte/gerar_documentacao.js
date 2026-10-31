@@ -106,7 +106,7 @@ function tabela(cabecalho, linhas, proporcoes) {
 // =====================================================================
 // CAPA
 // =====================================================================
-const VERSAO = "0.15";
+const VERSAO = "0.16";
 const DATA = "31/10/2026";
 
 conteudo.push(new Paragraph({ spacing: { before: 2400 }, children: [] }));
@@ -164,11 +164,12 @@ tabela(
   [
     ["Cadastro de questões objetivas e discursivas", "Reconhecimento de texto manuscrito (fase posterior, medida à parte)"],
     ["Explicação das alternativas das objetivas", "Treinamento ou ajuste fino de modelo próprio"],
-    ["Feedback e nota sugerida nas discursivas, com e sem resposta esperada", "Acesso direto de alunos ao sistema"],
+    ["Feedback e nota sugerida nas discursivas, com e sem resposta esperada", "Contas e login para alunos"],
     ["Tela de aceite ou ajuste da nota pelo professor", "Cadastro aberto: as contas são criadas pelo administrador"],
     ["Registro de métricas e exportação em CSV", ""],
     ["Login com contas individuais, papéis e limite diário de chamadas", ""],
     ["Atividades montadas pelo professor, impressas em folha A4", ""],
+    ["Folhas de resposta com código, correção da turma e consulta do resultado pelo aluno com o código, sem login", ""],
     ["Comparação com um método de similaridade de textos (baseline)", ""],
   ],
   [1, 1],
@@ -186,6 +187,7 @@ tabela(
     ["Apoio", "Publicação no Google Cloud", "Scripts e guia prontos em 26/10/2026; instalação feita pelo autor"],
     ["Apoio", "Folhas de resposta com código único, primeira parte do fluxo de resultados dos alunos", "Implementado em 31/10/2026; aguardando revisão"],
     ["Apoio", "Respostas por folha, correção, painel de resultados e liberação", "Implementado em 31/10/2026; aguardando revisão"],
+    ["Apoio", "Página do aluno para consultar o resultado pelo código", "Implementado em 31/10/2026; aguardando revisão"],
     ["5", "Execução em lote e baseline", "Pendente"],
     ["6", "Análise e coleta com especialistas", "Pendente"],
   ],
@@ -240,6 +242,7 @@ tabela(
     ["`app/questoes/`", "Páginas de questões: lista dos dois tipos e objetivas (`router.py`), discursivas e respostas (`discursivas.py`), cliente do modelo para as rotas (`cliente.py`)"],
     ["`app/revisao/`", "Aceite ou ajuste da nota pelo professor: regra (`servico.py`) e rota (`router.py`)"],
     ["`app/atividades/`", "Atividades: montagem de conjuntos de questões, caderno de questões em A4 e rotas das folhas de resposta (`router.py`)"],
+    ["`app/aluno/`", "Página pública do aluno: o que ele pode ver do próprio resultado (`servico.py`) e as rotas de consulta pelo código (`router.py`)"],
     ["`app/resultados/`", "Respostas de cada folha, nota da folha e liberação (`servico.py`), correção em lote das discursivas (`lote.py`) e páginas do painel e da folha (`router.py`)"],
     ["`app/folhas/`", "Folhas de resposta: posição de cada elemento na página (`layout.py`) e geração dos códigos e do QR code (`servico.py`)"],
     ["`app/templates/`", "Páginas HTML; `base.html` tem a barra de navegação e `_macros.html` os elementos repetidos, como a nota circulada"],
@@ -821,7 +824,7 @@ tabela(["Elemento", "Posição e finalidade"], [
   ["Cabeçalho", "Título, turma, número da página e o código da folha em letras grandes, para conferência visual"],
   ["Objetivas", "Uma linha por questão, com bolinhas de 5,2 mm de diâmetro identificadas pela letra. Se a objetiva não tem alternativas cadastradas, recebe as letras A a E"],
   ["Discursivas", "Uma caixa por questão ou por item, com o rótulo acima e linhas de escrita a cada 8 mm"],
-  ["Canhoto", "Só na primeira página, abaixo de uma linha tracejada: título, código e o endereço onde o aluno consulta o resultado"],
+  ["Canhoto", "Só na primeira página, abaixo de uma linha tracejada: título, código, o endereço onde o aluno consulta o resultado e um segundo QR code que abre a página do aluno já com o código. Fica fora da área lida, porque o aluno o leva embora"],
 ], [3, 7]);
 p("Depois que há respostas registradas em alguma folha, as folhas não podem mais ser descartadas, porque as respostas e as correções dependem delas.");
 p("Para imprimir, a página orienta a usar papel A4, escala 100% (\"Tamanho real\") e margens \"Nenhuma\". Com outra escala, as posições na folha deixam de corresponder às calculadas.");
@@ -849,6 +852,26 @@ tabela(["Situação", "Pontos"], [
 p("Uma folha está concluída quando todas as questões têm pontos. Depois da liberação, o aluno vê o resultado apenas das folhas concluídas; as demais aparecem quando o professor terminar de revisar. As objetivas podem ser alteradas a qualquer momento, porque a nota é só uma comparação com o gabarito. Uma discursiva já corrigida não é alterada: a correção e a decisão do professor se referem ao texto corrigido, e uma tentativa de mudar o texto é avisada.");
 h3("Correção em lote (lote.py)");
 p("Uma turma de 40 alunos com duas discursivas exige 80 chamadas ao modelo, o que levaria vários minutos. Por isso a correção em lote roda numa linha de execução separada, e o painel mostra o andamento, atualizando a página a cada 5 segundos. Antes de cada chamada, o limite diário da conta é conferido; se for atingido, o lote para e as respostas restantes continuam pendentes. Uma falha do modelo é registrada nas métricas, como qualquer outra, e a resposta continua pendente para uma nova tentativa.");
+
+// ---------------------------------------------------------------------
+h2("4.25 Página do aluno: app/aluno/");
+p("É a única parte do sistema aberta sem login. O aluno digita o código do canhoto, ou aponta a câmera para o QR code do canhoto, e vê o resultado da própria folha. O código é a chave: é aleatório, só o aluno tem o canhoto, e o sistema não guarda o nome de ninguém.");
+tabela(["Rota", "O que faz"], [
+  ["`GET /resultado`", "Formulário para digitar o código. Com `codigo`, normaliza o que foi digitado (minúsculas, espaços, sem hífen) e leva à rota seguinte"],
+  ["`GET /r/{codigo}`", "Resultado da folha, quando liberado e concluído; senão, um aviso de que o professor ainda não liberou ou de que a folha está em correção"],
+], [3, 7]);
+h3("O que o aluno vê e o que não vê");
+tabela(["Mostrado ao aluno", "Nunca mostrado"], [
+  ["Nota total e pontos de cada questão", "Nota sugerida pelo modelo"],
+  ["Objetivas: alternativa marcada, alternativa correta, por que a marcada está errada, o caminho até a correta e a pista do enunciado, quando a explicação foi gerada para a questão", "Análise por critério, escrita para o professor, que revela o conteúdo esperado"],
+  ["Discursivas: o feedback elaborado para o aluno e a nota confirmada pelo professor", "Comentário da revisão, motivo da confiança e dados de custo e de métricas"],
+], [5, 5]);
+h3("Proteções");
+marcadores([
+  "**Tentativas de adivinhar códigos:** consultas com código inexistente são contadas por endereço de rede; depois de 30 em 10 minutos, novas consultas daquela rede são recusadas até a janela passar. O limite é folgado porque uma turma inteira costuma usar a mesma rede da escola. Com mais de 850 bilhões de códigos possíveis, 30 tentativas a cada 10 minutos não chegam perto de encontrar um código válido.",
+  "**Cabeçalhos da resposta:** a página não é guardada pelo navegador nem por intermediários (`Cache-Control: no-store`), não é indexada por buscadores (`noindex`) e não envia o endereço com o código para outros sites (`Referrer-Policy: no-referrer`).",
+  "**Página separada:** a página do aluno não tem a barra de navegação do professor nem links para o resto do sistema.",
+]);
 
 // ---------------------------------------------------------------------
 h1("5. Configuração e execução");
@@ -928,7 +951,7 @@ tabela(["Arquivo", "O que faz"], [
 
 // ---------------------------------------------------------------------
 h1("6. Testes automatizados");
-p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 213 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
+p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 219 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
 tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_precos.py`", "Custo correto para o modelo em uso; preço de cache aplicado; nome com sufixo de versão; modelo desconhecido não gera custo inventado"],
   ["`tests/test_llm.py`", "Sucesso grava tokens, custo, latência, modelo e prompt; resposta sem formato válido vira falha com tokens; erro de rede vira falha com motivo; cliente sem novas tentativas automáticas"],
@@ -942,6 +965,7 @@ tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_atividades.py`", "Criação e título obrigatório; adicionar sem repetir, mover e remover com renumeração; busca que esconde as já incluídas; retorno só para dentro da atividade; editar e excluir sem apagar questões; folha do aluno com ordem, itens, alternativas e linhas; número de linhas; folha com gabarito, resumo das objetivas, resposta esperada e rubrica; acesso só com login"],
   ["`tests/test_folhas.py`", "Formato e alfabeto do código, sem repetições; código digitado normalizado; geração com numeração contínua e layout mantido; quantidades e linhas inválidas; atividade sem questões; questões travadas depois das folhas e liberadas ao descartar; folhas impressas com código, QR code, marcas, bolinhas, caixas e canhoto; impressão de uma única folha; caderno sem linhas quando há folhas; elementos dentro da área e sem sobreposição; duas colunas e nova página nas objetivas; quebra de página nas discursivas; objetiva sem alternativas cadastradas; conteúdo do QR code"],
   ["`tests/test_resultados.py`", "Registro de objetivas certas, erradas, em branco e com mais de uma marcada, e de discursivas; alternativa inválida sem gravar nada; salvar e ir para a próxima folha; objetiva sem gabarito e aviso no painel; folha de outra atividade; correção da folha com resposta esperada, revisão e folha concluída; falha do modelo mantendo a resposta pendente; discursiva corrigida não alterada; correção em lote e parada no limite diário; painel e busca pelo código; liberação, recolhimento e visibilidade para o aluno; valor das objetivas; folhas com respostas não descartadas"],
+  ["`tests/test_aluno.py`", "Resultado liberado com explicação da objetiva e feedback da discursiva, sem nada do que é do professor, e sem cache; código digitado com minúsculas e espaços; aviso antes da liberação e para folha incompleta; código inexistente e bloqueio após muitas tentativas; formulário sem indexação; QR code com link no canhoto"],
   ["`tests/test_lista_questoes.py`", "Páginas de 50 e página fora do intervalo; cada filtro, inclusive situação pendente e sem correção; filtros mantidos ao trocar de página; filtro sem resultado; opções dos filtros vindas do banco"],
   ["`tests/test_importar_enem.py`", "Paginação; parada após recusas seguidas; exclusão de numeração fora da área e de repetidas; filtro de área e de imagens; montagem do enunciado; importação com gabarito e sem duplicar"],
 ], [3, 7]);
@@ -1016,6 +1040,8 @@ tabela(["Decisão", "Motivo"], [
   ["Nota da folha só com todas as discursivas confirmadas", "Cumpre o RF11: nenhuma nota chega ao aluno sem a decisão do professor"],
   ["Discursiva em branco vale zero sem chamar o modelo", "Não há o que avaliar, e a chamada teria custo"],
   ["Correção em lote numa linha de execução, com andamento em memória", "A página não pode esperar minutos; uma fila de tarefas exigiria outro serviço, desnecessário com um único processo no servidor"],
+  ["Consulta do aluno sem login, pelo código da folha", "Evita criar e administrar contas de alunos e guardar dados pessoais; o código já é um segredo que só o aluno tem"],
+  ["Link de consulta por QR code no canhoto", "O aluno abre o resultado no celular sem digitar o código; o canhoto fica com o aluno e não é digitalizado"],
   ["Questões travadas enquanto houver folhas", "Mudar a ordem ou as questões depois da impressão faria a leitura procurar respostas no lugar errado"],
 ], [4, 6]);
 
@@ -1041,6 +1067,8 @@ marcadores([
   "**Layout ligado à versão do sistema:** a posição dos elementos é recalculada a partir da atividade, e não gravada. Uma mudança futura em `layout.py` alteraria a posição esperada em folhas já impressas; por isso, mudanças nesse arquivo só devem ser feitas quando não houver folhas em uso.",
   "**Impressão em escala diferente de 100%:** algumas impressoras reduzem a página para caber nas margens. As marcas de alinhamento corrigem parte disso na leitura, mas a orientação é imprimir em tamanho real.",
   "**Correções das folhas nas métricas:** as correções feitas pelas folhas de resposta entram nas métricas e nas revisões como qualquer outra. Para a análise da pesquisa, elas podem ser separadas pela origem da resposta (`folha`); como usam sempre a condição com resposta esperada quando disponível, não devem entrar na comparação entre condições.",
+  "**Quem tem o canhoto vê o resultado:** como não há login, um canhoto perdido ou fotografado por outra pessoa dá acesso ao resultado daquela folha. Como o resultado não tem nome, o dano é limitado; o professor deve orientar os alunos a guardar o canhoto.",
+  "**Bloqueio de consultas em memória:** a contagem de códigos inexistentes recomeça quando o servidor reinicia, como o bloqueio de senhas.",
   "**Andamento do lote em memória:** se o servidor reiniciar durante uma correção em lote, ela para. As respostas que faltaram continuam pendentes, e basta pedir a correção de novo.",
   "**Chave de sessão:** sem `SECRET_KEY` no .env, cada reinício do servidor encerra todas as sessões. No servidor publicado, a chave é obrigatória e `COOKIE_SEGURO` deve estar ligado.",
 ]);
@@ -1100,6 +1128,7 @@ tabela(["Termo", "Significado"], [
 // ---------------------------------------------------------------------
 h1("10. Histórico de versões");
 tabela(["Data", "Versão", "Referência", "Mudança"], [
+  ["31/10/2026", "0.16", "pull request da página do aluno", "Página pública em que o aluno consulta o próprio resultado pelo código da folha, só depois da liberação e com a folha concluída; QR code com link no canhoto; limite de consultas com código inexistente"],
   ["31/10/2026", "0.15", "pull request das respostas por folha", "Respostas de cada folha digitadas pelo professor, nota das objetivas pelo gabarito, correção das discursivas por folha ou em lote, nota da folha só com as discursivas confirmadas, painel de resultados e liberação para os alunos"],
   ["31/10/2026", "0.14", "pull request das folhas de resposta", "Folhas de resposta com código único no lugar do nome, QR code, marcas de alinhamento, bolinhas e caixas em posições fixas e canhoto para o aluno; caderno de questões sem identificação; questões travadas enquanto houver folhas"],
   ["26/10/2026", "0.13", "pull request da publicação", "Guia e scripts para publicar no Google Cloud com HTTPS, serviço do sistema e cópia diária do banco; utilitários de redefinição de senha e de cópia do banco"],
