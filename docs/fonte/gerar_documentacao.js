@@ -106,7 +106,7 @@ function tabela(cabecalho, linhas, proporcoes) {
 // =====================================================================
 // CAPA
 // =====================================================================
-const VERSAO = "0.16";
+const VERSAO = "0.17";
 const DATA = "31/10/2026";
 
 conteudo.push(new Paragraph({ spacing: { before: 2400 }, children: [] }));
@@ -188,6 +188,7 @@ tabela(
     ["Apoio", "Folhas de resposta com código único, primeira parte do fluxo de resultados dos alunos", "Implementado em 31/10/2026; aguardando revisão"],
     ["Apoio", "Respostas por folha, correção, painel de resultados e liberação", "Implementado em 31/10/2026; aguardando revisão"],
     ["Apoio", "Página do aluno para consultar o resultado pelo código", "Implementado em 31/10/2026; aguardando revisão"],
+    ["Apoio", "Envio das folhas digitalizadas e identificação pelo QR code", "Implementado em 31/10/2026; aguardando revisão"],
     ["5", "Execução em lote e baseline", "Pendente"],
     ["6", "Análise e coleta com especialistas", "Pendente"],
   ],
@@ -236,12 +237,13 @@ tabela(
     ["`app/contas/`", "Senhas (`senhas.py`), sessão e permissões (`sessao.py`), regras das contas (`servico.py`) e páginas de entrar, trocar senha e usuários (`router.py`)"],
     ["`app/config.py`", "Leitura das configurações do arquivo .env"],
     ["`app/database.py`", "Conexão com o banco e abertura de sessões"],
-    ["`app/models.py`", "Definição das quatorze tabelas do banco"],
+    ["`app/models.py`", "Definição das quinze tabelas do banco"],
     ["`app/correcao/`", "Chamada ao modelo (`llm.py`), prompts (`prompts.py`), contratos de saída (`contratos.py`), explicação de objetivas (`objetiva.py`) e correção de discursivas (`discursiva.py`)"],
     ["`app/metricas/`", "Cálculo de custo (`precos.py`), números do artigo (`resumo.py`), página e exportações (`router.py`)"],
     ["`app/questoes/`", "Páginas de questões: lista dos dois tipos e objetivas (`router.py`), discursivas e respostas (`discursivas.py`), cliente do modelo para as rotas (`cliente.py`)"],
     ["`app/revisao/`", "Aceite ou ajuste da nota pelo professor: regra (`servico.py`) e rota (`router.py`)"],
     ["`app/atividades/`", "Atividades: montagem de conjuntos de questões, caderno de questões em A4 e rotas das folhas de resposta (`router.py`)"],
+    ["`app/digitalizacao/`", "Folhas digitalizadas: conversão de PDF e fotos em imagens, leitura do QR code, armazenamento e conferência (`servico.py` e `router.py`)"],
     ["`app/aluno/`", "Página pública do aluno: o que ele pode ver do próprio resultado (`servico.py`) e as rotas de consulta pelo código (`router.py`)"],
     ["`app/resultados/`", "Respostas de cada folha, nota da folha e liberação (`servico.py`), correção em lote das discursivas (`lote.py`) e páginas do painel e da folha (`router.py`)"],
     ["`app/folhas/`", "Folhas de resposta: posição de cada elemento na página (`layout.py`) e geração dos códigos e do QR code (`servico.py`)"],
@@ -262,7 +264,7 @@ tabela(
 
 // ---------------------------------------------------------------------
 h1("3. Modelo de dados");
-p("O banco tem quatorze tabelas. As oito primeiras foram criadas pela migração inicial do Alembic, a tabela `usuario` por uma migração própria, que também ligou revisões e chamadas ao usuário que as fez, as tabelas `item_questao` e `resposta_item` pela migração dos itens das discursivas, as tabelas `atividade` e `atividade_questao` pela migração das atividades, e a tabela `folha` pela migração das folhas de resposta. Duas delas existem por razão metodológica e não devem ser simplificadas: `revisao_professor`, que guarda a nota sugerida e a nota final lado a lado e permite calcular a concordância, e `metrica_requisicao`, que registra também as falhas, porque a taxa de falha é um resultado da pesquisa.");
+p("O banco tem quinze tabelas. As oito primeiras foram criadas pela migração inicial do Alembic, a tabela `usuario` por uma migração própria, que também ligou revisões e chamadas ao usuário que as fez, as tabelas `item_questao` e `resposta_item` pela migração dos itens das discursivas, as tabelas `atividade` e `atividade_questao` pela migração das atividades, a tabela `folha` pela migração das folhas de resposta, e a tabela `pagina_digitalizada` pela migração das digitalizações. Duas delas existem por razão metodológica e não devem ser simplificadas: `revisao_professor`, que guarda a nota sugerida e a nota final lado a lado e permite calcular a concordância, e `metrica_requisicao`, que registra também as falhas, porque a taxa de falha é um resultado da pesquisa.");
 tabela(
   ["Tabela", "Finalidade"],
   [
@@ -352,6 +354,18 @@ campos("folha", [
   ["`numero`", "inteiro", "Número sequencial da folha dentro da atividade (1, 2, 3...), único em cada atividade"],
   ["`codigo`", "texto", "Código da folha no formato `XXXX-XXXX`, único em todo o sistema. Substitui o nome do aluno: é por ele que a folha digitalizada é identificada e que o aluno consulta o resultado"],
   ["`criado_em`", "data e hora", "Momento da geração"],
+]);
+campos("pagina_digitalizada", [
+  ["`id`", "inteiro", "Identificador"],
+  ["`atividade_id`", "inteiro", "Atividade para a qual a página foi enviada"],
+  ["`folha_id`", "inteiro", "Folha identificada; vazio enquanto o QR code não foi lido e o professor não indicou a folha"],
+  ["`pagina`", "inteiro", "Página da folha (1, 2...)"],
+  ["`arquivo`", "texto", "Caminho da imagem, relativo à pasta de arquivos do sistema; a imagem fica em disco, não no banco"],
+  ["`nome_original`", "texto", "Nome do arquivo enviado pelo professor"],
+  ["`pagina_do_arquivo`", "inteiro", "Posição da página no PDF enviado (1 nas imagens)"],
+  ["`situacao`", "texto", "`identificada`, `sem_qr`, `outra_atividade` ou `substituida`, quando uma digitalização mais nova da mesma página ocupou o lugar"],
+  ["`usuario_id`", "inteiro", "Quem enviou"],
+  ["`criado_em`", "data e hora", "Momento do envio"],
 ]);
 campos("atividade_questao", [
   ["`id`", "inteiro", "Identificador"],
@@ -874,6 +888,25 @@ marcadores([
 ]);
 
 // ---------------------------------------------------------------------
+h2("4.26 Folhas digitalizadas: app/digitalizacao/");
+p("Terceira parte do fluxo: o professor digitaliza as folhas respondidas e envia ao sistema, que identifica cada página pelo QR code e mostra a imagem ao lado das respostas da folha. A leitura automática das bolinhas e da escrita fica para a etapa seguinte; nesta, a imagem já evita que o professor precise manusear o papel para digitar as respostas.");
+tabela(["Rota", "O que faz"], [
+  ["`GET /atividades/{id}/digitalizacoes`", "Envio de arquivos, números (folhas com digitalização e com todas as páginas), páginas sem folha com a imagem e a lista das folhas com as páginas recebidas"],
+  ["`POST /atividades/{id}/digitalizacoes`", "Recebe um ou mais arquivos PDF, PNG ou JPG, até 80 MB e 150 páginas por PDF"],
+  ["`GET .../digitalizacoes/{pagina}/imagem`", "A imagem da página, só com login e só na atividade a que pertence"],
+  ["`POST .../digitalizacoes/{pagina}/atribuir`", "O professor indica o código da folha e a página, quando o QR code não foi lido"],
+  ["`POST .../digitalizacoes/{pagina}/excluir`", "Apaga a página e o arquivo da imagem"],
+], [4, 6]);
+h3("Como cada página é tratada");
+marcadores([
+  "**Conversão:** cada página do PDF vira uma imagem em tons de cinza a 200 dpi, com a biblioteca PyMuPDF; fotos são abertas com o OpenCV e reduzidas a no máximo 3000 pixels no lado maior. A imagem é gravada em JPEG, em disco, numa pasta por atividade.",
+  "**Identificação:** o QR code é procurado com o detector do OpenCV, primeiro na página inteira e depois em versões que ajudam em digitalizações ruins: o canto superior direito ampliado, o canto inferior esquerdo ampliado (página de cabeça para baixo) e a página em preto e branco puro.",
+  "**Resultado:** a página é ligada à folha e à página indicadas no QR code. Se o código for de outra atividade, ou se o QR code não for lido, a página fica na lista de pendentes, com a imagem, para o professor indicar a folha ou excluir. Uma nova digitalização da mesma página substitui a anterior, que fica registrada como substituída.",
+  "**Na página da folha:** as imagens aparecem ao lado do formulário de respostas, em telas largas, ou acima dele, em telas estreitas.",
+]);
+p("Com folhas de resposta impressas e páginas digitalizadas, as folhas não podem ser descartadas e a atividade não pode ser excluída, pela mesma razão das respostas registradas.");
+
+// ---------------------------------------------------------------------
 h1("5. Configuração e execução");
 
 h2("5.1 Arquivo .env");
@@ -884,8 +917,9 @@ tabela(["Variável", "Obrigatória", "Significado"], [
   ["`DATABASE_URL`", "Não", "Outro banco, sempre com caminho absoluto. Sem ela, usa `tcc.db` na raiz"],
   ["`SECRET_KEY`", "Sim, fora do computador do autor", "Chave que assina o cookie de login. Sem ela, o sistema usa uma chave temporária e todos saem a cada reinício. O comando que gera uma está no `.env.example`"],
   ["`COOKIE_SEGURO`", "Não", "`true` só com HTTPS, no servidor publicado: o navegador passa a enviar o cookie apenas por conexão criptografada"],
-  ["`LIMITE_CHAMADAS_DIA`", "Não", "Máximo de chamadas ao modelo por pessoa por dia; padrão 60"],
+  ["`LIMITE_CHAMADAS_DIA`", "Não", "Máximo de chamadas ao modelo por pessoa por dia; padrão 60. Uma turma de 40 alunos com duas discursivas exige 80 chamadas: para corrigir a turma num dia, aumente o valor"],
   ["`NOME_SISTEMA`", "Não", "Nome exibido nas páginas; padrão Devolutiva"],
+  ["`PASTA_ARQUIVOS`", "Não", "Pasta das folhas digitalizadas, com caminho absoluto; padrão `arquivos` na raiz do projeto"],
 ], [3, 2, 6]);
 
 h2("5.2 Tabela de preços");
@@ -951,7 +985,7 @@ tabela(["Arquivo", "O que faz"], [
 
 // ---------------------------------------------------------------------
 h1("6. Testes automatizados");
-p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 219 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
+p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 231 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
 tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_precos.py`", "Custo correto para o modelo em uso; preço de cache aplicado; nome com sufixo de versão; modelo desconhecido não gera custo inventado"],
   ["`tests/test_llm.py`", "Sucesso grava tokens, custo, latência, modelo e prompt; resposta sem formato válido vira falha com tokens; erro de rede vira falha com motivo; cliente sem novas tentativas automáticas"],
@@ -966,6 +1000,7 @@ tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_folhas.py`", "Formato e alfabeto do código, sem repetições; código digitado normalizado; geração com numeração contínua e layout mantido; quantidades e linhas inválidas; atividade sem questões; questões travadas depois das folhas e liberadas ao descartar; folhas impressas com código, QR code, marcas, bolinhas, caixas e canhoto; impressão de uma única folha; caderno sem linhas quando há folhas; elementos dentro da área e sem sobreposição; duas colunas e nova página nas objetivas; quebra de página nas discursivas; objetiva sem alternativas cadastradas; conteúdo do QR code"],
   ["`tests/test_resultados.py`", "Registro de objetivas certas, erradas, em branco e com mais de uma marcada, e de discursivas; alternativa inválida sem gravar nada; salvar e ir para a próxima folha; objetiva sem gabarito e aviso no painel; folha de outra atividade; correção da folha com resposta esperada, revisão e folha concluída; falha do modelo mantendo a resposta pendente; discursiva corrigida não alterada; correção em lote e parada no limite diário; painel e busca pelo código; liberação, recolhimento e visibilidade para o aluno; valor das objetivas; folhas com respostas não descartadas"],
   ["`tests/test_aluno.py`", "Resultado liberado com explicação da objetiva e feedback da discursiva, sem nada do que é do professor, e sem cache; código digitado com minúsculas e espaços; aviso antes da liberação e para folha incompleta; código inexistente e bloqueio após muitas tentativas; formulário sem indexação; QR code com link no canhoto"],
+  ["`tests/test_digitalizacao.py`", "QR code lido em página reta, de cabeça para baixo e com ruído, em folhas sintéticas com o layout real; página sem QR code; PDF com várias folhas e foto sem QR code; página de outra atividade e reenvio que substitui; arquivos recusados; atividade sem folhas; indicação manual da folha com código e página inválidos; exclusão da página e do arquivo; imagem só com login e na atividade certa; atividade com digitalizações não excluída"],
   ["`tests/test_lista_questoes.py`", "Páginas de 50 e página fora do intervalo; cada filtro, inclusive situação pendente e sem correção; filtros mantidos ao trocar de página; filtro sem resultado; opções dos filtros vindas do banco"],
   ["`tests/test_importar_enem.py`", "Paginação; parada após recusas seguidas; exclusão de numeração fora da área e de repetidas; filtro de área e de imagens; montagem do enunciado; importação com gabarito e sem duplicar"],
 ], [3, 7]);
@@ -1042,6 +1077,9 @@ tabela(["Decisão", "Motivo"], [
   ["Correção em lote numa linha de execução, com andamento em memória", "A página não pode esperar minutos; uma fila de tarefas exigiria outro serviço, desnecessário com um único processo no servidor"],
   ["Consulta do aluno sem login, pelo código da folha", "Evita criar e administrar contas de alunos e guardar dados pessoais; o código já é um segredo que só o aluno tem"],
   ["Link de consulta por QR code no canhoto", "O aluno abre o resultado no celular sem digitar o código; o canhoto fica com o aluno e não é digitalizado"],
+  ["Imagens em disco, e não no banco", "Mantém o banco pequeno e a cópia diária rápida; o banco guarda só o caminho"],
+  ["QR code como única identificação automática", "É lido com segurança mesmo em digitalizações ruins; ler o código impresso em letras exigiria reconhecimento de texto, mais sujeito a erro"],
+  ["Página não identificada guardada, e não descartada", "O professor vê a imagem e indica a folha, sem precisar digitalizar de novo"],
   ["Questões travadas enquanto houver folhas", "Mudar a ordem ou as questões depois da impressão faria a leitura procurar respostas no lugar errado"],
 ], [4, 6]);
 
@@ -1069,6 +1107,8 @@ marcadores([
   "**Correções das folhas nas métricas:** as correções feitas pelas folhas de resposta entram nas métricas e nas revisões como qualquer outra. Para a análise da pesquisa, elas podem ser separadas pela origem da resposta (`folha`); como usam sempre a condição com resposta esperada quando disponível, não devem entrar na comparação entre condições.",
   "**Quem tem o canhoto vê o resultado:** como não há login, um canhoto perdido ou fotografado por outra pessoa dá acesso ao resultado daquela folha. Como o resultado não tem nome, o dano é limitado; o professor deve orientar os alunos a guardar o canhoto.",
   "**Bloqueio de consultas em memória:** a contagem de códigos inexistentes recomeça quando o servidor reinicia, como o bloqueio de senhas.",
+  "**Digitalizações fora da cópia diária:** a cópia automática cobre só o banco. As imagens ficam na pasta de arquivos do servidor; o professor deve guardar os PDFs originais até o fim do semestre.",
+  "**Fotos com perspectiva forte:** o QR code costuma ser lido mesmo em fotos tortas, mas a leitura das respostas, na etapa seguinte, precisa das quatro marcas dos cantos visíveis na imagem.",
   "**Andamento do lote em memória:** se o servidor reiniciar durante uma correção em lote, ela para. As respostas que faltaram continuam pendentes, e basta pedir a correção de novo.",
   "**Chave de sessão:** sem `SECRET_KEY` no .env, cada reinício do servidor encerra todas as sessões. No servidor publicado, a chave é obrigatória e `COOKIE_SEGURO` deve estar ligado.",
 ]);
@@ -1102,6 +1142,9 @@ tabela(["Termo", "Significado"], [
   ["OWASP", "Fundação aberta que publica guias de segurança para aplicações web"],
   ["Papel", "Conjunto de permissões de uma conta: administrador ou avaliador"],
   ["Prompt", "Texto de instrução enviado ao modelo de linguagem"],
+  ["OpenCV", "Biblioteca aberta de processamento de imagens, usada para ler o QR code e, na etapa seguinte, para alinhar a página e ler as bolinhas"],
+  ["PyMuPDF", "Biblioteca para abrir arquivos PDF e converter as páginas em imagens"],
+  ["dpi", "Pontos por polegada: a resolução de uma digitalização. A 200 dpi, um milímetro da folha tem cerca de 8 pixels"],
   ["QR code", "Código de barras em duas dimensões, lido por câmeras e por programas de imagem, que guarda um texto curto com correção de erros"],
   ["LGPD", "Lei Geral de Proteção de Dados Pessoais (Lei nº 13.709/2018)"],
   ["Marcas de alinhamento", "Quadrados pretos impressos em posições fixas da folha, usados para endireitar e ajustar a escala da imagem digitalizada"],
@@ -1128,6 +1171,7 @@ tabela(["Termo", "Significado"], [
 // ---------------------------------------------------------------------
 h1("10. Histórico de versões");
 tabela(["Data", "Versão", "Referência", "Mudança"], [
+  ["31/10/2026", "0.17", "pull request das digitalizações", "Envio de PDF ou fotos das folhas respondidas, identificação de cada página pelo QR code, conferência das páginas não identificadas e imagem ao lado das respostas da folha; atividade com respostas ou digitalizações não pode ser excluída"],
   ["31/10/2026", "0.16", "pull request da página do aluno", "Página pública em que o aluno consulta o próprio resultado pelo código da folha, só depois da liberação e com a folha concluída; QR code com link no canhoto; limite de consultas com código inexistente"],
   ["31/10/2026", "0.15", "pull request das respostas por folha", "Respostas de cada folha digitadas pelo professor, nota das objetivas pelo gabarito, correção das discursivas por folha ou em lote, nota da folha só com as discursivas confirmadas, painel de resultados e liberação para os alunos"],
   ["31/10/2026", "0.14", "pull request das folhas de resposta", "Folhas de resposta com código único no lugar do nome, QR code, marcas de alinhamento, bolinhas e caixas em posições fixas e canhoto para o aluno; caderno de questões sem identificação; questões travadas enquanto houver folhas"],
@@ -1157,6 +1201,8 @@ marcadores([
   "OWASP. Password Storage Cheat Sheet. Disponível em: https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html. Acesso em: 23 out. 2026.",
   "PERCIVAL, C.; JOSEFSSON, S. RFC 7914: The scrypt Password-Based Key Derivation Function. IETF, 2016. Disponível em: https://www.rfc-editor.org/rfc/rfc7914. Acesso em: 23 out. 2026.",
   "BRAILLE INSTITUTE. Atkinson Hyperlegible Font. Disponível em: https://www.brailleinstitute.org/freefont/. Acesso em: 23 out. 2026.",
+  "OPENCV. OpenCV: Open Source Computer Vision Library. Disponível em: https://opencv.org/. Acesso em: 31 out. 2026.",
+  "ARTIFEX. PyMuPDF Documentation. Disponível em: https://pymupdf.readthedocs.io/. Acesso em: 31 out. 2026.",
   "BRASIL. Lei nº 13.709, de 14 de agosto de 2018. Lei Geral de Proteção de Dados Pessoais (LGPD). Disponível em: https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm. Acesso em: 31 out. 2026.",
 ]);
 
