@@ -51,7 +51,7 @@ def cliente_anonimo(fabrica_sessao):
     from fastapi.testclient import TestClient
 
     from app.contas.sessao import tentativas
-    from app.database import obter_sessao
+    from app.database import obter_fabrica_sessao, obter_sessao
     from app.main import app
 
     def sessao_de_teste():
@@ -59,7 +59,10 @@ def cliente_anonimo(fabrica_sessao):
             yield s
 
     app.dependency_overrides[obter_sessao] = sessao_de_teste
+    app.dependency_overrides[obter_fabrica_sessao] = lambda: fabrica_sessao
     tentativas._erros.clear()
+    from app.resultados import lote
+    lote._andamentos.clear()
     yield TestClient(app)
     app.dependency_overrides.clear()
 
