@@ -106,7 +106,7 @@ function tabela(cabecalho, linhas, proporcoes) {
 // =====================================================================
 // CAPA
 // =====================================================================
-const VERSAO = "0.14";
+const VERSAO = "0.15";
 const DATA = "31/10/2026";
 
 conteudo.push(new Paragraph({ spacing: { before: 2400 }, children: [] }));
@@ -185,6 +185,7 @@ tabela(
     ["Apoio", "Login, contas, página inicial e novo visual com tema escuro", "Implementado em 23/10/2026; aguardando revisão"],
     ["Apoio", "Publicação no Google Cloud", "Scripts e guia prontos em 26/10/2026; instalação feita pelo autor"],
     ["Apoio", "Folhas de resposta com código único, primeira parte do fluxo de resultados dos alunos", "Implementado em 31/10/2026; aguardando revisão"],
+    ["Apoio", "Respostas por folha, correção, painel de resultados e liberação", "Implementado em 31/10/2026; aguardando revisão"],
     ["5", "Execução em lote e baseline", "Pendente"],
     ["6", "Análise e coleta com especialistas", "Pendente"],
   ],
@@ -239,6 +240,7 @@ tabela(
     ["`app/questoes/`", "Páginas de questões: lista dos dois tipos e objetivas (`router.py`), discursivas e respostas (`discursivas.py`), cliente do modelo para as rotas (`cliente.py`)"],
     ["`app/revisao/`", "Aceite ou ajuste da nota pelo professor: regra (`servico.py`) e rota (`router.py`)"],
     ["`app/atividades/`", "Atividades: montagem de conjuntos de questões, caderno de questões em A4 e rotas das folhas de resposta (`router.py`)"],
+    ["`app/resultados/`", "Respostas de cada folha, nota da folha e liberação (`servico.py`), correção em lote das discursivas (`lote.py`) e páginas do painel e da folha (`router.py`)"],
     ["`app/folhas/`", "Folhas de resposta: posição de cada elemento na página (`layout.py`) e geração dos códigos e do QR code (`servico.py`)"],
     ["`app/templates/`", "Páginas HTML; `base.html` tem a barra de navegação e `_macros.html` os elementos repetidos, como a nota circulada"],
     ["`app/static/`", "Estilo (`estilo.css`), script do tema e do menu (`app.js`) e fontes com as suas licenças"],
@@ -318,9 +320,10 @@ campos("submissao", [
   ["`id`", "inteiro", "Identificador"],
   ["`questao_id`", "inteiro", "Questão respondida"],
   ["`resposta_aluno`", "texto", "Resposta discursiva. Em questão com itens, o texto completo, com cada item identificado pela letra e os itens vazios marcados como \"(em branco)\""],
-  ["`alternativa_escolhida`", "texto", "Letra escolhida, nas objetivas"],
+  ["`alternativa_escolhida`", "texto", "Letra escolhida, nas objetivas. Vazio é em branco; `*` indica mais de uma alternativa marcada na folha"],
+  ["`folha_id`", "inteiro", "Folha de respostas de onde veio a resposta; vazio nas respostas do corpus. Cada questão tem no máximo uma resposta por folha"],
   ["`codigo_corpus`", "texto", "Código anônimo da resposta no corpus, por exemplo `R014`"],
-  ["`origem`", "texto", "`autor`, `voluntario` ou `especialista`; usada como variável de análise"],
+  ["`origem`", "texto", "`autor`, `voluntario` ou `especialista` no corpus, usada como variável de análise; `folha` nas respostas das folhas de resposta"],
   ["`criado_em`", "data e hora", "Momento do registro"],
 ]);
 campos("resposta_item", [
@@ -336,6 +339,8 @@ campos("atividade", [
   ["`instrucoes`", "texto", "Instruções impressas no topo da folha do aluno (opcional)"],
   ["`usuario_id`", "inteiro", "Quem criou a atividade"],
   ["`linhas_por_resposta`", "inteiro", "Linhas de cada caixa de resposta discursiva nas folhas de resposta; fixado na primeira geração de folhas (padrão 8)"],
+  ["`valor_objetiva`", "decimal", "Pontos de cada objetiva certa (padrão 1). As discursivas valem a nota máxima da questão"],
+  ["`resultados_liberados_em`", "data e hora", "Quando o professor liberou os resultados para os alunos; vazio enquanto não liberou"],
   ["`criado_em`", "data e hora", "Momento da criação"],
 ]);
 campos("folha", [
@@ -818,7 +823,32 @@ tabela(["Elemento", "Posição e finalidade"], [
   ["Discursivas", "Uma caixa por questão ou por item, com o rótulo acima e linhas de escrita a cada 8 mm"],
   ["Canhoto", "Só na primeira página, abaixo de uma linha tracejada: título, código e o endereço onde o aluno consulta o resultado"],
 ], [3, 7]);
+p("Depois que há respostas registradas em alguma folha, as folhas não podem mais ser descartadas, porque as respostas e as correções dependem delas.");
 p("Para imprimir, a página orienta a usar papel A4, escala 100% (\"Tamanho real\") e margens \"Nenhuma\". Com outra escala, as posições na folha deixam de corresponder às calculadas.");
+
+// ---------------------------------------------------------------------
+h2("4.24 Respostas, correção e resultados: app/resultados/");
+p("Segunda parte do fluxo: o professor registra o que cada aluno respondeu na folha, o sistema corrige, o professor confirma as notas e libera os resultados. Nesta versão, as respostas são digitadas pelo professor; a leitura automática das folhas digitalizadas entra numa versão posterior e vai preencher os mesmos campos.");
+tabela(["Rota", "O que faz"], [
+  ["`GET /atividades/{id}/resultados`", "Painel: folhas com respostas, concluídas, discursivas a corrigir e esperando revisão, média das concluídas, valor das objetivas, liberação e a lista das folhas com situação e pontos. Com `codigo`, abre a folha daquele código (aceita minúsculas e sem hífen)"],
+  ["`GET /atividades/{id}/folhas/{folha}`", "Página da folha: uma linha por objetiva com as letras, \"em branco\" e \"mais de uma\"; uma caixa de texto por discursiva ou por item; resultado de cada questão; botões para ir à folha anterior ou seguinte"],
+  ["`POST .../folhas/{folha}/respostas`", "Grava as respostas. \"Salvar e ir para a próxima\" leva à folha seguinte, para digitar a turma em sequência"],
+  ["`POST .../folhas/{folha}/corrigir`", "Corrige na hora as discursivas daquela folha"],
+  ["`POST /atividades/{id}/resultados/corrigir`", "Corrige em lote todas as discursivas pendentes da atividade, fora da requisição"],
+  ["`POST /atividades/{id}/resultados/liberar` e `/recolher`", "Libera os resultados para os alunos ou recolhe a liberação"],
+  ["`POST /atividades/{id}/resultados/valor`", "Altera os pontos de cada objetiva (maior que 0 e até 100)"],
+], [4, 6]);
+h3("Nota de cada questão");
+tabela(["Situação", "Pontos"], [
+  ["Objetiva certa", "O valor das objetivas da atividade"],
+  ["Objetiva errada, em branco ou com mais de uma marcada", "Zero"],
+  ["Objetiva sem alternativa correta cadastrada", "Sem nota: a folha não fica concluída, e o painel avisa quais questões estão sem gabarito"],
+  ["Discursiva em branco", "Zero, sem chamar o modelo"],
+  ["Discursiva respondida", "Corrigida pelo mesmo procedimento da seção 4.9, com a resposta esperada quando a questão tem uma. A nota sugerida aparece como pendente até o professor aceitar ou ajustar na página da resposta (seção 4.11); só então conta"],
+], [4, 6]);
+p("Uma folha está concluída quando todas as questões têm pontos. Depois da liberação, o aluno vê o resultado apenas das folhas concluídas; as demais aparecem quando o professor terminar de revisar. As objetivas podem ser alteradas a qualquer momento, porque a nota é só uma comparação com o gabarito. Uma discursiva já corrigida não é alterada: a correção e a decisão do professor se referem ao texto corrigido, e uma tentativa de mudar o texto é avisada.");
+h3("Correção em lote (lote.py)");
+p("Uma turma de 40 alunos com duas discursivas exige 80 chamadas ao modelo, o que levaria vários minutos. Por isso a correção em lote roda numa linha de execução separada, e o painel mostra o andamento, atualizando a página a cada 5 segundos. Antes de cada chamada, o limite diário da conta é conferido; se for atingido, o lote para e as respostas restantes continuam pendentes. Uma falha do modelo é registrada nas métricas, como qualquer outra, e a resposta continua pendente para uma nova tentativa.");
 
 // ---------------------------------------------------------------------
 h1("5. Configuração e execução");
@@ -898,7 +928,7 @@ tabela(["Arquivo", "O que faz"], [
 
 // ---------------------------------------------------------------------
 h1("6. Testes automatizados");
-p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 195 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
+p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 213 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
 tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_precos.py`", "Custo correto para o modelo em uso; preço de cache aplicado; nome com sufixo de versão; modelo desconhecido não gera custo inventado"],
   ["`tests/test_llm.py`", "Sucesso grava tokens, custo, latência, modelo e prompt; resposta sem formato válido vira falha com tokens; erro de rede vira falha com motivo; cliente sem novas tentativas automáticas"],
@@ -911,6 +941,7 @@ tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_copia_banco.py`", "Cópia compactada, com nome pela data, que pode ser restaurada; apagamento só das cópias antigas; recusa de banco que não seja SQLite"],
   ["`tests/test_atividades.py`", "Criação e título obrigatório; adicionar sem repetir, mover e remover com renumeração; busca que esconde as já incluídas; retorno só para dentro da atividade; editar e excluir sem apagar questões; folha do aluno com ordem, itens, alternativas e linhas; número de linhas; folha com gabarito, resumo das objetivas, resposta esperada e rubrica; acesso só com login"],
   ["`tests/test_folhas.py`", "Formato e alfabeto do código, sem repetições; código digitado normalizado; geração com numeração contínua e layout mantido; quantidades e linhas inválidas; atividade sem questões; questões travadas depois das folhas e liberadas ao descartar; folhas impressas com código, QR code, marcas, bolinhas, caixas e canhoto; impressão de uma única folha; caderno sem linhas quando há folhas; elementos dentro da área e sem sobreposição; duas colunas e nova página nas objetivas; quebra de página nas discursivas; objetiva sem alternativas cadastradas; conteúdo do QR code"],
+  ["`tests/test_resultados.py`", "Registro de objetivas certas, erradas, em branco e com mais de uma marcada, e de discursivas; alternativa inválida sem gravar nada; salvar e ir para a próxima folha; objetiva sem gabarito e aviso no painel; folha de outra atividade; correção da folha com resposta esperada, revisão e folha concluída; falha do modelo mantendo a resposta pendente; discursiva corrigida não alterada; correção em lote e parada no limite diário; painel e busca pelo código; liberação, recolhimento e visibilidade para o aluno; valor das objetivas; folhas com respostas não descartadas"],
   ["`tests/test_lista_questoes.py`", "Páginas de 50 e página fora do intervalo; cada filtro, inclusive situação pendente e sem correção; filtros mantidos ao trocar de página; filtro sem resultado; opções dos filtros vindas do banco"],
   ["`tests/test_importar_enem.py`", "Paginação; parada após recusas seguidas; exclusão de numeração fora da área e de repetidas; filtro de área e de imagens; montagem do enunciado; importação com gabarito e sem duplicar"],
 ], [3, 7]);
@@ -981,6 +1012,10 @@ tabela(["Decisão", "Motivo"], [
   ["Caderno de questões separado da folha de respostas", "Só a folha de respostas é digitalizada e lida, o que diminui o número de páginas, e o caderno pode ser reaproveitado entre turmas"],
   ["Layout calculado no servidor, em milímetros", "A mesma função posiciona os elementos na impressão e os localiza na leitura; um layout calculado pelo navegador poderia variar entre computadores"],
   ["QR code e marcas de alinhamento, em vez de ler o código impresso", "O QR code tem correção de erros e é lido com segurança mesmo em digitalizações de baixa qualidade; as marcas permitem endireitar a imagem antes de procurar as respostas"],
+  ["Correção das folhas com a resposta esperada, quando existe", "Na sala de aula, o objetivo é a melhor correção possível; a comparação entre as duas condições continua restrita ao corpus da pesquisa"],
+  ["Nota da folha só com todas as discursivas confirmadas", "Cumpre o RF11: nenhuma nota chega ao aluno sem a decisão do professor"],
+  ["Discursiva em branco vale zero sem chamar o modelo", "Não há o que avaliar, e a chamada teria custo"],
+  ["Correção em lote numa linha de execução, com andamento em memória", "A página não pode esperar minutos; uma fila de tarefas exigiria outro serviço, desnecessário com um único processo no servidor"],
   ["Questões travadas enquanto houver folhas", "Mudar a ordem ou as questões depois da impressão faria a leitura procurar respostas no lugar errado"],
 ], [4, 6]);
 
@@ -1005,6 +1040,8 @@ marcadores([
   "**Limite diário conta também as falhas:** uma chamada que falhou também foi cobrada pela OpenAI, por isso entra na contagem.",
   "**Layout ligado à versão do sistema:** a posição dos elementos é recalculada a partir da atividade, e não gravada. Uma mudança futura em `layout.py` alteraria a posição esperada em folhas já impressas; por isso, mudanças nesse arquivo só devem ser feitas quando não houver folhas em uso.",
   "**Impressão em escala diferente de 100%:** algumas impressoras reduzem a página para caber nas margens. As marcas de alinhamento corrigem parte disso na leitura, mas a orientação é imprimir em tamanho real.",
+  "**Correções das folhas nas métricas:** as correções feitas pelas folhas de resposta entram nas métricas e nas revisões como qualquer outra. Para a análise da pesquisa, elas podem ser separadas pela origem da resposta (`folha`); como usam sempre a condição com resposta esperada quando disponível, não devem entrar na comparação entre condições.",
+  "**Andamento do lote em memória:** se o servidor reiniciar durante uma correção em lote, ela para. As respostas que faltaram continuam pendentes, e basta pedir a correção de novo.",
   "**Chave de sessão:** sem `SECRET_KEY` no .env, cada reinício do servidor encerra todas as sessões. No servidor publicado, a chave é obrigatória e `COOKIE_SEGURO` deve estar ligado.",
 ]);
 
@@ -1063,6 +1100,7 @@ tabela(["Termo", "Significado"], [
 // ---------------------------------------------------------------------
 h1("10. Histórico de versões");
 tabela(["Data", "Versão", "Referência", "Mudança"], [
+  ["31/10/2026", "0.15", "pull request das respostas por folha", "Respostas de cada folha digitadas pelo professor, nota das objetivas pelo gabarito, correção das discursivas por folha ou em lote, nota da folha só com as discursivas confirmadas, painel de resultados e liberação para os alunos"],
   ["31/10/2026", "0.14", "pull request das folhas de resposta", "Folhas de resposta com código único no lugar do nome, QR code, marcas de alinhamento, bolinhas e caixas em posições fixas e canhoto para o aluno; caderno de questões sem identificação; questões travadas enquanto houver folhas"],
   ["26/10/2026", "0.13", "pull request da publicação", "Guia e scripts para publicar no Google Cloud com HTTPS, serviço do sistema e cópia diária do banco; utilitários de redefinição de senha e de cópia do banco"],
   ["24/10/2026", "0.12", "pull request das atividades", "Atividades com questões em ordem, aba própria na barra de navegação e folha de impressão em A4 para o aluno e com gabarito"],
