@@ -326,3 +326,34 @@ class PaginaDigitalizada(Base):
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
 
     folha: Mapped["Folha | None"] = relationship(back_populates="digitalizacoes")
+    leitura: Mapped["LeituraPagina | None"] = relationship(
+        back_populates="pagina_digitalizada", cascade="all, delete-orphan", uselist=False
+    )
+
+
+class LeituraPagina(Base):
+    """Leitura automática de uma página digitalizada: bolinhas e escrita.
+
+    Guarda o que foi lido antes da conferência do professor. Comparar com as
+    respostas depois de conferidas mede a taxa de acerto da leitura, que é um
+    dado da pesquisa (scripts/medir_leitura.py).
+    """
+
+    __tablename__ = "leitura_pagina"
+    __table_args__ = (UniqueConstraint("pagina_digitalizada_id", name="uq_leitura_pagina"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    pagina_digitalizada_id: Mapped[int] = mapped_column(
+        ForeignKey("pagina_digitalizada.id", name="fk_leitura_pagina_digitalizada"))
+    situacao: Mapped[str] = mapped_column(String(20))           # "lida" ou "falha"
+    motivo: Mapped[str | None] = mapped_column(Text)           # falha do alinhamento ou da transcrição
+    arquivo_alinhado: Mapped[str | None] = mapped_column(String(300))
+    # {"objetivas": {questao_id: {"marcada", "duvida", "preenchimento"}}, "textos": {campo: texto}}
+    resultado_json: Mapped[str] = mapped_column(Text, default="{}")
+    servico_ocr: Mapped[str | None] = mapped_column(String(50))  # vazio quando a escrita não foi enviada
+    latencia_ocr_ms: Mapped[float | None] = mapped_column(Float)
+    conferida_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuario.id", name="fk_leitura_pagina_usuario"))
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+
+    pagina_digitalizada: Mapped[PaginaDigitalizada] = relationship(back_populates="leitura")

@@ -18,6 +18,9 @@ class Configuracao(BaseSettings):
     database_url: str = f"sqlite:///{RAIZ / 'tcc.db'}"
     # Onde ficam as imagens das folhas digitalizadas. Fora do repositório.
     pasta_arquivos: Path = RAIZ / "arquivos"
+    # Chave de API do Google Cloud Vision, para ler a escrita das folhas
+    # digitalizadas. Sem ela, só as bolinhas das objetivas são lidas.
+    google_vision_api_key: str = ""
 
     nome_sistema: str = "Devolutiva"
 
