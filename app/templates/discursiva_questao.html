@@ -39,7 +39,7 @@
   <tr>
     <td><a href="/respostas/{{ s.id }}">{{ s.id }}</a></td>
     <td>{{ s.codigo_corpus or "" }}</td>
-    <td>{{ origens.get(s.origem or "", s.origem) }}</td>
+    <td>{{ "Folha de respostas" if s.origem == "folha" else origens.get(s.origem or "", s.origem) }}</td>
     <td><a href="/respostas/{{ s.id }}">{{ s.resposta_aluno[:90] }}{% if s.resposta_aluno|length > 90 %}…{% endif %}</a></td>
     <td>{{ n }}</td>
     <td>{{ revisadas }}</td>

@@ -4,6 +4,7 @@
 <head>
   {% include "_cabeca.html" %}
   <title>{% block titulo %}Início{% endblock %} | {{ nome_sistema }}</title>
+  {% block cabeca %}{% endblock %}
 </head>
 <body>
 {% set usuario = request.state.usuario if request.state.usuario is defined else none %}
