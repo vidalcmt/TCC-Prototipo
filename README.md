@@ -112,6 +112,7 @@ app/
   resultados/        respostas por folha, correção em lote, painel e liberação
   aluno/             página pública em que o aluno consulta o resultado pelo código
   digitalizacao/     envio das folhas digitalizadas e identificação pelo QR code
+  leitura/           leitura automática: alinhamento, bolinhas (OpenCV) e escrita (Google Cloud Vision)
   templates/         páginas HTML
   static/            estilo, fontes e script do tema claro/escuro
 config/precos.toml   preços por modelo, com fonte e data de acesso
@@ -119,7 +120,7 @@ prompts/             prompts versionados e registro de mudanças
 alembic/             migrações do banco
 baseline/            similaridade vetorial, fora do produto (etapa 5)
 dados/               corpus congelado (etapa 5)
-scripts/             utilitários de linha de comando (admin, senha, cópia do banco)
+scripts/             utilitários de linha de comando (admin, senha, cópia do banco, medida da leitura)
 deploy/              instalação no servidor: scripts, serviços e Caddyfile
 tests/               testes automatizados
 ```
