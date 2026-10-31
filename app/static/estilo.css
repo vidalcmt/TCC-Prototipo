@@ -361,3 +361,5 @@ td.origem { white-space: nowrap; }
   .folha-com-imagem { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
   .imagens-folha { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; }
 }
+.resposta-folha img.recorte { display: block; width: 100%; height: auto; border: 1px solid var(--pauta); border-radius: 6px; background: #fff; margin: 4px 0 6px; }
+.status.lida { background: var(--caneta-azul-fundo); color: var(--caneta-azul); border-color: var(--caneta-azul); }

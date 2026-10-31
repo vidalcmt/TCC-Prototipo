@@ -12,6 +12,9 @@ from app.digitalizacao.servico import (
     paginas_da_atividade, receber,
 )
 from app.folhas import layout as L
+from app.leitura import lote as lote_leitura
+from app.leitura import ocr
+from app.leitura.servico import paginas_para_ler
 from app.models import Atividade, PaginaDigitalizada
 from app.templates_config import templates
 
@@ -45,7 +48,19 @@ def pagina(request: Request, atividade_id: int, aviso: str | None = None, sessao
     for p in identificadas:
         por_folha.setdefault(p.folha_id, []).append(p.pagina)
     total_paginas = len(L.montar(atividade, atividade.linhas_por_resposta)) if atividade.folhas else 0
+    leitura_por_folha = {}
+    for p in identificadas:
+        if p.leitura is None:
+            estado = "não lida"
+        elif p.leitura.situacao == "falha":
+            estado = "falha na leitura"
+        else:
+            estado = "conferida" if p.leitura.conferida_em else "lida, a conferir"
+        leitura_por_folha.setdefault(p.folha_id, set()).add(estado)
+    andamento = lote_leitura.andamento(atividade.id)
     return templates.TemplateResponse(request, "digitalizacoes.html", {
+        "a_ler": len(paginas_para_ler(sessao, atividade)), "andamento": andamento,
+        "ocr_disponivel": ocr.disponivel(), "leitura_por_folha": leitura_por_folha,
         "atividade": atividade, "aviso": aviso, "rotulos": ROTULOS,
         "pendentes": [p for p in paginas if p.situacao in (SEM_QR, OUTRA_ATIVIDADE)],
         "identificadas": len(identificadas), "por_folha": por_folha, "paginas_por_folha": total_paginas,
