@@ -70,11 +70,14 @@
 <p class="discreto">Uma folha por aluno, cada uma com um código único no lugar do nome. O aluno responde na folha, guarda o canhoto com o código e depois consulta o próprio resultado com ele. O caderno de questões é o mesmo para todos.</p>
 {% if atividade.folhas %}
 <div class="acoes" style="margin: 10px 0 14px">
-  <a class="botao" href="/atividades/{{ atividade.id }}/folhas/imprimir" target="_blank" rel="noopener">Imprimir as {{ atividade.folhas|length }} folhas de resposta</a>
+  <a class="botao" href="/atividades/{{ atividade.id }}/resultados">Respostas e resultados</a>
+  <a class="botao contorno" href="/atividades/{{ atividade.id }}/folhas/imprimir" target="_blank" rel="noopener">Imprimir as {{ atividade.folhas|length }} folhas de resposta</a>
+  {% if not com_respostas %}
   <form method="post" action="/atividades/{{ atividade.id }}/folhas/descartar"
         data-pergunta="Descartar todas as folhas desta atividade? As já impressas deixam de valer." onsubmit="return confirm(this.dataset.pergunta)">
     <button type="submit" class="secundario">Descartar folhas</button>
   </form>
+  {% endif %}
 </div>
 <details>
   <summary>Ver os códigos ({{ atividade.folhas|length }})</summary>
@@ -88,7 +91,7 @@
   </table>
   </div>
 </details>
-<p class="discreto">Linhas por resposta discursiva: {{ atividade.linhas_por_resposta }}.</p>
+<p class="discreto">Linhas por resposta discursiva: {{ atividade.linhas_por_resposta }}.{% if com_respostas %} As folhas não podem mais ser descartadas, porque já há respostas registradas.{% endif %}</p>
 {% endif %}
 <form class="filtros" method="post" action="/atividades/{{ atividade.id }}/folhas">
   <div class="campo estreito">

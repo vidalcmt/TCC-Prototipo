@@ -123,11 +123,16 @@ class RespostaEsperada(Base):
 
 class Submissao(Base):
     __tablename__ = "submissao"
+    # Numa folha de respostas, cada questão tem no máximo uma resposta.
+    __table_args__ = (UniqueConstraint("folha_id", "questao_id", name="uq_submissao_folha_questao"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     questao_id: Mapped[int] = mapped_column(ForeignKey("questao.id"))
     resposta_aluno: Mapped[str | None] = mapped_column(Text)
+    # Objetivas: a letra marcada; vazio é em branco e "*" é mais de uma marcada.
     alternativa_escolhida: Mapped[str | None] = mapped_column(String(1))
+    # Folha de respostas de onde veio a resposta; vazio nas respostas do corpus.
+    folha_id: Mapped[int | None] = mapped_column(ForeignKey("folha.id", name="fk_submissao_folha"))
     # Identificador anônimo da resposta no corpus (ex.: "R014") e sua origem
     # ("autor", "voluntario", "especialista"), usada como variável de análise.
     codigo_corpus: Mapped[str | None] = mapped_column(String(50))
@@ -139,6 +144,7 @@ class Submissao(Base):
     respostas_itens: Mapped[list["RespostaItem"]] = relationship(
         cascade="all, delete-orphan", order_by="RespostaItem.id"
     )
+    folha: Mapped["Folha | None"] = relationship(back_populates="respostas")
 
     def resposta_do_item(self, letra: str) -> str:
         for r in self.respostas_itens:
@@ -244,6 +250,10 @@ class Atividade(Base):
     # Fica gravado porque a leitura das folhas digitalizadas precisa do mesmo
     # layout com que elas foram impressas.
     linhas_por_resposta: Mapped[int] = mapped_column(Integer, default=8, server_default="8")
+    # Pontos de cada objetiva certa. As discursivas valem a nota máxima da questão.
+    valor_objetiva: Mapped[float] = mapped_column(Float, default=1.0, server_default="1")
+    # Quando o professor liberou os resultados para os alunos; vazio enquanto não liberou.
+    resultados_liberados_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     itens: Mapped[list["AtividadeQuestao"]] = relationship(
         back_populates="atividade", cascade="all, delete-orphan", order_by="AtividadeQuestao.ordem"
@@ -287,3 +297,4 @@ class Folha(Base):
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
 
     atividade: Mapped[Atividade] = relationship(back_populates="folhas")
+    respostas: Mapped[list[Submissao]] = relationship(back_populates="folha")
