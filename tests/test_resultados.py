@@ -43,6 +43,25 @@ def prova(fabrica_sessao):
                 "codigos": [f.codigo for f in folhas]}
 
 
+class _LinhaSincrona:
+    """Substitui a linha de execução do lote nos testes: o banco de teste usa uma
+    única conexão, que não pode ser usada ao mesmo tempo por duas linhas."""
+
+    def __init__(self, target, args, daemon=None):
+        self._alvo, self._args = target, args
+
+    def start(self):
+        self._alvo(*self._args)
+
+    def join(self, *_):
+        pass
+
+
+@pytest.fixture(autouse=True)
+def lote_sincrono(monkeypatch):
+    monkeypatch.setattr(lote.threading, "Thread", _LinhaSincrona)
+
+
 def _url(p, i=0):
     return f"/atividades/{p['atividade']}/folhas/{p['folhas'][i]}"
 
