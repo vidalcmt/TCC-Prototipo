@@ -1,0 +1,42 @@
+{% extends "base_aluno.html" %}
+{% from "_macros.html" import nota_circulada %}
+{% block titulo %}{{ atividade.titulo }}{% endblock %}
+{% block conteudo %}
+<div class="cabecalho-pagina">
+  <div>
+    <h1>{{ atividade.titulo }}</h1>
+    <p class="resumo">{% if atividade.turma %}{{ atividade.turma }} · {% endif %}Folha {{ folha.codigo }}</p>
+  </div>
+  <div class="nota-total">
+    {{ nota_circulada(resultado.pontos, grande=True) }}
+    <div class="discreto">de {{ resultado.maximo|num }} pontos</div>
+  </div>
+</div>
+
+{% for q in questoes %}
+<section class="questao-aluno">
+  <h2>Questão {{ q.numero }}
+    <span class="discreto">· {{ q.pontos|num }} de {{ q.valor|num }}</span>
+    {% if q.situacao == "certa" %}<span class="status status-atendido">Certa</span>
+    {% elif q.situacao == "errada" %}<span class="status status-nao_atendido">Errada</span>
+    {% elif q.situacao == "anulada" %}<span class="status status-nao_atendido">Mais de uma marcada</span>
+    {% elif q.situacao == "em_branco" %}<span class="status status-parcial">Em branco</span>{% endif %}
+  </h2>
+  {% if q.tipo == "objetiva" %}
+  <p>{% if q.marcada %}Você marcou <strong>{{ q.marcada }}</strong>. {% endif %}A resposta correta é <strong>{{ q.gabarito }}</strong>.</p>
+  {% if q.explicacao %}
+  {% if q.explicacao.marcada %}<p><strong>Por que a {{ q.marcada }} não é a resposta:</strong> {{ q.explicacao.marcada }}</p>{% endif %}
+  {% if q.explicacao.correta %}<p><strong>Como chegar à {{ q.gabarito }}:</strong> {{ q.explicacao.correta }}</p>{% endif %}
+  {% if q.explicacao.pista and q.situacao != "certa" %}<p class="pista-enunciado"><strong>Pista do enunciado:</strong> {{ q.explicacao.pista }}</p>{% endif %}
+  {% endif %}
+  {% elif q.feedback %}
+  <div class="feedback-aluno">{{ q.feedback }}</div>
+  {% elif q.situacao == "em_branco" %}
+  <p class="discreto">A resposta ficou em branco.</p>
+  {% endif %}
+</section>
+{% endfor %}
+
+<p class="discreto">As notas foram conferidas pelo seu professor. Se tiver dúvida sobre alguma correção, converse com ele levando este código.</p>
+<p><a href="/resultado">Consultar outro código</a></p>
+{% endblock %}

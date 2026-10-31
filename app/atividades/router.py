@@ -258,4 +258,6 @@ def imprimir_folhas(request: Request, atividade_id: int, folha: int | None = Non
         "atividade": atividade, "folhas": folhas, "paginas": paginas, "L": L,
         "qr": lambda codigo, pagina: qr_svg(L.conteudo_qr(codigo, pagina)),
         "endereco": str(request.base_url).rstrip("/") + "/resultado",
+        # QR do canhoto: abre direto a página do aluno, já com o código
+        "qr_link": lambda codigo: qr_svg(str(request.base_url).rstrip("/") + "/r/" + codigo),
     })
