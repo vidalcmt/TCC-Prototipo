@@ -141,9 +141,10 @@ class ControleDeTentativas:
     sistema roda em um único processo; reiniciar o servidor zera a contagem.
     """
 
-    def __init__(self, relogio=time.monotonic):
+    def __init__(self, relogio=time.monotonic, maximo: int = MAX_TENTATIVAS):
         self._erros: dict[str, list[float]] = defaultdict(list)
         self._relogio = relogio
+        self._maximo = maximo
 
     def _recentes(self, chave: str) -> list[float]:
         limite = self._relogio() - JANELA_SEGUNDOS
@@ -151,7 +152,7 @@ class ControleDeTentativas:
         return self._erros[chave]
 
     def bloqueado(self, chave: str) -> bool:
-        return len(self._recentes(chave)) >= MAX_TENTATIVAS
+        return len(self._recentes(chave)) >= self._maximo
 
     def registrar_erro(self, chave: str) -> None:
         self._recentes(chave).append(self._relogio())
