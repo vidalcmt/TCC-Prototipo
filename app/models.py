@@ -298,3 +298,31 @@ class Folha(Base):
 
     atividade: Mapped[Atividade] = relationship(back_populates="folhas")
     respostas: Mapped[list[Submissao]] = relationship(back_populates="folha")
+    digitalizacoes: Mapped[list["PaginaDigitalizada"]] = relationship(
+        back_populates="folha", order_by="PaginaDigitalizada.pagina"
+    )
+
+
+class PaginaDigitalizada(Base):
+    """Uma página de folha de respostas digitalizada e enviada pelo professor.
+
+    A folha e a página são identificadas pelo QR code. Quando o QR code não é
+    lido, a página fica sem folha até o professor indicar qual é. A imagem
+    fica em disco, na pasta de arquivos do sistema, e não no banco.
+    """
+
+    __tablename__ = "pagina_digitalizada"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    atividade_id: Mapped[int] = mapped_column(ForeignKey("atividade.id", name="fk_pagina_digitalizada_atividade"))
+    folha_id: Mapped[int | None] = mapped_column(ForeignKey("folha.id", name="fk_pagina_digitalizada_folha"))
+    pagina: Mapped[int | None] = mapped_column(Integer)          # página da folha (1, 2...)
+    arquivo: Mapped[str] = mapped_column(String(300))            # caminho relativo à pasta de arquivos
+    nome_original: Mapped[str] = mapped_column(String(300))      # nome do arquivo enviado
+    pagina_do_arquivo: Mapped[int] = mapped_column(Integer)      # posição no PDF enviado (1 para imagens)
+    # "identificada", "sem_qr", "outra_atividade" ou "substituida" (uma mais nova ocupou o lugar)
+    situacao: Mapped[str] = mapped_column(String(30))
+    usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuario.id", name="fk_pagina_digitalizada_usuario"))
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+
+    folha: Mapped["Folha | None"] = relationship(back_populates="digitalizacoes")

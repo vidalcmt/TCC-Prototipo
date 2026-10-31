@@ -111,6 +111,7 @@ app/
   folhas/            folhas de resposta: códigos, QR code e posição dos elementos
   resultados/        respostas por folha, correção em lote, painel e liberação
   aluno/             página pública em que o aluno consulta o resultado pelo código
+  digitalizacao/     envio das folhas digitalizadas e identificação pelo QR code
   templates/         páginas HTML
   static/            estilo, fontes e script do tema claro/escuro
 config/precos.toml   preços por modelo, com fonte e data de acesso
