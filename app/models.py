@@ -240,9 +240,16 @@ class Atividade(Base):
     instrucoes: Mapped[str | None] = mapped_column(Text)
     usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuario.id"))
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+    # Linhas de escrita de cada resposta discursiva na folha de respostas.
+    # Fica gravado porque a leitura das folhas digitalizadas precisa do mesmo
+    # layout com que elas foram impressas.
+    linhas_por_resposta: Mapped[int] = mapped_column(Integer, default=8, server_default="8")
 
     itens: Mapped[list["AtividadeQuestao"]] = relationship(
         back_populates="atividade", cascade="all, delete-orphan", order_by="AtividadeQuestao.ordem"
+    )
+    folhas: Mapped[list["Folha"]] = relationship(
+        back_populates="atividade", cascade="all, delete-orphan", order_by="Folha.numero"
     )
 
 
@@ -260,3 +267,23 @@ class AtividadeQuestao(Base):
 
     atividade: Mapped[Atividade] = relationship(back_populates="itens")
     questao: Mapped[Questao] = relationship()
+
+
+class Folha(Base):
+    """Uma folha de respostas impressa: uma por aluno, identificada por um
+    código único e anônimo. O código também é a chave com que o aluno consulta
+    o próprio resultado, por isso é aleatório e difícil de adivinhar."""
+
+    __tablename__ = "folha"
+    __table_args__ = (
+        UniqueConstraint("codigo", name="uq_folha_codigo"),
+        UniqueConstraint("atividade_id", "numero", name="uq_folha_numero"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    atividade_id: Mapped[int] = mapped_column(ForeignKey("atividade.id"))
+    numero: Mapped[int] = mapped_column(Integer)  # 1, 2, 3... dentro da atividade
+    codigo: Mapped[str] = mapped_column(String(20))
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+
+    atividade: Mapped[Atividade] = relationship(back_populates="folhas")

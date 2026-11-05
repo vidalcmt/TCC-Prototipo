@@ -106,8 +106,8 @@ function tabela(cabecalho, linhas, proporcoes) {
 // =====================================================================
 // CAPA
 // =====================================================================
-const VERSAO = "0.13";
-const DATA = "26/10/2026";
+const VERSAO = "0.14";
+const DATA = "31/10/2026";
 
 conteudo.push(new Paragraph({ spacing: { before: 2400 }, children: [] }));
 conteudo.push(new Paragraph({
@@ -184,6 +184,7 @@ tabela(
     ["4", "Tela de aceite do professor", "Implementada em 22/10/2026; aguardando revisão"],
     ["Apoio", "Login, contas, página inicial e novo visual com tema escuro", "Implementado em 23/10/2026; aguardando revisão"],
     ["Apoio", "Publicação no Google Cloud", "Scripts e guia prontos em 26/10/2026; instalação feita pelo autor"],
+    ["Apoio", "Folhas de resposta com código único, primeira parte do fluxo de resultados dos alunos", "Implementado em 31/10/2026; aguardando revisão"],
     ["5", "Execução em lote e baseline", "Pendente"],
     ["6", "Análise e coleta com especialistas", "Pendente"],
   ],
@@ -232,12 +233,13 @@ tabela(
     ["`app/contas/`", "Senhas (`senhas.py`), sessão e permissões (`sessao.py`), regras das contas (`servico.py`) e páginas de entrar, trocar senha e usuários (`router.py`)"],
     ["`app/config.py`", "Leitura das configurações do arquivo .env"],
     ["`app/database.py`", "Conexão com o banco e abertura de sessões"],
-    ["`app/models.py`", "Definição das treze tabelas do banco"],
+    ["`app/models.py`", "Definição das quatorze tabelas do banco"],
     ["`app/correcao/`", "Chamada ao modelo (`llm.py`), prompts (`prompts.py`), contratos de saída (`contratos.py`), explicação de objetivas (`objetiva.py`) e correção de discursivas (`discursiva.py`)"],
     ["`app/metricas/`", "Cálculo de custo (`precos.py`), números do artigo (`resumo.py`), página e exportações (`router.py`)"],
     ["`app/questoes/`", "Páginas de questões: lista dos dois tipos e objetivas (`router.py`), discursivas e respostas (`discursivas.py`), cliente do modelo para as rotas (`cliente.py`)"],
     ["`app/revisao/`", "Aceite ou ajuste da nota pelo professor: regra (`servico.py`) e rota (`router.py`)"],
-    ["`app/atividades/`", "Atividades: montagem de conjuntos de questões e folha de impressão em A4 (`router.py`)"],
+    ["`app/atividades/`", "Atividades: montagem de conjuntos de questões, caderno de questões em A4 e rotas das folhas de resposta (`router.py`)"],
+    ["`app/folhas/`", "Folhas de resposta: posição de cada elemento na página (`layout.py`) e geração dos códigos e do QR code (`servico.py`)"],
     ["`app/templates/`", "Páginas HTML; `base.html` tem a barra de navegação e `_macros.html` os elementos repetidos, como a nota circulada"],
     ["`app/static/`", "Estilo (`estilo.css`), script do tema e do menu (`app.js`) e fontes com as suas licenças"],
     ["`config/precos.toml`", "Preços por modelo, com fonte e data de acesso"],
@@ -255,7 +257,7 @@ tabela(
 
 // ---------------------------------------------------------------------
 h1("3. Modelo de dados");
-p("O banco tem treze tabelas. As oito primeiras foram criadas pela migração inicial do Alembic, a tabela `usuario` por uma migração própria, que também ligou revisões e chamadas ao usuário que as fez, as tabelas `item_questao` e `resposta_item` pela migração dos itens das discursivas, e as tabelas `atividade` e `atividade_questao` pela migração das atividades. Duas delas existem por razão metodológica e não devem ser simplificadas: `revisao_professor`, que guarda a nota sugerida e a nota final lado a lado e permite calcular a concordância, e `metrica_requisicao`, que registra também as falhas, porque a taxa de falha é um resultado da pesquisa.");
+p("O banco tem quatorze tabelas. As oito primeiras foram criadas pela migração inicial do Alembic, a tabela `usuario` por uma migração própria, que também ligou revisões e chamadas ao usuário que as fez, as tabelas `item_questao` e `resposta_item` pela migração dos itens das discursivas, as tabelas `atividade` e `atividade_questao` pela migração das atividades, e a tabela `folha` pela migração das folhas de resposta. Duas delas existem por razão metodológica e não devem ser simplificadas: `revisao_professor`, que guarda a nota sugerida e a nota final lado a lado e permite calcular a concordância, e `metrica_requisicao`, que registra também as falhas, porque a taxa de falha é um resultado da pesquisa.");
 tabela(
   ["Tabela", "Finalidade"],
   [
@@ -333,7 +335,15 @@ campos("atividade", [
   ["`turma`", "texto", "Turma a que se destina (opcional)"],
   ["`instrucoes`", "texto", "Instruções impressas no topo da folha do aluno (opcional)"],
   ["`usuario_id`", "inteiro", "Quem criou a atividade"],
+  ["`linhas_por_resposta`", "inteiro", "Linhas de cada caixa de resposta discursiva nas folhas de resposta; fixado na primeira geração de folhas (padrão 8)"],
   ["`criado_em`", "data e hora", "Momento da criação"],
+]);
+campos("folha", [
+  ["`id`", "inteiro", "Identificador"],
+  ["`atividade_id`", "inteiro", "Atividade a que a folha pertence"],
+  ["`numero`", "inteiro", "Número sequencial da folha dentro da atividade (1, 2, 3...), único em cada atividade"],
+  ["`codigo`", "texto", "Código da folha no formato `XXXX-XXXX`, único em todo o sistema. Substitui o nome do aluno: é por ele que a folha digitalizada é identificada e que o aluno consulta o resultado"],
+  ["`criado_em`", "data e hora", "Momento da geração"],
 ]);
 campos("atividade_questao", [
   ["`id`", "inteiro", "Identificador"],
@@ -764,18 +774,21 @@ tabela(["Rota", "O que faz"], [
   ["`POST /atividades/{id}/questoes/{questao}/mover`", "Troca a questão de lugar com a anterior ou a seguinte"],
   ["`POST /atividades/{id}/questoes/{questao}/remover`", "Tira a questão da atividade e renumera as demais. A questão continua cadastrada"],
   ["`POST /atividades/{id}/editar` e `/excluir`", "Altera título, turma e instruções, ou apaga a atividade, depois de confirmação. Apagar a atividade não apaga as questões"],
-  ["`GET /atividades/{id}/imprimir`", "Folha pronta para imprimir ou salvar em PDF pelo navegador. Com `gabarito=1`, é a versão do professor; `linhas` define quantas linhas cada resposta discursiva recebe (5, 8, 12 ou 16; padrão 8)"],
+  ["`GET /atividades/{id}/imprimir`", "Caderno de questões pronto para imprimir ou salvar em PDF pelo navegador. Com `gabarito=1`, é a versão do professor; `linhas` define quantas linhas cada resposta discursiva recebe (5, 8, 12 ou 16; padrão 8). Quando a atividade já tem folhas de resposta, o caderno sai sem linhas, porque o aluno responde na folha"],
+  ["`POST /atividades/{id}/folhas`", "Gera folhas de resposta (de 1 a 200 por vez). Na primeira geração, também define as linhas por resposta discursiva; gerações seguintes continuam a numeração e mantêm o mesmo layout"],
+  ["`POST /atividades/{id}/folhas/descartar`", "Apaga todas as folhas da atividade, depois de confirmação, e destrava as questões"],
+  ["`GET /atividades/{id}/folhas/imprimir`", "Página com as folhas de resposta em A4, uma ou mais páginas por folha. Com `folha={id}`, só aquela folha, para reimprimir uma que se perdeu"],
 ], [4, 6]);
 h3("O que sai na folha");
 tabela(["Parte", "Folha do aluno", "Folha com gabarito"], [
-  ["Cabeçalho", "Título, turma e campos para nome, turma, data e nota", "Título, turma e a indicação \"Gabarito, uso do professor\""],
+  ["Cabeçalho", "Título e turma, sem campo de nome: o aluno é identificado pelo código da folha de respostas", "Título, turma e a indicação \"Gabarito, uso do professor\""],
   ["Instruções", "Impressas logo abaixo do cabeçalho", "Omitidas"],
   ["Resumo", "Não há", "Lista das objetivas com a letra correta, pelo número da questão na folha"],
   ["Objetivas", "Enunciado e alternativas com um círculo para marcar", "A alternativa correta com o círculo preenchido e em negrito"],
   ["Discursivas", "Enunciado, valor em pontos e linhas para a resposta, separadas por item quando houver", "Enunciado, itens, resposta esperada e rubrica com os pontos de cada critério"],
 ], [2, 4, 4]);
 p("A folha usa uma folha de estilo própria (`app/static/impressao.css`), sempre clara, com o tamanho de página A4 definido para a impressão. Uma questão de alternativas e o bloco de cada item não são quebrados entre páginas. A barra de controles do topo da tela não sai na impressão.");
-p("Um layout padronizado de folha também prepara a fase posterior de reconhecimento de texto manuscrito: com as respostas sempre nas mesmas áreas da página, fica mais simples localizar cada resposta na imagem digitalizada.");
+p("Desde a versão 0.14, a atividade é impressa em duas partes: o caderno de questões, igual para todos e sem identificação, e uma folha de respostas por aluno, descrita na seção 4.23. Enquanto houver folhas geradas, as questões da atividade ficam travadas: adicionar, remover ou mudar a ordem é recusado com um aviso, porque a folha já impressa deixaria de corresponder às questões.");
 
 // ---------------------------------------------------------------------
 h2("4.22 Utilitários de manutenção: scripts/");
@@ -783,6 +796,29 @@ tabela(["Script", "O que faz"], [
   ["`redefinir_senha.py`", "Com `--listar`, mostra as contas cadastradas; com `--email`, gera uma senha provisória nova para a conta, que precisa ser trocada no primeiro acesso. Serve para quando o próprio administrador esquece a senha, já que a senha não pode ser lida no banco"],
   ["`copia_banco.py`", "Copia o banco com a função de cópia do próprio SQLite, que gera um arquivo consistente mesmo com o sistema no ar, compacta com gzip, nomeia pela data e hora de Brasília e apaga as cópias mais antigas que o prazo informado (padrão 30 dias). Opcionalmente envia a cópia para um bucket do Cloud Storage"],
 ], [3, 7]);
+
+// ---------------------------------------------------------------------
+h2("4.23 Folhas de resposta: app/folhas/");
+p("É a primeira parte do fluxo de resultados dos alunos: o professor imprime uma folha de respostas por aluno, cada uma com um código único no lugar do nome; o aluno responde à mão e guarda o canhoto com o código; depois o professor digitaliza as folhas, o sistema identifica cada uma pelo código e o aluno consulta o próprio resultado digitando o código. As etapas seguintes (respostas por folha, digitalização, leitura automática e página do aluno) entram nas próximas versões.");
+h3("Código da folha (servico.py)");
+tabela(["Função", "O que faz"], [
+  ["`novo_codigo()`", "Sorteia um código de 8 caracteres no formato `XXXX-XXXX`, com o gerador criptográfico da biblioteca padrão (`secrets`). O alfabeto não tem 0, O, 1, I e L, que se confundem na escrita e na leitura. São mais de 850 bilhões de combinações, o que torna inviável adivinhar o código de outro aluno"],
+  ["`normalizar_codigo(texto)`", "Aceita o código digitado com letras minúsculas, espaços ou sem o hífen e devolve o formato padrão"],
+  ["`gerar_folhas(sessao, atividade, quantidade, linhas)`", "Cria as folhas com códigos que não se repetem no sistema e numeração que continua a das já existentes"],
+  ["`questoes_travadas(atividade)`", "Verdadeiro quando a atividade já tem folhas"],
+  ["`qr_svg(texto)`", "Desenha o QR code em SVG, um formato vetorial que sai nítido em qualquer impressora"],
+], [4, 6]);
+h3("Posição dos elementos (layout.py)");
+p("A função `montar(atividade, linhas)` calcula, em milímetros, a posição de cada elemento de cada página: as bolinhas das objetivas, numa grade de duas colunas, e uma caixa com linhas para cada discursiva ou para cada item, passando para uma nova página quando a próxima caixa não cabe. As posições não dependem do navegador nem da impressora, e a mesma função será usada para ler a folha digitalizada: o sistema sabe exatamente onde procurar cada resposta na imagem.");
+tabela(["Elemento", "Posição e finalidade"], [
+  ["Marcas de alinhamento", "Quatro quadrados pretos de 8 mm nos cantos da área de respostas. Na leitura, servem para corrigir a inclinação e a escala da imagem digitalizada"],
+  ["QR code", "No canto superior direito, com o conteúdo `DEVOLUTIVA|código|página`. Identifica a folha e a página sem depender de leitura de texto"],
+  ["Cabeçalho", "Título, turma, número da página e o código da folha em letras grandes, para conferência visual"],
+  ["Objetivas", "Uma linha por questão, com bolinhas de 5,2 mm de diâmetro identificadas pela letra. Se a objetiva não tem alternativas cadastradas, recebe as letras A a E"],
+  ["Discursivas", "Uma caixa por questão ou por item, com o rótulo acima e linhas de escrita a cada 8 mm"],
+  ["Canhoto", "Só na primeira página, abaixo de uma linha tracejada: título, código e o endereço onde o aluno consulta o resultado"],
+], [3, 7]);
+p("Para imprimir, a página orienta a usar papel A4, escala 100% (\"Tamanho real\") e margens \"Nenhuma\". Com outra escala, as posições na folha deixam de corresponder às calculadas.");
 
 // ---------------------------------------------------------------------
 h1("5. Configuração e execução");
@@ -862,7 +898,7 @@ tabela(["Arquivo", "O que faz"], [
 
 // ---------------------------------------------------------------------
 h1("6. Testes automatizados");
-p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 175 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
+p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 195 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
 tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_precos.py`", "Custo correto para o modelo em uso; preço de cache aplicado; nome com sufixo de versão; modelo desconhecido não gera custo inventado"],
   ["`tests/test_llm.py`", "Sucesso grava tokens, custo, latência, modelo e prompt; resposta sem formato válido vira falha com tokens; erro de rede vira falha com motivo; cliente sem novas tentativas automáticas"],
@@ -874,6 +910,7 @@ tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_revisao.py`", "Aceite e ajuste; mesma nota conta como aceite; nota fora do intervalo; segunda revisão recusada pela regra e pelo banco; correção sem nota; concordância e desvios por condição; resumo vazio sem divisão por zero; resumo de chamadas; formulário e ordem dos botões; erros da revisão; exportação das revisões"],
   ["`tests/test_copia_banco.py`", "Cópia compactada, com nome pela data, que pode ser restaurada; apagamento só das cópias antigas; recusa de banco que não seja SQLite"],
   ["`tests/test_atividades.py`", "Criação e título obrigatório; adicionar sem repetir, mover e remover com renumeração; busca que esconde as já incluídas; retorno só para dentro da atividade; editar e excluir sem apagar questões; folha do aluno com ordem, itens, alternativas e linhas; número de linhas; folha com gabarito, resumo das objetivas, resposta esperada e rubrica; acesso só com login"],
+  ["`tests/test_folhas.py`", "Formato e alfabeto do código, sem repetições; código digitado normalizado; geração com numeração contínua e layout mantido; quantidades e linhas inválidas; atividade sem questões; questões travadas depois das folhas e liberadas ao descartar; folhas impressas com código, QR code, marcas, bolinhas, caixas e canhoto; impressão de uma única folha; caderno sem linhas quando há folhas; elementos dentro da área e sem sobreposição; duas colunas e nova página nas objetivas; quebra de página nas discursivas; objetiva sem alternativas cadastradas; conteúdo do QR code"],
   ["`tests/test_lista_questoes.py`", "Páginas de 50 e página fora do intervalo; cada filtro, inclusive situação pendente e sem correção; filtros mantidos ao trocar de página; filtro sem resultado; opções dos filtros vindas do banco"],
   ["`tests/test_importar_enem.py`", "Paginação; parada após recusas seguidas; exclusão de numeração fora da área e de repetidas; filtro de área e de imagens; montagem do enunciado; importação com gabarito e sem duplicar"],
 ], [3, 7]);
@@ -940,6 +977,11 @@ tabela(["Decisão", "Motivo"], [
   ["Quem revisou e quem pediu a chamada gravados", "Permite separar os dados por avaliador na análise e conferir o uso de cada conta"],
   ["Métricas e custos só para administradores", "Os avaliadores da coleta não precisam ver custos, e ver a concordância acumulada poderia influenciar as suas decisões"],
   ["Fontes servidas pelo próprio sistema", "As páginas não dependem de serviços externos e não enviam dados de acesso a terceiros"],
+  ["Código no lugar do nome do aluno", "O sistema não guarda nenhum dado pessoal do aluno; só quem tem o canhoto liga o código a uma pessoa. Isso reduz o tratamento de dados pessoais previsto na LGPD e evita que o nome influencie a correção"],
+  ["Caderno de questões separado da folha de respostas", "Só a folha de respostas é digitalizada e lida, o que diminui o número de páginas, e o caderno pode ser reaproveitado entre turmas"],
+  ["Layout calculado no servidor, em milímetros", "A mesma função posiciona os elementos na impressão e os localiza na leitura; um layout calculado pelo navegador poderia variar entre computadores"],
+  ["QR code e marcas de alinhamento, em vez de ler o código impresso", "O QR code tem correção de erros e é lido com segurança mesmo em digitalizações de baixa qualidade; as marcas permitem endireitar a imagem antes de procurar as respostas"],
+  ["Questões travadas enquanto houver folhas", "Mudar a ordem ou as questões depois da impressão faria a leitura procurar respostas no lugar errado"],
 ], [4, 6]);
 
 h2("8.2 Limitações e pontos de atenção");
@@ -961,6 +1003,8 @@ marcadores([
   "**Busca no enunciado:** o SQLite só ignora a diferença entre maiúsculas e minúsculas em letras sem acento. Buscar \"REVOLUÇÃO\" não encontra \"revolução\"; buscar em minúsculas, ou por parte da palavra sem acento (\"revolu\"), encontra.",
   "**Bloqueio por tentativas em memória:** a contagem de senhas erradas fica na memória do servidor e recomeça quando ele reinicia. É suficiente para um único servidor; com vários, precisaria ir para o banco.",
   "**Limite diário conta também as falhas:** uma chamada que falhou também foi cobrada pela OpenAI, por isso entra na contagem.",
+  "**Layout ligado à versão do sistema:** a posição dos elementos é recalculada a partir da atividade, e não gravada. Uma mudança futura em `layout.py` alteraria a posição esperada em folhas já impressas; por isso, mudanças nesse arquivo só devem ser feitas quando não houver folhas em uso.",
+  "**Impressão em escala diferente de 100%:** algumas impressoras reduzem a página para caber nas margens. As marcas de alinhamento corrigem parte disso na leitura, mas a orientação é imprimir em tamanho real.",
   "**Chave de sessão:** sem `SECRET_KEY` no .env, cada reinício do servidor encerra todas as sessões. No servidor publicado, a chave é obrigatória e `COOKIE_SEGURO` deve estar ligado.",
 ]);
 
@@ -993,6 +1037,10 @@ tabela(["Termo", "Significado"], [
   ["OWASP", "Fundação aberta que publica guias de segurança para aplicações web"],
   ["Papel", "Conjunto de permissões de uma conta: administrador ou avaliador"],
   ["Prompt", "Texto de instrução enviado ao modelo de linguagem"],
+  ["QR code", "Código de barras em duas dimensões, lido por câmeras e por programas de imagem, que guarda um texto curto com correção de erros"],
+  ["LGPD", "Lei Geral de Proteção de Dados Pessoais (Lei nº 13.709/2018)"],
+  ["Marcas de alinhamento", "Quadrados pretos impressos em posições fixas da folha, usados para endireitar e ajustar a escala da imagem digitalizada"],
+  ["SVG", "Formato de imagem vetorial, descrita por formas geométricas, que não perde nitidez ao ser ampliada ou impressa"],
   ["Resumo criptográfico", "Valor calculado a partir da senha do qual não se consegue voltar à senha; também chamado de hash"],
   ["Item", "Parte de uma questão discursiva com comando próprio, identificada por letra (a, b, c), que compartilha o texto-base com as demais"],
   ["Rubrica", "Lista de critérios de correção de uma questão discursiva, cada um com seu peso na nota"],
@@ -1015,6 +1063,7 @@ tabela(["Termo", "Significado"], [
 // ---------------------------------------------------------------------
 h1("10. Histórico de versões");
 tabela(["Data", "Versão", "Referência", "Mudança"], [
+  ["31/10/2026", "0.14", "pull request das folhas de resposta", "Folhas de resposta com código único no lugar do nome, QR code, marcas de alinhamento, bolinhas e caixas em posições fixas e canhoto para o aluno; caderno de questões sem identificação; questões travadas enquanto houver folhas"],
   ["26/10/2026", "0.13", "pull request da publicação", "Guia e scripts para publicar no Google Cloud com HTTPS, serviço do sistema e cópia diária do banco; utilitários de redefinição de senha e de cópia do banco"],
   ["24/10/2026", "0.12", "pull request das atividades", "Atividades com questões em ordem, aba própria na barra de navegação e folha de impressão em A4 para o aluno e com gabarito"],
   ["24/10/2026", "0.11", "pull request da lista de questões", "Lista de questões com 50 por página e filtros por palavra no enunciado, número, tipo, área, origem, ano e situação"],
@@ -1041,6 +1090,7 @@ marcadores([
   "OWASP. Password Storage Cheat Sheet. Disponível em: https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html. Acesso em: 23 out. 2026.",
   "PERCIVAL, C.; JOSEFSSON, S. RFC 7914: The scrypt Password-Based Key Derivation Function. IETF, 2016. Disponível em: https://www.rfc-editor.org/rfc/rfc7914. Acesso em: 23 out. 2026.",
   "BRAILLE INSTITUTE. Atkinson Hyperlegible Font. Disponível em: https://www.brailleinstitute.org/freefont/. Acesso em: 23 out. 2026.",
+  "BRASIL. Lei nº 13.709, de 14 de agosto de 2018. Lei Geral de Proteção de Dados Pessoais (LGPD). Disponível em: https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm. Acesso em: 31 out. 2026.",
 ]);
 
 // =====================================================================

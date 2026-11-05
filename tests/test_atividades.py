@@ -118,7 +118,7 @@ def _atividade_completa(fabrica_sessao, cliente_web):
 def test_folha_do_aluno(fabrica_sessao, cliente_web):
     aid = _atividade_completa(fabrica_sessao, cliente_web)
     folha = cliente_web.get(f"/atividades/{aid}/imprimir").text
-    assert "Nome:" in folha and "Responda a caneta." in folha and "impressao.css" in folha
+    assert "Nome:" not in folha and "Responda a caneta." in folha and "impressao.css" in folha
     # ordem da atividade: discursiva com itens, objetiva, discursiva simples
     assert folha.index("Texto-base da Fuvest.") < folha.index("Enunciado objetivo") < folha.index("Discursiva simples.")
     assert "Questão 3" in folha and "(valor: 5 pontos)" in folha

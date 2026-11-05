@@ -13,14 +13,18 @@
   <a href="/atividades/{{ atividade.id }}">&larr; Voltar</a>
   <button type="button" onclick="window.print()">Imprimir ou salvar em PDF</button>
   {% if gabarito %}
-  <a href="{{ base }}?linhas={{ linhas }}">Ver a folha do aluno</a>
+  <a href="{{ base }}?linhas={{ linhas }}">Ver o caderno do aluno</a>
   {% else %}
   <a href="{{ base }}?gabarito=1&linhas={{ linhas }}">Ver com gabarito</a>
+  {% if com_folhas %}
+  <a href="/atividades/{{ atividade.id }}/folhas/imprimir">Folhas de resposta</a>
+  {% else %}
   <label>Linhas por resposta
     <select onchange="location.href='{{ base }}?linhas=' + this.value">
       {% for n in opcoes_linhas %}<option value="{{ n }}"{% if n == linhas %} selected{% endif %}>{{ n }}</option>{% endfor %}
     </select>
   </label>
+  {% endif %}
   {% endif %}
   <span class="dica">Para gerar o PDF, escolha "Salvar como PDF" na janela de impressão.</span>
 </div>
@@ -31,10 +35,8 @@
     {% if atividade.turma %}<div class="turma">{{ atividade.turma }}</div>{% endif %}
     {% if gabarito %}
     <div class="faixa-gabarito">Gabarito, uso do professor</div>
-    {% else %}
-    <div class="campos">
-      <div>Nome:</div><div>Turma:</div><div>Data:</div><div>Nota:</div>
-    </div>
+    {% elif com_folhas %}
+    <div class="faixa-gabarito">Caderno de questões: responda na sua folha de respostas</div>
     {% endif %}
   </header>
 
@@ -64,10 +66,10 @@
     {% for it in q.itens %}
     <div class="item">
       <div class="item-comando"><span class="letra">{{ it.letra }})</span> {{ it.enunciado }}</div>
-      {% if not gabarito %}<div class="linhas">{% for _ in range(linhas) %}<div></div>{% endfor %}</div>{% endif %}
+      {% if not gabarito and not com_folhas %}<div class="linhas">{% for _ in range(linhas) %}<div></div>{% endfor %}</div>{% endif %}
     </div>
     {% endfor %}
-    {% elif not gabarito %}
+    {% elif not gabarito and not com_folhas %}
     <div class="linhas">{% for _ in range(linhas) %}<div></div>{% endfor %}</div>
     {% endif %}
 

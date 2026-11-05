@@ -4,12 +4,16 @@ As atividades são uma ferramenta de uso do professor. Não entram na correção
 nas métricas nem na análise da pesquisa.
 """
 
+from urllib.parse import quote
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import obter_sessao
+from app.folhas import layout as L
+from app.folhas.servico import FolhasInvalidas, descartar_folhas, gerar_folhas, qr_svg, questoes_travadas
 from app.models import Atividade, AtividadeQuestao, Questao, Usuario
 from app.questoes.router import _filtrar
 from app.templates_config import templates
@@ -30,6 +34,14 @@ def _buscar(sessao: Session, atividade_id: int) -> Atividade:
     if atividade is None:
         raise HTTPException(status_code=404, detail="Atividade não encontrada")
     return atividade
+
+
+AVISO_TRAVADA = ("As folhas de resposta desta atividade já foram geradas. Para mudar as questões, "
+                 "descarte as folhas primeiro: as já impressas deixam de valer.")
+
+
+def _voltar(atividade: Atividade, aviso: str, ancora: str = "") -> RedirectResponse:
+    return RedirectResponse(f"/atividades/{atividade.id}?aviso={quote(aviso)}{ancora}", status_code=303)
 
 
 def _renumerar(atividade: Atividade) -> None:
@@ -80,7 +92,8 @@ async def criar(request: Request, sessao: Session = Depends(obter_sessao)):
 # ---------------------------------------------------------------------------
 
 @router.get("/{atividade_id}", response_class=HTMLResponse)
-def detalhe(request: Request, atividade_id: int, sessao: Session = Depends(obter_sessao)):
+def detalhe(request: Request, atividade_id: int, aviso: str | None = None,
+            sessao: Session = Depends(obter_sessao)):
     atividade = _buscar(sessao, atividade_id)
     filtros = {nome: (request.query_params.get(nome) or "").strip()
                for nome in ("busca", "numero", "tipo", "area", "fonte", "ano", "situacao")}
@@ -99,6 +112,8 @@ def detalhe(request: Request, atividade_id: int, sessao: Session = Depends(obter
         "atividade": atividade, "filtros": filtros, "buscando": buscando,
         "resultados": resultados, "mais": mais, "limite": LIMITE_BUSCA,
         "autor": sessao.get(Usuario, atividade.usuario_id) if atividade.usuario_id else None,
+        "aviso": aviso, "travada": questoes_travadas(atividade),
+        "opcoes_linhas": LINHAS_POR_RESPOSTA, "linhas_padrao": LINHAS_PADRAO,
     })
 
 
@@ -125,6 +140,8 @@ def excluir(atividade_id: int, sessao: Session = Depends(obter_sessao)):
 @router.post("/{atividade_id}/questoes")
 async def adicionar(request: Request, atividade_id: int, sessao: Session = Depends(obter_sessao)):
     atividade = _buscar(sessao, atividade_id)
+    if questoes_travadas(atividade):
+        return _voltar(atividade, AVISO_TRAVADA, "#questoes")
     dados = await _formulario(request)
     questao_id = int(dados["questao_id"]) if dados.get("questao_id", "").isdigit() else None
     if questao_id is None or sessao.get(Questao, questao_id) is None:
@@ -141,6 +158,8 @@ async def adicionar(request: Request, atividade_id: int, sessao: Session = Depen
 @router.post("/{atividade_id}/questoes/{questao_id}/mover")
 async def mover(request: Request, atividade_id: int, questao_id: int, sessao: Session = Depends(obter_sessao)):
     atividade = _buscar(sessao, atividade_id)
+    if questoes_travadas(atividade):
+        return _voltar(atividade, AVISO_TRAVADA, "#questoes")
     direcao = (await _formulario(request)).get("direcao")
     itens = list(atividade.itens)
     posicao = next((i for i, item in enumerate(itens) if item.questao_id == questao_id), None)
@@ -156,6 +175,8 @@ async def mover(request: Request, atividade_id: int, questao_id: int, sessao: Se
 @router.post("/{atividade_id}/questoes/{questao_id}/remover")
 def remover(atividade_id: int, questao_id: int, sessao: Session = Depends(obter_sessao)):
     atividade = _buscar(sessao, atividade_id)
+    if questoes_travadas(atividade):
+        return _voltar(atividade, AVISO_TRAVADA, "#questoes")
     for item in list(atividade.itens):
         if item.questao_id == questao_id:
             atividade.itens.remove(item)
@@ -171,11 +192,13 @@ def remover(atividade_id: int, questao_id: int, sessao: Session = Depends(obter_
 @router.get("/{atividade_id}/imprimir", response_class=HTMLResponse)
 def imprimir(request: Request, atividade_id: int, gabarito: int = 0, linhas: int = LINHAS_PADRAO,
              sessao: Session = Depends(obter_sessao)):
-    """Folha pronta para imprimir ou salvar em PDF pelo navegador.
+    """Caderno de questões pronto para imprimir ou salvar em PDF pelo navegador.
 
-    Sem gabarito, é a folha do aluno: alternativas para marcar e linhas para
-    escrever. Com gabarito, é a do professor: alternativa correta marcada e,
-    nas discursivas, a resposta esperada e a rubrica no lugar das linhas.
+    O caderno não identifica o aluno: é o mesmo para a turma toda. Com folhas
+    de resposta geradas, as respostas vão nelas, e o caderno sai sem linhas;
+    sem folhas, as discursivas trazem linhas para responder no próprio caderno.
+    Com gabarito, é a versão do professor: alternativa correta marcada e, nas
+    discursivas, a resposta esperada e a rubrica.
     """
     atividade = _buscar(sessao, atividade_id)
     linhas = linhas if linhas in LINHAS_POR_RESPOSTA else LINHAS_PADRAO
@@ -188,4 +211,46 @@ def imprimir(request: Request, atividade_id: int, gabarito: int = 0, linhas: int
     return templates.TemplateResponse(request, "atividade_impressao.html", {
         "atividade": atividade, "gabarito": bool(gabarito), "linhas": linhas,
         "opcoes_linhas": LINHAS_POR_RESPOSTA, "resumo_objetivas": resumo_objetivas,
+        "com_folhas": bool(atividade.folhas),
+    })
+
+
+# ---------------------------------------------------------------------------
+# Folhas de resposta
+# ---------------------------------------------------------------------------
+
+@router.post("/{atividade_id}/folhas")
+async def criar_folhas(request: Request, atividade_id: int, sessao: Session = Depends(obter_sessao)):
+    atividade = _buscar(sessao, atividade_id)
+    dados = await _formulario(request)
+    quantidade = int(dados["quantidade"]) if dados.get("quantidade", "").isdigit() else 0
+    linhas = int(dados["linhas"]) if dados.get("linhas", "").isdigit() else LINHAS_PADRAO
+    try:
+        novas = gerar_folhas(sessao, atividade, quantidade, linhas)
+    except FolhasInvalidas as erro:
+        return _voltar(atividade, str(erro), "#folhas")
+    texto = "1 folha gerada" if len(novas) == 1 else f"{len(novas)} folhas geradas"
+    return _voltar(atividade, f"{texto} (números {novas[0].numero} a {novas[-1].numero}).", "#folhas")
+
+
+@router.post("/{atividade_id}/folhas/descartar")
+def descartar(atividade_id: int, sessao: Session = Depends(obter_sessao)):
+    atividade = _buscar(sessao, atividade_id)
+    descartar_folhas(sessao, atividade)
+    return _voltar(atividade, "Folhas descartadas. As questões podem ser alteradas de novo.", "#folhas")
+
+
+@router.get("/{atividade_id}/folhas/imprimir", response_class=HTMLResponse)
+def imprimir_folhas(request: Request, atividade_id: int, folha: int | None = None,
+                    sessao: Session = Depends(obter_sessao)):
+    """Folhas de resposta em A4, uma por aluno, com o layout de app/folhas/layout.py."""
+    atividade = _buscar(sessao, atividade_id)
+    folhas = [f for f in atividade.folhas if folha is None or f.id == folha]
+    if not folhas:
+        raise HTTPException(status_code=404, detail="Nenhuma folha de resposta gerada.")
+    paginas = L.montar(atividade, atividade.linhas_por_resposta)
+    return templates.TemplateResponse(request, "folhas_impressao.html", {
+        "atividade": atividade, "folhas": folhas, "paginas": paginas, "L": L,
+        "qr": lambda codigo, pagina: qr_svg(L.conteudo_qr(codigo, pagina)),
+        "endereco": str(request.base_url).rstrip("/") + "/resultado",
     })

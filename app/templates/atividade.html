@@ -11,12 +11,13 @@
   </div>
   {% if atividade.itens %}
   <div class="acoes">
-    <a class="botao" href="/atividades/{{ atividade.id }}/imprimir" target="_blank" rel="noopener">Imprimir para o aluno</a>
+    <a class="botao" href="/atividades/{{ atividade.id }}/imprimir" target="_blank" rel="noopener">Imprimir caderno de questões</a>
     <a class="botao contorno" href="/atividades/{{ atividade.id }}/imprimir?gabarito=1" target="_blank" rel="noopener">Imprimir com gabarito</a>
   </div>
   {% endif %}
 </div>
 
+{% if aviso %}<div class="aviso aviso-info" role="status">{{ aviso }}</div>{% endif %}
 {% if atividade.instrucoes %}<div class="enunciado">{{ atividade.instrucoes }}</div>{% endif %}
 
 <details class="editar-atividade">
@@ -37,6 +38,7 @@
 </details>
 
 <h2 id="questoes">Questões da atividade</h2>
+{% if travada %}<p class="discreto">As questões estão travadas porque as folhas de resposta já foram geradas: mudar a ordem ou o conteúdo deixaria as folhas impressas sem correspondência.</p>{% endif %}
 {% if atividade.itens %}
 <ol class="lista-atividade">
   {% for item in atividade.itens %}
@@ -46,6 +48,7 @@
       <div class="discreto">{{ "Discursiva" if q.tipo == "discursiva" else "Objetiva" }} · <a href="/questoes/{{ q.id }}">questão {{ q.id }}</a>{% if q.fonte %} · {{ q.fonte }}{% endif %}{% if q.itens %} · itens {{ q.itens|map(attribute="letra")|join(", ") }}{% endif %}</div>
       <div>{{ q.enunciado[:180] }}{% if q.enunciado|length > 180 %}…{% endif %}</div>
     </div>
+    {% if not travada %}
     <div class="acoes-item">
       <form method="post" action="/atividades/{{ atividade.id }}/questoes/{{ q.id }}/mover">
         <button type="submit" name="direcao" value="cima" class="secundario pequeno" aria-label="Subir" {% if loop.first %}disabled{% endif %}>&uarr;</button>
@@ -55,6 +58,7 @@
         <button type="submit" class="secundario pequeno">Remover</button>
       </form>
     </div>
+    {% endif %}
   </li>
   {% endfor %}
 </ol>
@@ -62,6 +66,49 @@
 <p class="pilha-vazia">Nenhuma questão ainda. Busque abaixo e clique em "Adicionar".</p>
 {% endif %}
 
+<h2 id="folhas">Folhas de resposta</h2>
+<p class="discreto">Uma folha por aluno, cada uma com um código único no lugar do nome. O aluno responde na folha, guarda o canhoto com o código e depois consulta o próprio resultado com ele. O caderno de questões é o mesmo para todos.</p>
+{% if atividade.folhas %}
+<div class="acoes" style="margin: 10px 0 14px">
+  <a class="botao" href="/atividades/{{ atividade.id }}/folhas/imprimir" target="_blank" rel="noopener">Imprimir as {{ atividade.folhas|length }} folhas de resposta</a>
+  <form method="post" action="/atividades/{{ atividade.id }}/folhas/descartar"
+        data-pergunta="Descartar todas as folhas desta atividade? As já impressas deixam de valer." onsubmit="return confirm(this.dataset.pergunta)">
+    <button type="submit" class="secundario">Descartar folhas</button>
+  </form>
+</div>
+<details>
+  <summary>Ver os códigos ({{ atividade.folhas|length }})</summary>
+  <div class="rolagem">
+  <table>
+    <tr><th>Folha</th><th>Código</th><th></th></tr>
+    {% for f in atividade.folhas %}
+    <tr><td>{{ f.numero }}</td><td class="sem-quebra"><strong>{{ f.codigo }}</strong></td>
+      <td><a href="/atividades/{{ atividade.id }}/folhas/imprimir?folha={{ f.id }}" target="_blank" rel="noopener">Imprimir só esta</a></td></tr>
+    {% endfor %}
+  </table>
+  </div>
+</details>
+<p class="discreto">Linhas por resposta discursiva: {{ atividade.linhas_por_resposta }}.</p>
+{% endif %}
+<form class="filtros" method="post" action="/atividades/{{ atividade.id }}/folhas">
+  <div class="campo estreito">
+    <label for="quantidade">{{ "Mais folhas" if atividade.folhas else "Quantidade" }}</label>
+    <input type="text" id="quantidade" name="quantidade" inputmode="numeric" value="{{ '' if atividade.folhas else '40' }}" required>
+  </div>
+  {% if not atividade.folhas %}
+  <div class="campo estreito">
+    <label for="linhas">Linhas por resposta</label>
+    <select id="linhas" name="linhas">
+      {% for n in opcoes_linhas %}<option value="{{ n }}"{% if n == linhas_padrao %} selected{% endif %}>{{ n }}</option>{% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  <div class="campo botoes">
+    <button type="submit">{{ "Gerar mais folhas" if atividade.folhas else "Gerar folhas de resposta" }}</button>
+  </div>
+</form>
+
+{% if not travada %}
 <h2 id="adicionar">Adicionar questões</h2>
 <form class="filtros" method="get" action="/atividades/{{ atividade.id }}#adicionar" role="search">
   <div class="campo largo">
@@ -114,5 +161,6 @@
 {% endif %}
 {% else %}
 <p class="discreto">Busque por uma palavra, um número ou um tipo de questão. As que já estão na atividade não aparecem.</p>
+{% endif %}
 {% endif %}
 {% endblock %}
