@@ -106,8 +106,8 @@ function tabela(cabecalho, linhas, proporcoes) {
 // =====================================================================
 // CAPA
 // =====================================================================
-const VERSAO = "0.18";
-const DATA = "31/10/2026";
+const VERSAO = "0.19";
+const DATA = "06/11/2026";
 
 conteudo.push(new Paragraph({ spacing: { before: 2400 }, children: [] }));
 conteudo.push(new Paragraph({
@@ -940,6 +940,8 @@ tabela(["Rota", "O que faz"], [
   ["`POST /atividades/{id}/folhas/{folha}/ler`", "Lê de novo, na hora, as páginas de uma folha"],
   ["`GET /atividades/{id}/folhas/{folha}/recorte/{campo}`", "Recorte da caixa de resposta de um campo, da página alinhada"],
 ], [4, 6]);
+h3("Teste da chave: scripts/teste_vision.py");
+p("Confere a configuração do Google Cloud Vision sem depender de uma folha: desenha uma frase numa imagem, envia ao serviço e mostra o que foi lido e o tempo da chamada. A chave nunca é exibida, só o seu tamanho e os quatro últimos caracteres. Quando o serviço recusa o pedido, a mensagem explica a causa provável, para os erros mais comuns de configuração: chave inválida, API não ativada, chave sem permissão para o Vision, restrição de endereço IP e faturamento inativo. As mesmas explicações aparecem na página da folha quando uma leitura falha. O passo a passo da configuração está no guia de publicação, seção 6.");
 h3("Medida da taxa de acerto: scripts/medir_leitura.py");
 p("Compara o que foi lido com o que o professor conferiu, nas leituras já conferidas. Nas objetivas, informa a proporção de marcações lidas corretamente, no total e entre as não duvidosas. Nas discursivas, calcula a taxa de erro de caracteres (CER) e de palavras (WER): a distância de edição de Levenshtein entre o texto lido e o conferido, dividida pelo tamanho do conferido. Com `--csv`, grava uma linha por campo. Esses números entram no artigo como resultado da leitura, separados dos resultados da correção.");
 
@@ -986,6 +988,7 @@ numerada([
   "Criar o banco: `alembic upgrade head`.",
   "Criar o primeiro administrador: `python -m scripts.criar_admin --nome \"Seu Nome\" --email voce@exemplo.com`. Anotar a senha provisória mostrada.",
   "Testar a conexão: `python -m scripts.teste_requisicao`.",
+  "Testar a chave do Google Cloud Vision, se configurada: `python -m scripts.teste_vision`.",
 ]);
 p("Se o PowerShell bloquear a ativação do ambiente, rode antes `Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned`, que libera scripts só na janela atual.");
 
@@ -1023,7 +1026,7 @@ tabela(["Arquivo", "O que faz"], [
 
 // ---------------------------------------------------------------------
 h1("6. Testes automatizados");
-p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 252 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
+p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 259 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
 tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_precos.py`", "Custo correto para o modelo em uso; preço de cache aplicado; nome com sufixo de versão; modelo desconhecido não gera custo inventado"],
   ["`tests/test_llm.py`", "Sucesso grava tokens, custo, latência, modelo e prompt; resposta sem formato válido vira falha com tokens; erro de rede vira falha com motivo; cliente sem novas tentativas automáticas"],
@@ -1039,7 +1042,7 @@ tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_resultados.py`", "Registro de objetivas certas, erradas, em branco e com mais de uma marcada, e de discursivas; alternativa inválida sem gravar nada; salvar e ir para a próxima folha; objetiva sem gabarito e aviso no painel; folha de outra atividade; correção da folha com resposta esperada, revisão e folha concluída; falha do modelo mantendo a resposta pendente; discursiva corrigida não alterada; correção em lote e parada no limite diário; painel e busca pelo código; liberação, recolhimento e visibilidade para o aluno; valor das objetivas; folhas com respostas não descartadas"],
   ["`tests/test_aluno.py`", "Resultado liberado com explicação da objetiva e feedback da discursiva, sem nada do que é do professor, e sem cache; código digitado com minúsculas e espaços; aviso antes da liberação e para folha incompleta; código inexistente e bloqueio após muitas tentativas; formulário sem indexação; QR code com link no canhoto"],
   ["`tests/test_digitalizacao.py`", "QR code lido em página reta, de cabeça para baixo e com ruído, em folhas sintéticas com o layout real; página sem QR code; PDF com várias folhas e foto sem QR code; página de outra atividade e reenvio que substitui; arquivos recusados; atividade sem folhas; indicação manual da folha com código e página inválidos; exclusão da página e do arquivo; imagem só com login e na atividade certa; atividade com digitalizações não excluída"],
-  ["`tests/test_leitura.py`", "Bolinhas lidas em folhas sintéticas com o layout real, retas, inclinadas, com perspectiva e de cabeça para baixo, incluindo mais de uma marcada e X como duvidoso; página sem marcas; palavras atribuídas às caixas, sem o texto impresso; pedido ao Google Cloud Vision com chave, recurso e idioma; erros do serviço; sem chave; leitura, conferência e medida pela tela; só bolinhas sem chave; leitura que não muda respostas salvas; falha de alinhamento exibida; distância de edição, CER e WER"],
+  ["`tests/test_leitura.py`", "Bolinhas lidas em folhas sintéticas com o layout real, retas, inclinadas, com perspectiva e de cabeça para baixo, incluindo mais de uma marcada e X como duvidoso; página sem marcas; palavras atribuídas às caixas, sem o texto impresso; pedido ao Google Cloud Vision com chave, recurso e idioma; erros do serviço; sem chave; explicação dos erros comuns de configuração; script de teste da chave, sem exibir a chave; leitura, conferência e medida pela tela; só bolinhas sem chave; leitura que não muda respostas salvas; falha de alinhamento exibida; distância de edição, CER e WER"],
   ["`tests/test_lista_questoes.py`", "Páginas de 50 e página fora do intervalo; cada filtro, inclusive situação pendente e sem correção; filtros mantidos ao trocar de página; filtro sem resultado; opções dos filtros vindas do banco"],
   ["`tests/test_importar_enem.py`", "Paginação; parada após recusas seguidas; exclusão de numeração fora da área e de repetidas; filtro de área e de imagens; montagem do enunciado; importação com gabarito e sem duplicar"],
 ], [3, 7]);
@@ -1223,6 +1226,7 @@ tabela(["Termo", "Significado"], [
 // ---------------------------------------------------------------------
 h1("10. Histórico de versões");
 tabela(["Data", "Versão", "Referência", "Mudança"], [
+  ["06/11/2026", "0.19", "pull request da configuração do Google Cloud Vision", "Passo a passo detalhado da chave do Google Cloud Vision no guia de publicação, script de teste da chave e mensagens que explicam os erros comuns de configuração; integra na main as versões 0.15 a 0.18, que tinham ficado nas branches intermediárias"],
   ["31/10/2026", "0.18", "pull request da leitura automática", "Alinhamento das páginas pelas marcas dos cantos, leitura das bolinhas com OpenCV, transcrição da escrita com o Google Cloud Vision, conferência na página da folha com recortes das caixas, leitura em lote e script de medida da taxa de acerto"],
   ["31/10/2026", "0.17", "pull request das digitalizações", "Envio de PDF ou fotos das folhas respondidas, identificação de cada página pelo QR code, conferência das páginas não identificadas e imagem ao lado das respostas da folha; atividade com respostas ou digitalizações não pode ser excluída"],
   ["31/10/2026", "0.16", "pull request da página do aluno", "Página pública em que o aluno consulta o próprio resultado pelo código da folha, só depois da liberação e com a folha concluída; QR code com link no canhoto; limite de consultas com código inexistente"],
