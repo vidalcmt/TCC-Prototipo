@@ -67,11 +67,33 @@ def anotar(imagem: np.ndarray, http: httpx.Client | None = None) -> tuple[dict, 
         raise OcrFalhou(f"Resposta inválida do Google Cloud Vision (HTTP {resposta.status_code}).")
     if resposta.status_code != 200 or "error" in dados:
         mensagem = (dados.get("error") or {}).get("message", "") if isinstance(dados, dict) else ""
-        raise OcrFalhou(f"O Google Cloud Vision recusou o pedido (HTTP {resposta.status_code}): {mensagem}".strip())
+        raise OcrFalhou(explicar_erro(resposta.status_code, mensagem))
     respostas = dados.get("responses") or [{}]
     if "error" in respostas[0]:
         raise OcrFalhou(f"O Google Cloud Vision não leu a imagem: {respostas[0]['error'].get('message', '')}")
     return respostas[0].get("fullTextAnnotation") or {}, latencia
+
+
+# Erros comuns na configuração, com o que fazer. A mensagem original do Google
+# vem junto, para o caso de nenhuma explicação servir.
+EXPLICACOES = [
+    ("API key not valid", "a chave está errada ou foi apagada. Confira o valor de GOOGLE_VISION_API_KEY no .env."),
+    ("SERVICE_DISABLED", "a Cloud Vision API não está ativada no projeto, ou a chave não tem permissão para ela. "
+                         "Ative a API e confira as restrições da chave (guia de publicação, seção 6)."),
+    ("has not been used in project", "a Cloud Vision API não está ativada no projeto. Ative a API e espere alguns "
+                                     "minutos (guia de publicação, seção 6)."),
+    ("are blocked", "a chave não tem permissão para a Cloud Vision API. Em Restrições da API, marque Cloud Vision API."),
+    ("IP address", "a chave está restrita a outro endereço IP. Em Restrições do aplicativo, informe o IP fixo do "
+                   "servidor, ou use uma chave própria para testar no computador."),
+    ("billing", "o faturamento do projeto não está ativo. Vincule uma conta de faturamento ao projeto."),
+]
+
+
+def explicar_erro(status: int, mensagem: str) -> str:
+    for trecho, explicacao in EXPLICACOES:
+        if trecho.lower() in (mensagem or "").lower():
+            return f"O Google Cloud Vision recusou o pedido: {explicacao} (HTTP {status}: {mensagem})"
+    return f"O Google Cloud Vision recusou o pedido (HTTP {status}): {mensagem}".strip()
 
 
 def palavras(anotacao: dict) -> list[tuple[str, float, float]]:
