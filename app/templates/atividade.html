@@ -31,10 +31,14 @@
     <textarea id="instrucoes" name="instrucoes" rows="3">{{ atividade.instrucoes or '' }}</textarea>
     <p><button type="submit">Salvar</button></p>
   </form>
+  {% if not com_respostas %}
   <form method="post" action="/atividades/{{ atividade.id }}/excluir"
         data-pergunta="Excluir a atividade {{ atividade.titulo }}? As questões continuam cadastradas." onsubmit="return confirm(this.dataset.pergunta)">
     <button type="submit" class="secundario pequeno">Excluir atividade</button>
   </form>
+  {% else %}
+  <p class="discreto">A atividade tem respostas ou digitalizações registradas e não pode ser excluída.</p>
+  {% endif %}
 </details>
 
 <h2 id="questoes">Questões da atividade</h2>

@@ -278,3 +278,12 @@ def test_painel_avisa_objetiva_sem_gabarito(fabrica_sessao, cliente_web, prova):
         s.commit()
     painel = cliente_web.get(f"/atividades/{prova['atividade']}/resultados").text
     assert "A questão 2 não tem alternativa correta cadastrada." in painel
+
+
+def test_atividade_com_respostas_nao_e_excluida(fabrica_sessao, cliente_web, prova):
+    p = prova
+    cliente_web.post(f"{_url(p)}/respostas", data={f"q{p['o1']}": "B"})
+    assert "Excluir atividade" not in cliente_web.get(f"/atividades/{p['atividade']}").text
+    assert "não pode ser excluída" in cliente_web.post(f"/atividades/{p['atividade']}/excluir").text
+    with fabrica_sessao() as s:
+        assert s.get(Atividade, p["atividade"]) is not None

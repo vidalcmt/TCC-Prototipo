@@ -16,6 +16,18 @@
 
 {% if aviso %}<div class="aviso aviso-info" role="status">{{ aviso }}</div>{% endif %}
 
+{% set imagens = folha.digitalizacoes|selectattr("situacao", "equalto", "identificada")|list %}
+{% if imagens %}
+<div class="folha-com-imagem">
+<aside class="imagens-folha" aria-label="Folha digitalizada">
+  {% for p in imagens %}
+  <a href="/atividades/{{ atividade.id }}/digitalizacoes/{{ p.id }}/imagem" target="_blank" rel="noopener" title="Abrir em tamanho real">
+    <img src="/atividades/{{ atividade.id }}/digitalizacoes/{{ p.id }}/imagem" alt="Página {{ p.pagina }} da folha {{ folha.codigo }}, digitalizada">
+  </a>
+  {% endfor %}
+</aside>
+<div>
+{% endif %}
 {% set objetivas = resultado.linhas|selectattr("questao.tipo", "equalto", "objetiva")|list %}
 {% set discursivas = resultado.linhas|selectattr("questao.tipo", "equalto", "discursiva")|list %}
 
@@ -89,6 +101,7 @@
   {% if proxima %}<button type="submit" name="depois" value="proxima" class="secundario">Salvar e ir para a folha {{ proxima.numero }}</button>{% endif %}
 </div>
 </form>
+{% if imagens %}</div></div>{% endif %}
 
 {% set a_corrigir = resultado.contar("a_corrigir") %}
 {% if a_corrigir %}
