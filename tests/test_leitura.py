@@ -215,3 +215,36 @@ def test_taxas_de_erro():
     assert taxa_de_erro("o exodo  rural", "o êxodo rural") == pytest.approx(1 / 13)
     assert taxa_de_erro("o exodo rural", "o êxodo rural", por_palavra=True) == pytest.approx(1 / 3)
     assert taxa_de_erro("", "") == 0 and taxa_de_erro("x", "") == 1
+
+
+# ---------- mensagens de erro e teste da chave ----------
+
+@pytest.mark.parametrize("mensagem, trecho", [
+    ("API key not valid. Please pass a valid API key.", "a chave está errada"),
+    ("Cloud Vision API has not been used in project 123 before or it is disabled.", "não está ativada"),
+    ("Requests to this API vision.googleapis.com method ... are blocked.", "não tem permissão"),
+    ("The provided API key has an IP address restriction.", "restrita a outro endereço IP"),
+    ("This API method requires billing to be enabled.", "faturamento"),
+    ("Algo inesperado", "HTTP 500): Algo inesperado"),
+])
+def test_erros_explicados(mensagem, trecho):
+    assert trecho in ocr.explicar_erro(500 if trecho.startswith("HTTP") else 403, mensagem)
+
+
+def test_script_de_teste_da_chave(monkeypatch, capsys):
+    from scripts import teste_vision
+
+    monkeypatch.setattr(config, "google_vision_api_key", "")
+    assert teste_vision.main() == 1 and "não está no .env" in capsys.readouterr().out
+
+    monkeypatch.setattr(config, "google_vision_api_key", "AIzaChaveDeTesteXYZ1")
+    monkeypatch.setattr(ocr, "anotar", lambda img: ({"text": "Devolutiva teste\n2026"}, 420.0))
+    assert teste_vision.main() == 0
+    saida = capsys.readouterr().out
+    assert "Funcionou em 420 ms" in saida and "Lido pelo Vision:  Devolutiva teste 2026" in saida
+    assert "AIzaChaveDeTeste" not in saida and "...XYZ1" in saida  # a chave não aparece
+
+    def falhar(img):
+        raise ocr.OcrFalhou(ocr.explicar_erro(400, "API key not valid."))
+    monkeypatch.setattr(ocr, "anotar", falhar)
+    assert teste_vision.main() == 1 and "a chave está errada" in capsys.readouterr().out
