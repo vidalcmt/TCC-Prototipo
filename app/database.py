@@ -23,3 +23,9 @@ def obter_sessao() -> Iterator[Session]:
         yield sessao
     finally:
         sessao.close()
+
+
+def obter_fabrica_sessao() -> sessionmaker:
+    """Dependência do FastAPI para trabalhos que continuam depois da resposta,
+    como a correção em lote, e precisam abrir as próprias sessões."""
+    return SessionLocal

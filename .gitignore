@@ -5,6 +5,7 @@
 *.db
 *.db-journal
 exportacoes/
+arquivos/
 
 # Python
 __pycache__/

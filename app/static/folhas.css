@@ -37,7 +37,7 @@ html, body { margin: 0; background: #E9EDF3; color: #000; font-family: "Atkinson
 .caixa .linha { position: absolute; left: 3mm; right: 3mm; border-top: 0.2mm solid #B5BCC8; }
 
 .recorte { left: 10mm; right: 10mm; border-top: 0.3mm dashed #000; font-size: 7pt; color: #444; text-align: center; padding-top: 0.5mm; }
-.canhoto { left: 20mm; right: 20mm; font-size: 9pt; line-height: 1.5; }
+.canhoto { left: 20mm; right: 44mm; font-size: 9pt; line-height: 1.5; }
 .codigo-canhoto { font-size: 12pt; font-weight: 700; letter-spacing: .08em; }
 
 @media print {

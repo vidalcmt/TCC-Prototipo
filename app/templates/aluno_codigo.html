@@ -1,0 +1,13 @@
+{% extends "base_aluno.html" %}
+{% block conteudo %}
+<h1>Ver meu resultado</h1>
+<p class="resumo">Digite o código impresso no canhoto da sua folha de respostas.</p>
+{% if erro %}<div class="aviso-erro" role="alert">{{ erro }}</div>{% endif %}
+<form class="formulario" method="get" action="/resultado">
+  <label for="codigo">Código da folha</label>
+  <input type="text" id="codigo" name="codigo" value="{{ codigo or '' }}" placeholder="XXXX-XXXX" required autofocus
+         autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" class="campo-codigo">
+  <p><button type="submit">Ver resultado</button></p>
+</form>
+<p class="discreto">O código não tem as letras O, I e L nem os números 0 e 1, para não haver confusão. Não sabe o código? Fale com o seu professor.</p>
+{% endblock %}

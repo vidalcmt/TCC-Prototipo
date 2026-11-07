@@ -2,9 +2,13 @@
 {% from "_macros.html" import nota_circulada %}
 {% block titulo %}Resposta {{ submissao.id }}{% endblock %}
 {% block conteudo %}
+{% if submissao.folha %}
+<a class="voltar" href="/atividades/{{ submissao.folha.atividade_id }}/folhas/{{ submissao.folha.id }}#discursivas">&larr; Voltar para a folha {{ submissao.folha.numero }} ({{ submissao.folha.codigo }})</a>
+{% else %}
 <a class="voltar" href="/questoes/{{ questao.id }}">&larr; Voltar para a questão {{ questao.id }}</a>
+{% endif %}
 <h1>Resposta {{ submissao.id }}{% if submissao.codigo_corpus %} <span class="discreto">({{ submissao.codigo_corpus }})</span>{% endif %}</h1>
-<p class="discreto">Origem: {{ origens.get(submissao.origem or "", submissao.origem) }}</p>
+<p class="discreto">Origem: {% if submissao.folha %}folha de respostas {{ submissao.folha.codigo }}, atividade "{{ submissao.folha.atividade.titulo }}"{% else %}{{ origens.get(submissao.origem or "", submissao.origem) }}{% endif %}</p>
 
 <details>
   <summary>Enunciado da questão</summary>
