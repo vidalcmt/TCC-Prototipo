@@ -12,6 +12,7 @@ from app.contas.sessao import verificar_limite_diario
 from app.database import obter_fabrica_sessao, obter_sessao
 from app.folhas.layout import letras
 from app.folhas.servico import normalizar_codigo
+from app.leitura.servico import campos_com_recorte, marcar_conferidas, valores_lidos
 from app.models import Atividade, Folha
 from app.questoes.cliente import obter_cliente_llm
 from app.resultados import lote
@@ -134,7 +135,10 @@ def pagina_da_folha(request: Request, atividade_id: int, folha_id: int, aviso: s
     folha = _folha(sessao, atividade, folha_id)
     folhas = atividade.folhas
     posicao = folhas.index(folha)
+    lidos, duvidas, avisos_leitura, leitura_pendente = valores_lidos(folha)
     return templates.TemplateResponse(request, "folha_respostas.html", {
+        "lidos": lidos, "duvidas": duvidas, "avisos_leitura": avisos_leitura, "leitura_pendente": leitura_pendente,
+        "recortes": campos_com_recorte(folha),
         "atividade": atividade, "folha": folha, "resultado": resultado_da_folha(sessao, folha),
         "anterior": folhas[posicao - 1] if posicao > 0 else None,
         "proxima": folhas[posicao + 1] if posicao + 1 < len(folhas) else None,
@@ -153,6 +157,7 @@ async def salvar_respostas(request: Request, atividade_id: int, folha_id: int,
     except RespostasInvalidas as erro:
         sessao.rollback()
         return _pagina_da_folha(folha, str(erro))
+    marcar_conferidas(sessao, folha)
     mensagem = " ".join(["Respostas salvas."] + avisos)
     if dados.get("depois") == "proxima":
         posicao = atividade.folhas.index(folha)

@@ -16,6 +16,7 @@ from app.aluno.router import router as router_aluno
 from app.atividades.router import router as router_atividades
 from app.digitalizacao.router import router as router_digitalizacao
 from app.inicio import router as router_inicio
+from app.leitura.router import router as router_leitura
 from app.metricas.router import router as router_metricas
 from app.questoes.discursivas import router as router_discursivas
 from app.questoes.router import router as router_questoes
@@ -55,6 +56,7 @@ app.include_router(router_revisao, dependencies=login)
 app.include_router(router_atividades, dependencies=login)
 app.include_router(router_resultados, dependencies=login)
 app.include_router(router_digitalizacao, dependencies=login)
+app.include_router(router_leitura, dependencies=login)
 app.include_router(router_metricas, dependencies=[Depends(exigir_admin)])
 
 

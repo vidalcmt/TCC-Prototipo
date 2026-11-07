@@ -15,6 +15,8 @@
 </div>
 
 {% if aviso %}<div class="aviso aviso-info" role="status">{{ aviso }}</div>{% endif %}
+{% if leitura_pendente %}<div class="aviso aviso-info leitura-pendente"><strong>Respostas lidas automaticamente da folha digitalizada.</strong> Elas já estão preenchidas abaixo, mas ainda não foram gravadas: confira cada uma com a imagem, corrija o que precisar e clique em Salvar. As marcadas com "confira" tiveram leitura duvidosa.</div>{% endif %}
+{% for a in avisos_leitura %}<div class="aviso aviso-erro">{{ a }}</div>{% endfor %}
 
 {% set imagens = folha.digitalizacoes|selectattr("situacao", "equalto", "identificada")|list %}
 {% if imagens %}
@@ -38,20 +40,23 @@
 <table class="grade-objetivas">
   <tr><th>Questão</th><th>Marcada na folha</th><th>Resultado</th></tr>
   {% for l in objetivas %}
+  {% set chave = "q" ~ l.questao.id %}
   {% set marcada = l.submissao.alternativa_escolhida if l.submissao else none %}
+  {% set lida = lidos.get(chave) if not l.submissao else none %}
   <tr>
     <td>{{ l.numero }}</td>
     <td>
       <fieldset class="opcoes-marcacao">
         <legend class="so-leitor">Questão {{ l.numero }}</legend>
         {% for letra in letras(l.questao) %}
-        <label><input type="radio" name="q{{ l.questao.id }}" value="{{ letra }}"{% if marcada == letra %} checked{% endif %}> {{ letra }}</label>
+        <label><input type="radio" name="q{{ l.questao.id }}" value="{{ letra }}"{% if marcada == letra or lida == letra %} checked{% endif %}> {{ letra }}</label>
         {% endfor %}
-        <label class="discreto"><input type="radio" name="q{{ l.questao.id }}" value="branco"{% if l.submissao and not marcada %} checked{% endif %}> em branco</label>
-        <label class="discreto"><input type="radio" name="q{{ l.questao.id }}" value="multipla"{% if marcada == MULTIPLA %} checked{% endif %}> mais de uma</label>
+        <label class="discreto"><input type="radio" name="q{{ l.questao.id }}" value="branco"{% if (l.submissao and not marcada) or lida == "branco" %} checked{% endif %}> em branco</label>
+        <label class="discreto"><input type="radio" name="q{{ l.questao.id }}" value="multipla"{% if marcada == MULTIPLA or lida == "multipla" %} checked{% endif %}> mais de uma</label>
       </fieldset>
     </td>
     <td class="sem-quebra">
+      {% if lida is not none %}<span class="status status-parcial{% if chave not in duvidas %} lida{% endif %}">{{ "confira" if chave in duvidas else "lida" }}</span>{% endif %}
       {% if l.situacao == "certa" %}<span class="status status-atendido">Certa</span>
       {% elif l.situacao in ("errada", "anulada") %}<span class="status status-nao_atendido">{{ "Errada" if l.situacao == "errada" else "Anulada" }}</span> <span class="discreto">gabarito {{ l.gabarito }}</span>
       {% elif l.situacao == "em_branco" %}<span class="discreto">Em branco · gabarito {{ l.gabarito }}</span>
@@ -84,12 +89,16 @@
   </div>
   {% if q.itens %}
   {% for item in q.itens %}
-  <label for="q{{ q.id }}_{{ item.letra }}"><span class="letra-item">{{ item.letra }})</span> <span class="discreto">{{ item.enunciado[:140] }}{% if item.enunciado|length > 140 %}…{% endif %}</span></label>
-  <textarea id="q{{ q.id }}_{{ item.letra }}" name="q{{ q.id }}_{{ item.letra }}" rows="4"{% if travada %} readonly{% endif %}>{{ s.resposta_do_item(item.letra) if s else "" }}</textarea>
+  {% set campo = "q" ~ q.id ~ "_" ~ item.letra %}
+  <label for="{{ campo }}"><span class="letra-item">{{ item.letra }})</span> <span class="discreto">{{ item.enunciado[:140] }}{% if item.enunciado|length > 140 %}…{% endif %}</span></label>
+  {% if campo in recortes %}<img class="recorte" src="/atividades/{{ atividade.id }}/folhas/{{ folha.id }}/recorte/{{ campo }}" alt="Resposta escrita na folha, item {{ item.letra }}" loading="lazy">{% endif %}
+  <textarea id="{{ campo }}" name="{{ campo }}" rows="4"{% if travada %} readonly{% endif %}>{{ s.resposta_do_item(item.letra) if s else lidos.get(campo, "") }}</textarea>
   {% endfor %}
   {% else %}
-  <label for="q{{ q.id }}" class="so-leitor">Resposta da questão {{ l.numero }}</label>
-  <textarea id="q{{ q.id }}" name="q{{ q.id }}" rows="5"{% if travada %} readonly{% endif %}>{{ s.resposta_aluno if s else "" }}</textarea>
+  {% set campo = "q" ~ q.id %}
+  <label for="{{ campo }}" class="so-leitor">Resposta da questão {{ l.numero }}</label>
+  {% if campo in recortes %}<img class="recorte" src="/atividades/{{ atividade.id }}/folhas/{{ folha.id }}/recorte/{{ campo }}" alt="Resposta escrita na folha, questão {{ l.numero }}" loading="lazy">{% endif %}
+  <textarea id="{{ campo }}" name="{{ campo }}" rows="5"{% if travada %} readonly{% endif %}>{{ s.resposta_aluno if s else lidos.get(campo, "") }}</textarea>
   {% endif %}
 </section>
 {% endfor %}
@@ -103,6 +112,14 @@
 </form>
 {% if imagens %}</div></div>{% endif %}
 
+{% if imagens %}
+<form method="post" action="/atividades/{{ atividade.id }}/folhas/{{ folha.id }}/ler" class="acoes-correcao"
+      onsubmit="setTimeout(() => { this.querySelector('button').disabled = true; this.querySelector('.aguarde').hidden = false; }, 0);">
+  <button type="submit" class="secundario">Ler de novo a folha digitalizada</button>
+  <span class="discreto">Lê as bolinhas e a escrita das imagens. Não muda respostas já salvas.</span>
+  <span class="discreto aguarde" hidden>Lendo...</span>
+</form>
+{% endif %}
 {% set a_corrigir = resultado.contar("a_corrigir") %}
 {% if a_corrigir %}
 <form method="post" action="/atividades/{{ atividade.id }}/folhas/{{ folha.id }}/corrigir" class="acoes-correcao"

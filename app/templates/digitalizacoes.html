@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block titulo %}Digitalizações: {{ atividade.titulo }}{% endblock %}
+{% block cabeca %}{% if andamento and andamento.em_andamento %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
 {% block conteudo %}
 <a class="voltar" href="/atividades/{{ atividade.id }}/resultados">&larr; Voltar para os resultados</a>
 <h1>Folhas digitalizadas</h1>
@@ -26,6 +27,18 @@
     <span class="discreto aguarde" hidden>Lendo as páginas...</span>
   </div>
 </form>
+
+<h2 id="leitura">Leitura automática</h2>
+<p class="discreto">O sistema endireita cada página pelas marcas dos cantos, lê as bolinhas das objetivas e{% if ocr_disponivel %} transcreve a escrita das discursivas com o Google Cloud Vision{% else %}, quando configurado, transcreve a escrita{% endif %}. Nada é gravado como resposta sem a sua conferência: a leitura preenche o formulário da folha, e você confere com a imagem e salva.</p>
+{% if not ocr_disponivel %}<div class="aviso aviso-erro">A leitura da escrita está desligada: falta a chave <code>GOOGLE_VISION_API_KEY</code> no arquivo .env. As bolinhas são lidas normalmente; as discursivas ficam para digitar.</div>{% endif %}
+{% if andamento and andamento.em_andamento %}
+<div class="aviso aviso-info" role="status">Lendo: {{ andamento.feitas + andamento.falhas }} de {{ andamento.total }} páginas. A página se atualiza sozinha.</div>
+{% else %}
+{% if andamento %}<div class="aviso {{ 'aviso-erro' if andamento.falhas or andamento.mensagem else 'aviso-certo' }}">Última leitura: {{ andamento.feitas }} de {{ andamento.total }} páginas lidas{% if andamento.falhas %}, {{ andamento.falhas }} não puderam ser lidas (abra a folha para ver o motivo){% endif %}.{% if andamento.mensagem %} {{ andamento.mensagem }}{% endif %}</div>{% endif %}
+<form method="post" action="/atividades/{{ atividade.id }}/digitalizacoes/ler">
+  <button type="submit"{% if not a_ler %} disabled{% endif %}>Ler {{ a_ler }} {{ "página ainda não lida" if a_ler == 1 else "páginas ainda não lidas" }}</button>
+</form>
+{% endif %}
 
 <h2 id="pendentes">Páginas sem folha</h2>
 {% if pendentes %}
@@ -63,14 +76,15 @@
 <h2>Folhas</h2>
 <div class="rolagem">
 <table>
-  <tr><th>Folha</th><th>Código</th><th>Páginas digitalizadas</th><th></th></tr>
+  <tr><th>Folha</th><th>Código</th><th>Páginas digitalizadas</th><th>Leitura</th><th></th></tr>
   {% for f in atividade.folhas %}
   {% set recebidas = por_folha.get(f.id, [])|unique|sort|list %}
   <tr>
     <td>{{ f.numero }}</td>
     <td class="sem-quebra">{{ f.codigo }}</td>
     <td>{% if recebidas %}{{ recebidas|join(", ") }}{% if recebidas|length < paginas_por_folha %} <span class="status status-parcial">faltam páginas</span>{% endif %}{% else %}<span class="discreto">nenhuma</span>{% endif %}</td>
-    <td>{% if recebidas %}<a href="/atividades/{{ atividade.id }}/folhas/{{ f.id }}">Abrir</a>{% endif %}</td>
+    <td>{{ leitura_por_folha.get(f.id, [])|sort|join(", ") }}</td>
+    <td>{% if recebidas %}<a href="/atividades/{{ atividade.id }}/folhas/{{ f.id }}">{{ "Conferir" if "lida, a conferir" in leitura_por_folha.get(f.id, []) else "Abrir" }}</a>{% endif %}</td>
   </tr>
   {% endfor %}
 </table>

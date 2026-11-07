@@ -99,6 +99,26 @@ sobreviva à perda do disco, programe snapshots diários:
 2. Em **Compute Engine > Discos**, abra o disco `devolutiva`, clique em
    **Editar** e escolha essa programação.
 
+## 6. Leitura da escrita (Google Cloud Vision)
+
+A leitura das bolinhas funciona sem configuração. Para transcrever a escrita
+das discursivas, o sistema usa o Google Cloud Vision, no mesmo projeto:
+
+1. Em **APIs e serviços > Biblioteca**, procure **Cloud Vision API** e clique
+   em **Ativar**.
+2. Em **APIs e serviços > Credenciais**, clique em **Criar credenciais >
+   Chave de API**. Abra a chave criada e, em **Restrições da API**, escolha
+   **Restringir chave** e marque só **Cloud Vision API**. Em **Restrições
+   do aplicativo**, escolha **Endereços IP** e informe o IP fixo da máquina.
+   Assim, mesmo que a chave vaze, ela só funciona a partir do servidor e só
+   para o Vision.
+3. Na janela SSH, edite o `.env` e acrescente a linha
+   `GOOGLE_VISION_API_KEY=` seguida da chave, sem espaços:
+   `sudo nano /opt/devolutiva/.env`. Depois, `sudo systemctl restart devolutiva`.
+
+Nunca cole a chave em conversas, prints ou no GitHub. Para testar no seu
+computador, crie outra chave sem a restrição de IP e coloque no `.env` local.
+
 ## Dia a dia
 
 | Para | Comando, na janela SSH |
@@ -117,6 +137,11 @@ O `atualizar.sh` faz uma cópia do banco antes de qualquer mudança.
 
 - A máquina e o IP fixo são cobrados enquanto existirem, mesmo desligados
   (a máquina desligada cobra só o disco e o IP). Os créditos cobrem esses custos.
+- O Google Cloud Vision cobra por página lida (uma chamada por página com
+  discursivas); as primeiras 1.000 por mês são gratuitas. Confira os valores
+  atuais em cloud.google.com/vision/pricing.
+- As folhas digitalizadas ficam em `/opt/devolutiva/arquivos` e não entram na
+  cópia diária do banco; o snapshot do disco as inclui.
 - As chamadas ao modelo são cobradas pela OpenAI, à parte. O limite diário por
   pessoa (`LIMITE_CHAMADAS_DIA` no `.env`) evita gastos inesperados.
 - Para encerrar tudo depois do TCC: apague a instância, o disco, o IP
