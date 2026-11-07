@@ -17,6 +17,7 @@ from app.inicio import router as router_inicio
 from app.metricas.router import router as router_metricas
 from app.questoes.discursivas import router as router_discursivas
 from app.questoes.router import router as router_questoes
+from app.resultados.router import router as router_resultados
 from app.revisao.router import router as router_revisao
 from app.templates_config import templates
 
@@ -48,6 +49,7 @@ app.include_router(router_discursivas, dependencies=login)
 app.include_router(router_questoes, dependencies=login)
 app.include_router(router_revisao, dependencies=login)
 app.include_router(router_atividades, dependencies=login)
+app.include_router(router_resultados, dependencies=login)
 app.include_router(router_metricas, dependencies=[Depends(exigir_admin)])
 
 

@@ -321,3 +321,20 @@ td.origem { white-space: nowrap; }
 .lista-atividade .acoes-item form { margin: 0; display: flex; gap: 4px; }
 .editar-atividade { margin: 8px 0 4px; }
 .editar-atividade > form { margin-top: 10px; }
+
+/* Resultados das folhas de resposta */
+.so-leitor { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.numeros-resultados { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin: 8px 0 4px; }
+.numeros-resultados > div { background: var(--folha); border: 1px solid var(--pauta); border-radius: 10px; padding: 12px 14px; color: var(--lapis); }
+.numeros-resultados strong { display: block; font-size: 24px; color: var(--tinta); }
+.opcoes-marcacao { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.opcoes-marcacao label { display: inline-flex; align-items: center; gap: 4px; margin: 0; font-weight: 400; white-space: nowrap; }
+.grade-objetivas td { vertical-align: middle; }
+.resposta-folha { background: var(--folha); border: 1px solid var(--pauta); border-radius: 10px; padding: 14px 16px; margin: 12px 0; }
+.resposta-folha label { display: block; margin: 10px 0 4px; }
+.resposta-folha textarea { width: 100%; }
+.resposta-folha textarea[readonly] { background: var(--papel); color: var(--lapis); }
+.cabeca-resposta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; }
+.notas-resposta { display: flex; align-items: center; gap: 10px; }
+.formulario-folha > .acoes { margin: 16px 0; }
+.botao.pequeno { font-size: 14px; padding: 5px 10px; }

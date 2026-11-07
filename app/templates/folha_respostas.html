@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% from "_macros.html" import nota_circulada, nota_pendente %}
+{% block titulo %}Folha {{ folha.numero }}: {{ atividade.titulo }}{% endblock %}
+{% block conteudo %}
+<a class="voltar" href="/atividades/{{ atividade.id }}/resultados">&larr; Voltar para os resultados</a>
+<div class="cabecalho-pagina">
+  <div>
+    <h1>Folha {{ folha.numero }} <span class="discreto">· {{ folha.codigo }}</span></h1>
+    <p class="resumo">{{ atividade.titulo }} · {{ resultado.situacao }}{% if resultado.respondida %} · {{ resultado.pontos|num }} de {{ resultado.maximo|num }} pontos{% if not resultado.completa %} até agora{% endif %}{% endif %}</p>
+  </div>
+  <div class="acoes">
+    {% if anterior %}<a class="botao contorno" href="/atividades/{{ atividade.id }}/folhas/{{ anterior.id }}">&larr; Folha {{ anterior.numero }}</a>{% endif %}
+    {% if proxima %}<a class="botao contorno" href="/atividades/{{ atividade.id }}/folhas/{{ proxima.id }}">Folha {{ proxima.numero }} &rarr;</a>{% endif %}
+  </div>
+</div>
+
+{% if aviso %}<div class="aviso aviso-info" role="status">{{ aviso }}</div>{% endif %}
+
+{% set objetivas = resultado.linhas|selectattr("questao.tipo", "equalto", "objetiva")|list %}
+{% set discursivas = resultado.linhas|selectattr("questao.tipo", "equalto", "discursiva")|list %}
+
+<form method="post" action="/atividades/{{ atividade.id }}/folhas/{{ folha.id }}/respostas" class="formulario-folha">
+{% if objetivas %}
+<h2>Objetivas <span class="discreto">({{ atividade.valor_objetiva|num }} {{ "ponto" if atividade.valor_objetiva == 1 else "pontos" }} cada)</span></h2>
+<div class="rolagem">
+<table class="grade-objetivas">
+  <tr><th>Questão</th><th>Marcada na folha</th><th>Resultado</th></tr>
+  {% for l in objetivas %}
+  {% set marcada = l.submissao.alternativa_escolhida if l.submissao else none %}
+  <tr>
+    <td>{{ l.numero }}</td>
+    <td>
+      <fieldset class="opcoes-marcacao">
+        <legend class="so-leitor">Questão {{ l.numero }}</legend>
+        {% for letra in letras(l.questao) %}
+        <label><input type="radio" name="q{{ l.questao.id }}" value="{{ letra }}"{% if marcada == letra %} checked{% endif %}> {{ letra }}</label>
+        {% endfor %}
+        <label class="discreto"><input type="radio" name="q{{ l.questao.id }}" value="branco"{% if l.submissao and not marcada %} checked{% endif %}> em branco</label>
+        <label class="discreto"><input type="radio" name="q{{ l.questao.id }}" value="multipla"{% if marcada == MULTIPLA %} checked{% endif %}> mais de uma</label>
+      </fieldset>
+    </td>
+    <td class="sem-quebra">
+      {% if l.situacao == "certa" %}<span class="status status-atendido">Certa</span>
+      {% elif l.situacao in ("errada", "anulada") %}<span class="status status-nao_atendido">{{ "Errada" if l.situacao == "errada" else "Anulada" }}</span> <span class="discreto">gabarito {{ l.gabarito }}</span>
+      {% elif l.situacao == "em_branco" %}<span class="discreto">Em branco · gabarito {{ l.gabarito }}</span>
+      {% elif l.situacao == "sem_gabarito" %}<span class="status status-parcial">Sem gabarito</span>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% endif %}
+
+{% if discursivas %}
+<h2 id="discursivas">Discursivas</h2>
+{% for l in discursivas %}
+{% set q = l.questao %}{% set s = l.submissao %}{% set travada = l.correcao is not none %}
+<section class="resposta-folha">
+  <div class="cabeca-resposta">
+    <div>
+      <strong>Questão {{ l.numero }}</strong> <span class="discreto">· vale {{ q.nota_maxima|num }} · <a href="/questoes/{{ q.id }}" target="_blank" rel="noopener">ver enunciado</a></span>
+      <div class="discreto">{{ l.rotulo }}{% if travada %}: o texto já foi corrigido e não pode ser alterado{% endif %}</div>
+    </div>
+    <div class="notas-resposta">
+      {% if l.situacao == "revisada" %}{{ nota_circulada(l.pontos) }}
+      {% elif l.situacao == "em_branco" %}{{ nota_circulada(0) }}
+      {% elif l.situacao == "a_revisar" %}<span class="discreto">sugerida: {{ l.correcao.nota_sugerida|num }}</span> {{ nota_pendente() }}
+      {% endif %}
+      {% if l.correcao %}<a class="botao{% if l.situacao == 'revisada' %} contorno{% endif %} pequeno" href="/respostas/{{ s.id }}#correcao-{{ l.correcao.id }}">{{ "Ver correção" if l.situacao == "revisada" else "Revisar a nota" }}</a>{% endif %}
+    </div>
+  </div>
+  {% if q.itens %}
+  {% for item in q.itens %}
+  <label for="q{{ q.id }}_{{ item.letra }}"><span class="letra-item">{{ item.letra }})</span> <span class="discreto">{{ item.enunciado[:140] }}{% if item.enunciado|length > 140 %}…{% endif %}</span></label>
+  <textarea id="q{{ q.id }}_{{ item.letra }}" name="q{{ q.id }}_{{ item.letra }}" rows="4"{% if travada %} readonly{% endif %}>{{ s.resposta_do_item(item.letra) if s else "" }}</textarea>
+  {% endfor %}
+  {% else %}
+  <label for="q{{ q.id }}" class="so-leitor">Resposta da questão {{ l.numero }}</label>
+  <textarea id="q{{ q.id }}" name="q{{ q.id }}" rows="5"{% if travada %} readonly{% endif %}>{{ s.resposta_aluno if s else "" }}</textarea>
+  {% endif %}
+</section>
+{% endfor %}
+<p class="discreto">Transcreva o que o aluno escreveu, sem corrigir a ortografia. Deixe vazio o que estiver em branco na folha.</p>
+{% endif %}
+
+<div class="acoes">
+  <button type="submit">Salvar respostas</button>
+  {% if proxima %}<button type="submit" name="depois" value="proxima" class="secundario">Salvar e ir para a folha {{ proxima.numero }}</button>{% endif %}
+</div>
+</form>
+
+{% set a_corrigir = resultado.contar("a_corrigir") %}
+{% if a_corrigir %}
+<form method="post" action="/atividades/{{ atividade.id }}/folhas/{{ folha.id }}/corrigir" class="acoes-correcao"
+      onsubmit="setTimeout(() => { this.querySelectorAll('button').forEach(b => b.disabled = true); this.querySelector('.aguarde').hidden = false; }, 0);">
+  <button type="submit">Corrigir {{ a_corrigir }} {{ "discursiva" if a_corrigir == 1 else "discursivas" }} desta folha</button>
+  <span class="discreto aguarde" hidden>Corrigindo, pode levar alguns segundos por resposta...</span>
+</form>
+{% endif %}
+{% endblock %}

@@ -109,6 +109,7 @@ app/
   revisao/           tela de aceite do professor (etapa 4)
   atividades/        atividades e impressão em A4
   folhas/            folhas de resposta: códigos, QR code e posição dos elementos
+  resultados/        respostas por folha, correção em lote, painel e liberação
   templates/         páginas HTML
   static/            estilo, fontes e script do tema claro/escuro
 config/precos.toml   preços por modelo, com fonte e data de acesso

@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block titulo %}Resultados: {{ atividade.titulo }}{% endblock %}
+{% block cabeca %}{% if andamento and andamento.em_andamento %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
+{% block conteudo %}
+<a class="voltar" href="/atividades/{{ atividade.id }}">&larr; Voltar para a atividade</a>
+<div class="cabecalho-pagina">
+  <div>
+    <h1>Resultados</h1>
+    <p class="resumo">{{ atividade.titulo }}{% if atividade.turma %} · {{ atividade.turma }}{% endif %}</p>
+  </div>
+</div>
+
+{% if aviso %}<div class="aviso aviso-info" role="status">{{ aviso }}</div>{% endif %}
+
+{% if not atividade.folhas %}
+<p class="pilha-vazia">Esta atividade ainda não tem folhas de resposta. Gere as folhas na <a href="/atividades/{{ atividade.id }}#folhas">página da atividade</a>.</p>
+{% else %}
+
+<div class="numeros-resultados">
+  <div><strong>{{ respondidas }}</strong> de {{ atividade.folhas|length }} folhas com respostas</div>
+  <div><strong>{{ concluidas }}</strong> concluídas</div>
+  <div><strong>{{ a_corrigir }}</strong> discursivas a corrigir</div>
+  <div><strong>{{ a_revisar }}</strong> esperando a sua revisão</div>
+  <div>Média das concluídas: <strong>{% if media is not none %}{{ media|num }}{% else %}-{% endif %}</strong> de {{ maximo|num }}</div>
+</div>
+
+<h2>Liberar para os alunos</h2>
+{% if atividade.resultados_liberados_em %}
+<div class="aviso aviso-certo">Resultados liberados em {{ atividade.resultados_liberados_em|data_local }}. Cada aluno vê a nota e o feedback quando a folha dele estiver concluída{% if concluidas < respondidas %}; {{ respondidas - concluidas }} {{ "folha ainda não está" if respondidas - concluidas == 1 else "folhas ainda não estão" }}{% endif %}.</div>
+<form method="post" action="/atividades/{{ atividade.id }}/resultados/recolher"
+      data-pergunta="Recolher os resultados? Os alunos deixam de ver as notas até você liberar de novo." onsubmit="return confirm(this.dataset.pergunta)">
+  <button type="submit" class="secundario">Recolher resultados</button>
+</form>
+{% else %}
+<p class="discreto">Enquanto você não liberar, nenhum aluno vê a nota. Depois de liberar, cada aluno vê o resultado da própria folha quando todas as notas dela estiverem confirmadas.</p>
+<form method="post" action="/atividades/{{ atividade.id }}/resultados/liberar"
+      data-pergunta="Liberar os resultados? {{ concluidas }} de {{ respondidas }} folhas respondidas estão concluídas; as outras aparecem para o aluno quando forem concluídas." onsubmit="return confirm(this.dataset.pergunta)">
+  <button type="submit"{% if not respondidas %} disabled{% endif %}>Liberar resultados</button>
+</form>
+{% endif %}
+
+<h2>Correção das discursivas</h2>
+{% if andamento and andamento.em_andamento %}
+<div class="aviso aviso-info" role="status">Corrigindo: {{ andamento.feitas + andamento.falhas }} de {{ andamento.total }} ({{ andamento.falhas }} {{ "falha" if andamento.falhas == 1 else "falhas" }}). A página se atualiza sozinha.</div>
+{% else %}
+{% if andamento %}
+<div class="aviso {{ 'aviso-erro' if andamento.falhas or andamento.mensagem else 'aviso-certo' }}">Última correção em lote: {{ andamento.feitas }} de {{ andamento.total }} corrigidas{% if andamento.falhas %}, {{ andamento.falhas }} falharam (registradas nas métricas; peça de novo para tentar outra vez){% endif %}.{% if andamento.mensagem %} {{ andamento.mensagem }}{% endif %}</div>
+{% endif %}
+<p class="discreto">Cada resposta discursiva é corrigida com uma chamada ao modelo, usando a resposta esperada quando a questão tem uma. A nota é uma sugestão: confirme ou ajuste cada uma na folha. Respostas em branco valem zero e não passam pelo modelo.</p>
+<form method="post" action="/atividades/{{ atividade.id }}/resultados/corrigir">
+  <button type="submit"{% if not a_corrigir %} disabled{% endif %}>Corrigir {{ a_corrigir }} {{ "resposta pendente" if a_corrigir == 1 else "respostas pendentes" }}</button>
+</form>
+{% endif %}
+
+<h2>Pontuação</h2>
+<p class="discreto">Total da atividade: {{ maximo|num }} pontos. Cada discursiva vale a nota máxima cadastrada na questão; o valor das objetivas pode ser mudado a qualquer momento e as notas são recalculadas.</p>
+{% if sem_gabarito %}<div class="aviso aviso-erro">{{ "A questão" if sem_gabarito|length == 1 else "As questões" }} {{ sem_gabarito|join(", ") }} {{ "não tem" if sem_gabarito|length == 1 else "não têm" }} alternativa correta cadastrada. Sem gabarito, a objetiva não é corrigida e a folha não fica concluída: cadastre as alternativas na página da questão.</div>{% endif %}
+<form class="filtros" method="post" action="/atividades/{{ atividade.id }}/resultados/valor">
+  <div class="campo estreito">
+    <label for="valor_objetiva">Cada objetiva vale</label>
+    <input type="text" id="valor_objetiva" name="valor_objetiva" value="{{ atividade.valor_objetiva|num }}" inputmode="decimal">
+  </div>
+  <div class="campo botoes"><button type="submit" class="secundario">Salvar valor</button></div>
+</form>
+
+<h2>Folhas</h2>
+<form class="filtros" method="get" action="/atividades/{{ atividade.id }}/resultados">
+  <div class="campo">
+    <label for="codigo">Abrir pelo código</label>
+    <input type="text" id="codigo" name="codigo" placeholder="XXXX-XXXX" autocomplete="off" autocapitalize="characters">
+  </div>
+  <div class="campo botoes"><button type="submit">Abrir</button></div>
+</form>
+
+<div class="rolagem">
+<table>
+  <tr><th>Folha</th><th>Código</th><th>Situação</th><th>Objetivas certas</th><th>Pontos</th><th></th></tr>
+  {% for r in resultados %}
+  {% set objetivas = r.linhas|selectattr("questao.tipo", "equalto", "objetiva")|list %}
+  <tr>
+    <td>{{ r.folha.numero }}</td>
+    <td class="sem-quebra">{{ r.folha.codigo }}</td>
+    <td>{{ r.situacao }}</td>
+    <td>{% if r.respondida and objetivas %}{{ objetivas|selectattr("situacao", "equalto", "certa")|list|length }} de {{ objetivas|length }}{% endif %}</td>
+    <td class="sem-quebra">{% if r.completa %}<strong>{{ r.pontos|num }}</strong> de {{ r.maximo|num }}{% elif r.respondida %}<span class="discreto">parcial: {{ r.pontos|num }}</span>{% endif %}</td>
+    <td><a href="/atividades/{{ atividade.id }}/folhas/{{ r.folha.id }}">{{ "Abrir" if r.respondida else "Digitar respostas" }}</a></td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% endif %}
+{% endblock %}
