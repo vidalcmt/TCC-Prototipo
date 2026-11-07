@@ -1,0 +1,21 @@
+{% from "_macros.html" import icone_marca, botao_tema %}
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  {% include "_cabeca.html" %}
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>{% block titulo %}Meu resultado{% endblock %} | {{ nome_sistema }}</title>
+</head>
+<body>
+<header class="barra">
+  <div class="barra-interna">
+    <span class="marca">{{ icone_marca() }}{{ nome_sistema }}</span>
+    <div class="usuario" style="margin-left: auto">{{ botao_tema() }}</div>
+  </div>
+</header>
+<main class="pagina pagina-aluno">
+{% block conteudo %}{% endblock %}
+</main>
+</body>
+</html>

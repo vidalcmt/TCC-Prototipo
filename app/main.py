@@ -12,6 +12,7 @@ from app.contas.router import administracao, protegido, publico
 from app.contas.sessao import (
     LimiteDiarioAtingido, NaoAutenticado, PrecisaTrocarSenha, SemPermissao, exigir_admin, exigir_login,
 )
+from app.aluno.router import router as router_aluno
 from app.atividades.router import router as router_atividades
 from app.inicio import router as router_inicio
 from app.metricas.router import router as router_metricas
@@ -38,6 +39,8 @@ app.mount("/static", StaticFiles(directory=RAIZ / "app" / "static"), name="stati
 
 # Rotas públicas: entrar e sair. Todo o resto exige login.
 app.include_router(publico)
+# Página do aluno: pública, o código da folha é a chave (ver app/aluno/router.py).
+app.include_router(router_aluno)
 app.include_router(protegido)
 app.include_router(administracao)
 

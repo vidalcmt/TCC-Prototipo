@@ -110,6 +110,7 @@ app/
   atividades/        atividades e impressão em A4
   folhas/            folhas de resposta: códigos, QR code e posição dos elementos
   resultados/        respostas por folha, correção em lote, painel e liberação
+  aluno/             página pública em que o aluno consulta o resultado pelo código
   templates/         páginas HTML
   static/            estilo, fontes e script do tema claro/escuro
 config/precos.toml   preços por modelo, com fonte e data de acesso

@@ -338,3 +338,12 @@ td.origem { white-space: nowrap; }
 .notas-resposta { display: flex; align-items: center; gap: 10px; }
 .formulario-folha > .acoes { margin: 16px 0; }
 .botao.pequeno { font-size: 14px; padding: 5px 10px; }
+
+/* Página do aluno */
+.pagina-aluno { max-width: 760px; }
+.campo-codigo { font-size: 22px; letter-spacing: .08em; text-transform: uppercase; max-width: 260px; }
+.nota-total { text-align: center; }
+.questao-aluno { background: var(--folha); border: 1px solid var(--pauta); border-radius: 10px; padding: 14px 18px; margin: 14px 0; }
+.questao-aluno h2 { font-size: 18px; margin: 0 0 8px; }
+.questao-aluno p { margin: 6px 0; }
+.feedback-aluno { white-space: pre-line; line-height: 1.55; }
