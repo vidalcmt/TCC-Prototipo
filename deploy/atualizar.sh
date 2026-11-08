@@ -41,7 +41,8 @@ for _ in $(seq 1 20); do
   sleep 1
 done
 if curl -fsS http://127.0.0.1:8000/saude >/dev/null 2>&1; then
-  echo "Atualizado: $(git log -1 --format='%h %s')"
+  # O repositório é do usuário da aplicação; o git recusa lê-lo como root ("dubious ownership").
+  echo "Atualizado: $(como_app git log -1 --format='%h %s')"
 else
   echo "A aplicação não respondeu. Veja o erro com: sudo journalctl -u devolutiva -n 50" >&2
   exit 1
