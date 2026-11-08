@@ -16,6 +16,8 @@ from app.folhas import layout as L
 from app.folhas.servico import FolhasInvalidas, descartar_folhas, gerar_folhas, qr_svg, questoes_travadas
 from app.models import Atividade, AtividadeQuestao, Questao, Usuario
 from app.questoes.router import _filtrar
+from app.digitalizacao.servico import tem_digitalizacoes
+from app.resultados.servico import folha_tem_respostas
 from app.templates_config import templates
 
 router = APIRouter(prefix="/atividades", tags=["atividades"])
@@ -114,6 +116,7 @@ def detalhe(request: Request, atividade_id: int, aviso: str | None = None,
         "autor": sessao.get(Usuario, atividade.usuario_id) if atividade.usuario_id else None,
         "aviso": aviso, "travada": questoes_travadas(atividade),
         "opcoes_linhas": LINHAS_POR_RESPOSTA, "linhas_padrao": LINHAS_PADRAO,
+        "com_respostas": folha_tem_respostas(atividade) or tem_digitalizacoes(sessao, atividade),
     })
 
 
@@ -131,8 +134,16 @@ async def editar(request: Request, atividade_id: int, sessao: Session = Depends(
 
 @router.post("/{atividade_id}/excluir")
 def excluir(atividade_id: int, sessao: Session = Depends(obter_sessao)):
-    """Apaga a atividade. As questões continuam cadastradas."""
-    sessao.delete(_buscar(sessao, atividade_id))
+    """Apaga a atividade. As questões continuam cadastradas.
+
+    Uma atividade com respostas ou digitalizações não é apagada: as respostas,
+    as correções e as revisões dependem das folhas.
+    """
+    atividade = _buscar(sessao, atividade_id)
+    if folha_tem_respostas(atividade) or tem_digitalizacoes(sessao, atividade):
+        return _voltar(atividade, "Esta atividade já tem respostas ou digitalizações registradas e não pode ser "
+                                  "excluída.")
+    sessao.delete(atividade)
     sessao.commit()
     return RedirectResponse("/atividades", status_code=303)
 
@@ -236,6 +247,9 @@ async def criar_folhas(request: Request, atividade_id: int, sessao: Session = De
 @router.post("/{atividade_id}/folhas/descartar")
 def descartar(atividade_id: int, sessao: Session = Depends(obter_sessao)):
     atividade = _buscar(sessao, atividade_id)
+    if folha_tem_respostas(atividade) or tem_digitalizacoes(sessao, atividade):
+        return _voltar(atividade, "Já há respostas ou digitalizações registradas nas folhas desta atividade, "
+                                  "por isso elas não podem ser descartadas.", "#folhas")
     descartar_folhas(sessao, atividade)
     return _voltar(atividade, "Folhas descartadas. As questões podem ser alteradas de novo.", "#folhas")
 
@@ -253,4 +267,6 @@ def imprimir_folhas(request: Request, atividade_id: int, folha: int | None = Non
         "atividade": atividade, "folhas": folhas, "paginas": paginas, "L": L,
         "qr": lambda codigo, pagina: qr_svg(L.conteudo_qr(codigo, pagina)),
         "endereco": str(request.base_url).rstrip("/") + "/resultado",
+        # QR do canhoto: abre direto a página do aluno, já com o código
+        "qr_link": lambda codigo: qr_svg(str(request.base_url).rstrip("/") + "/r/" + codigo),
     })

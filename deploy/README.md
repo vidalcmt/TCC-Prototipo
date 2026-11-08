@@ -99,6 +99,92 @@ sobreviva à perda do disco, programe snapshots diários:
 2. Em **Compute Engine > Discos**, abra o disco `devolutiva`, clique em
    **Editar** e escolha essa programação.
 
+## 6. Leitura da escrita (Google Cloud Vision)
+
+A leitura das bolinhas das objetivas funciona sem configuração. Para
+transcrever a escrita das discursivas, o sistema usa o Google Cloud Vision, no
+mesmo projeto do Google Cloud em que está a máquina. São quatro passos, todos
+no navegador, mais um teste na janela SSH.
+
+### 6.1 Ativar a API
+
+1. Abra https://console.cloud.google.com/apis/library/vision.googleapis.com
+   e confira, no seletor do alto da página, se o projeto é o da máquina
+   `devolutiva`.
+2. Clique em **Ativar**. Se aparecer um pedido de faturamento, vincule a mesma
+   conta de faturamento da máquina: as primeiras 1.000 páginas por mês são
+   gratuitas.
+
+### 6.2 Criar a chave
+
+1. Abra https://console.cloud.google.com/apis/credentials (mesmo projeto).
+2. Clique em **Criar credenciais > Chave de API**. A chave aparece numa
+   janela; ainda não copie, clique em **Editar chave de API** (ou feche e
+   clique no nome da chave na lista).
+3. Em **Nome**, escreva `devolutiva-vision`.
+4. Em **Restrições do aplicativo**, escolha **Endereços IP** e adicione o IP
+   fixo da máquina, o mesmo do endereço do site (por exemplo, `34.39.228.173`).
+5. Em **Restrições de API**, escolha **Restringir chave**, abra a lista, marque
+   só **Cloud Vision API** e clique em **OK**.
+6. Clique em **Salvar**. As restrições levam alguns minutos para valer.
+
+Com as duas restrições, mesmo que a chave vaze, ela só funciona a partir do
+servidor e só para o Vision. Nunca cole a chave em conversas, prints, e-mails
+ou no GitHub.
+
+### 6.3 Colocar a chave no servidor
+
+1. Na lista de credenciais, clique em **Mostrar chave** e copie.
+2. Na janela SSH da máquina:
+
+   ```
+   sudo nano /opt/devolutiva/.env
+   ```
+
+3. Vá até o fim do arquivo e acrescente uma linha, sem espaços e sem aspas:
+
+   ```
+   GOOGLE_VISION_API_KEY=cole-a-chave-aqui
+   ```
+
+   Aproveite para conferir `LIMITE_CHAMADAS_DIA`: uma turma de 40 alunos com
+   duas discursivas são 80 correções. Para corrigir a turma num dia, use por
+   exemplo `LIMITE_CHAMADAS_DIA=150`.
+4. Salve com `Ctrl+O`, `Enter`, e saia com `Ctrl+X`.
+5. Reinicie a aplicação:
+
+   ```
+   sudo systemctl restart devolutiva
+   ```
+
+### 6.4 Testar
+
+```
+cd /opt/devolutiva && sudo -u devolutiva .venv/bin/python -m scripts.teste_vision
+```
+
+O teste envia uma imagem com uma frase e mostra o que foi lido. Se der certo,
+aparece `Funcionou` e a frase lida. Se der errado, a mensagem diz o que
+conferir:
+
+| Mensagem | O que fazer |
+|---|---|
+| `GOOGLE_VISION_API_KEY não está no .env` | Repita o 6.3 e confira se a linha não tem espaço antes do `=` |
+| `a chave está errada ou foi apagada` | Copie a chave de novo, sem espaços no começo ou no fim |
+| `a Cloud Vision API não está ativada` | Repita o 6.1 e espere alguns minutos |
+| `a chave não tem permissão para a Cloud Vision API` | No 6.2, marque Cloud Vision API em Restrições de API |
+| `a chave está restrita a outro endereço IP` | No 6.2, confira o IP fixo da máquina |
+| `o faturamento do projeto não está ativo` | Vincule a conta de faturamento ao projeto |
+
+Depois do teste, a página **Folhas digitalizadas** de qualquer atividade deixa
+de mostrar o aviso vermelho de que a leitura da escrita está desligada.
+
+### Para testar no seu computador
+
+A chave do servidor não funciona fora dele, por causa da restrição de IP.
+Para testar no computador, crie uma segunda chave, com a restrição de API mas
+sem a de IP, coloque no `.env` local e apague essa chave quando terminar.
+
 ## Dia a dia
 
 | Para | Comando, na janela SSH |
@@ -108,6 +194,7 @@ sobreviva à perda do disco, programe snapshots diários:
 | Ver os erros mais recentes | `sudo journalctl -u devolutiva -n 50` |
 | Fazer uma cópia do banco agora | `sudo systemctl start devolutiva-copia` |
 | Listar as cópias | `ls -lh /var/backups/devolutiva` |
+| Testar a chave do Google Cloud Vision | `cd /opt/devolutiva && sudo -u devolutiva .venv/bin/python -m scripts.teste_vision` |
 | Gerar senha provisória para quem esqueceu | `cd /opt/devolutiva && sudo -u devolutiva .venv/bin/python -m scripts.redefinir_senha --email voce@exemplo.com` |
 | Baixar o banco para o computador | `sudo cp /opt/devolutiva/tcc.db ~ && sudo chown $USER ~/tcc.db`, depois a engrenagem da janela SSH, **Fazer download de arquivo**, `tcc.db` |
 
@@ -117,6 +204,11 @@ O `atualizar.sh` faz uma cópia do banco antes de qualquer mudança.
 
 - A máquina e o IP fixo são cobrados enquanto existirem, mesmo desligados
   (a máquina desligada cobra só o disco e o IP). Os créditos cobrem esses custos.
+- O Google Cloud Vision cobra por página lida (uma chamada por página com
+  discursivas); as primeiras 1.000 por mês são gratuitas. Confira os valores
+  atuais em cloud.google.com/vision/pricing.
+- As folhas digitalizadas ficam em `/opt/devolutiva/arquivos` e não entram na
+  cópia diária do banco; o snapshot do disco as inclui.
 - As chamadas ao modelo são cobradas pela OpenAI, à parte. O limite diário por
   pessoa (`LIMITE_CHAMADAS_DIA` no `.env`) evita gastos inesperados.
 - Para encerrar tudo depois do TCC: apague a instância, o disco, o IP

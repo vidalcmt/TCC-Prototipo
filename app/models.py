@@ -123,11 +123,16 @@ class RespostaEsperada(Base):
 
 class Submissao(Base):
     __tablename__ = "submissao"
+    # Numa folha de respostas, cada questão tem no máximo uma resposta.
+    __table_args__ = (UniqueConstraint("folha_id", "questao_id", name="uq_submissao_folha_questao"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     questao_id: Mapped[int] = mapped_column(ForeignKey("questao.id"))
     resposta_aluno: Mapped[str | None] = mapped_column(Text)
+    # Objetivas: a letra marcada; vazio é em branco e "*" é mais de uma marcada.
     alternativa_escolhida: Mapped[str | None] = mapped_column(String(1))
+    # Folha de respostas de onde veio a resposta; vazio nas respostas do corpus.
+    folha_id: Mapped[int | None] = mapped_column(ForeignKey("folha.id", name="fk_submissao_folha"))
     # Identificador anônimo da resposta no corpus (ex.: "R014") e sua origem
     # ("autor", "voluntario", "especialista"), usada como variável de análise.
     codigo_corpus: Mapped[str | None] = mapped_column(String(50))
@@ -139,6 +144,7 @@ class Submissao(Base):
     respostas_itens: Mapped[list["RespostaItem"]] = relationship(
         cascade="all, delete-orphan", order_by="RespostaItem.id"
     )
+    folha: Mapped["Folha | None"] = relationship(back_populates="respostas")
 
     def resposta_do_item(self, letra: str) -> str:
         for r in self.respostas_itens:
@@ -244,6 +250,10 @@ class Atividade(Base):
     # Fica gravado porque a leitura das folhas digitalizadas precisa do mesmo
     # layout com que elas foram impressas.
     linhas_por_resposta: Mapped[int] = mapped_column(Integer, default=8, server_default="8")
+    # Pontos de cada objetiva certa. As discursivas valem a nota máxima da questão.
+    valor_objetiva: Mapped[float] = mapped_column(Float, default=1.0, server_default="1")
+    # Quando o professor liberou os resultados para os alunos; vazio enquanto não liberou.
+    resultados_liberados_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     itens: Mapped[list["AtividadeQuestao"]] = relationship(
         back_populates="atividade", cascade="all, delete-orphan", order_by="AtividadeQuestao.ordem"
@@ -287,3 +297,63 @@ class Folha(Base):
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
 
     atividade: Mapped[Atividade] = relationship(back_populates="folhas")
+    respostas: Mapped[list[Submissao]] = relationship(back_populates="folha")
+    digitalizacoes: Mapped[list["PaginaDigitalizada"]] = relationship(
+        back_populates="folha", order_by="PaginaDigitalizada.pagina"
+    )
+
+
+class PaginaDigitalizada(Base):
+    """Uma página de folha de respostas digitalizada e enviada pelo professor.
+
+    A folha e a página são identificadas pelo QR code. Quando o QR code não é
+    lido, a página fica sem folha até o professor indicar qual é. A imagem
+    fica em disco, na pasta de arquivos do sistema, e não no banco.
+    """
+
+    __tablename__ = "pagina_digitalizada"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    atividade_id: Mapped[int] = mapped_column(ForeignKey("atividade.id", name="fk_pagina_digitalizada_atividade"))
+    folha_id: Mapped[int | None] = mapped_column(ForeignKey("folha.id", name="fk_pagina_digitalizada_folha"))
+    pagina: Mapped[int | None] = mapped_column(Integer)          # página da folha (1, 2...)
+    arquivo: Mapped[str] = mapped_column(String(300))            # caminho relativo à pasta de arquivos
+    nome_original: Mapped[str] = mapped_column(String(300))      # nome do arquivo enviado
+    pagina_do_arquivo: Mapped[int] = mapped_column(Integer)      # posição no PDF enviado (1 para imagens)
+    # "identificada", "sem_qr", "outra_atividade" ou "substituida" (uma mais nova ocupou o lugar)
+    situacao: Mapped[str] = mapped_column(String(30))
+    usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuario.id", name="fk_pagina_digitalizada_usuario"))
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+
+    folha: Mapped["Folha | None"] = relationship(back_populates="digitalizacoes")
+    leitura: Mapped["LeituraPagina | None"] = relationship(
+        back_populates="pagina_digitalizada", cascade="all, delete-orphan", uselist=False
+    )
+
+
+class LeituraPagina(Base):
+    """Leitura automática de uma página digitalizada: bolinhas e escrita.
+
+    Guarda o que foi lido antes da conferência do professor. Comparar com as
+    respostas depois de conferidas mede a taxa de acerto da leitura, que é um
+    dado da pesquisa (scripts/medir_leitura.py).
+    """
+
+    __tablename__ = "leitura_pagina"
+    __table_args__ = (UniqueConstraint("pagina_digitalizada_id", name="uq_leitura_pagina"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    pagina_digitalizada_id: Mapped[int] = mapped_column(
+        ForeignKey("pagina_digitalizada.id", name="fk_leitura_pagina_digitalizada"))
+    situacao: Mapped[str] = mapped_column(String(20))           # "lida" ou "falha"
+    motivo: Mapped[str | None] = mapped_column(Text)           # falha do alinhamento ou da transcrição
+    arquivo_alinhado: Mapped[str | None] = mapped_column(String(300))
+    # {"objetivas": {questao_id: {"marcada", "duvida", "preenchimento"}}, "textos": {campo: texto}}
+    resultado_json: Mapped[str] = mapped_column(Text, default="{}")
+    servico_ocr: Mapped[str | None] = mapped_column(String(50))  # vazio quando a escrita não foi enviada
+    latencia_ocr_ms: Mapped[float | None] = mapped_column(Float)
+    conferida_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuario.id", name="fk_leitura_pagina_usuario"))
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+
+    pagina_digitalizada: Mapped[PaginaDigitalizada] = relationship(back_populates="leitura")

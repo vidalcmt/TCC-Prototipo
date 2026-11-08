@@ -49,7 +49,7 @@ def test_bloqueio_apos_tentativas_e_liberacao_depois_da_janela():
 
 # ---------- toda rota exige login ----------
 
-PUBLICAS = {"/entrar", "/sair", "/saude"}
+PUBLICAS = {"/entrar", "/sair", "/saude", "/resultado", "/r/{codigo}"}
 
 
 def _rotas():
