@@ -3,6 +3,7 @@
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -79,7 +80,9 @@ async def enviar(request: Request, atividade_id: int, sessao: Session = Depends(
     if not arquivos:
         return _voltar(atividade, "Escolha ao menos um arquivo.")
     try:
-        resumo = receber(sessao, atividade, arquivos, request.state.usuario.id)
+        # A conversão e a leitura do QR code ocupam o processador por alguns segundos por página;
+        # fora do laço de eventos, o resto do site continua respondendo enquanto isso.
+        resumo = await run_in_threadpool(receber, sessao, atividade, arquivos, request.state.usuario.id)
     except DigitalizacaoInvalida as erro:
         return _voltar(atividade, str(erro))
     return _voltar(atividade, resumo.texto())
