@@ -170,3 +170,24 @@ def test_atividade_com_digitalizacoes_nao_e_excluida_nem_descarta_folhas(fabrica
     assert "não podem ser descartadas" in cliente_web.post(f"/atividades/{p['atividade']}/folhas/descartar").text
     with fabrica_sessao() as s:
         assert s.get(Atividade, p["atividade"]) is not None
+
+
+def test_pdf_de_celular_com_pagina_enorme_e_reduzido(fabrica_sessao, cliente_web, prova, pasta):
+    """Aplicativos de digitalização gravam a página do tamanho da foto, em pontos."""
+    p = prova
+    documento = pymupdf.open()
+    pagina = documento.new_page(width=3000, height=4200)  # mais de um metro de altura
+    pagina.insert_image(pagina.rect, stream=cv2.imencode(".png", folha_sintetica(L.conteudo_qr(p["codigos"][0], 1)))[1].tobytes())
+    r = _enviar(cliente_web, p, ("celular.pdf", documento.tobytes()))
+    assert "1 identificadas pelo QR code" in r.text
+    with fabrica_sessao() as s:
+        imagem = cv2.imread(str(pasta / s.query(PaginaDigitalizada).one().arquivo), cv2.IMREAD_GRAYSCALE)
+    assert max(imagem.shape) == 3000
+
+
+def test_paginas_do_pdf_saem_uma_de_cada_vez():
+    from app.digitalizacao.servico import imagens_do_arquivo
+    paginas = imagens_do_arquivo("a.pdf", _pdf(folha_sintetica(None), folha_sintetica(None)))
+    assert not isinstance(paginas, list)
+    formatos = [img.shape for img in paginas]
+    assert len(formatos) == 2 and all(h == 2339 and abs(w - 1654) <= 1 for h, w in formatos)  # A4 a 200 dpi

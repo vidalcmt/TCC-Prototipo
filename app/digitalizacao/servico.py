@@ -8,6 +8,7 @@ feita depois, em outra etapa.
 """
 
 import uuid
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -68,8 +69,25 @@ class ResumoEnvio:
 # Imagens
 # ---------------------------------------------------------------------------
 
-def imagens_do_arquivo(nome: str, conteudo: bytes) -> list[np.ndarray]:
-    """Páginas do arquivo como imagens em tons de cinza."""
+def _reduzir(imagem: np.ndarray) -> np.ndarray:
+    maior = max(imagem.shape)
+    if maior <= LADO_MAXIMO:
+        return imagem
+    escala = LADO_MAXIMO / maior
+    return cv2.resize(imagem, None, fx=escala, fy=escala, interpolation=cv2.INTER_AREA)
+
+
+def imagens_do_arquivo(nome: str, conteudo: bytes) -> Iterator[np.ndarray]:
+    """Páginas do arquivo como imagens em tons de cinza, uma de cada vez.
+
+    As páginas são entregues uma a uma para que só uma imagem fique na memória
+    por vez: o servidor tem 2 GB, e um PDF de turma inteira pode ter dezenas de
+    páginas. O tamanho também é limitado. Aplicativos de digitalização do
+    celular costumam gravar o PDF com a página do tamanho da foto, em pontos
+    (por exemplo, 4000 por 3000, mais de um metro de lado); convertida a
+    200 dpi, uma página dessas teria mais de 100 milhões de pixels. Por isso a
+    escala da conversão é reduzida até o lado maior caber em LADO_MAXIMO.
+    """
     extensao = Path(nome).suffix.lower()
     if extensao not in EXTENSOES:
         raise DigitalizacaoInvalida(f"{nome}: envie PDF, PNG ou JPG")
@@ -80,19 +98,22 @@ def imagens_do_arquivo(nome: str, conteudo: bytes) -> list[np.ndarray]:
             raise DigitalizacaoInvalida(f"{nome}: o PDF não pôde ser aberto")
         if documento.page_count > MAXIMO_PAGINAS:
             raise DigitalizacaoInvalida(f"{nome}: mais de {MAXIMO_PAGINAS} páginas; divida o arquivo")
-        imagens = []
-        for pagina in documento:
-            pixels = pagina.get_pixmap(dpi=DPI, colorspace=pymupdf.csGRAY)
-            imagens.append(np.frombuffer(pixels.samples, dtype=np.uint8).reshape(pixels.h, pixels.w).copy())
-        return imagens
+        return _paginas_do_pdf(documento)
     imagem = cv2.imdecode(np.frombuffer(conteudo, dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
     if imagem is None:
         raise DigitalizacaoInvalida(f"{nome}: a imagem não pôde ser aberta")
-    maior = max(imagem.shape)
-    if maior > LADO_MAXIMO:
-        escala = LADO_MAXIMO / maior
-        imagem = cv2.resize(imagem, None, fx=escala, fy=escala, interpolation=cv2.INTER_AREA)
-    return [imagem]
+    return iter([_reduzir(imagem)])
+
+
+def _paginas_do_pdf(documento) -> Iterator[np.ndarray]:
+    with documento:
+        for pagina in documento:
+            lado_pt = max(pagina.rect.width, pagina.rect.height) or 1
+            zoom = min(DPI / 72, LADO_MAXIMO / lado_pt)
+            pixels = pagina.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), colorspace=pymupdf.csGRAY)
+            imagem = np.frombuffer(pixels.samples, dtype=np.uint8).reshape(pixels.h, pixels.w).copy()
+            del pixels
+            yield imagem
 
 
 def ler_qr_da_imagem(imagem: np.ndarray) -> tuple[str, int] | None:
