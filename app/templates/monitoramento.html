@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block titulo %}Monitoramento{% endblock %}
+{% macro ms(valor) %}{% if valor is none %}-{% elif valor >= 1000 %}{{ (valor / 1000)|round(1)|num }} s{% else %}{{ valor|round|int }} ms{% endif %}{% endmacro %}
+{% macro bytes(valor) %}{% if valor is none %}-{% elif valor >= 1073741824 %}{{ (valor / 1073741824)|round(1)|num }} GB{% else %}{{ (valor / 1048576)|round|int }} MB{% endif %}{% endmacro %}
+{% macro barras(id, titulo, valores, maior, formato, rotulos) %}
+{# Gráfico de barras simples em SVG. Cada barra tem um título, que o navegador mostra ao passar o mouse. #}
+{% set n = valores|length %}{% set largura = 720 %}{% set altura = 140 %}{% set passo = largura / (n if n else 1) %}
+<figure class="grafico" aria-labelledby="{{ id }}-titulo">
+  <figcaption id="{{ id }}-titulo">{{ titulo }}</figcaption>
+  <svg viewBox="0 0 {{ largura }} {{ altura + 22 }}" role="img" aria-label="{{ titulo }}">
+    <line class="eixo" x1="0" y1="{{ altura }}" x2="{{ largura }}" y2="{{ altura }}"/>
+    {% for v in valores %}
+    {% set h = ((v or 0) / maior * (altura - 8)) if maior else 0 %}
+    <g class="barra">
+      <rect class="alvo" x="{{ loop.index0 * passo }}" y="0" width="{{ passo }}" height="{{ altura }}"><title>{{ rotulos[loop.index0] }}: {{ formato(v) }}</title></rect>
+      {% if h > 0 %}<rect class="valor" x="{{ loop.index0 * passo + 1 }}" y="{{ altura - h }}" width="{{ [passo - 2, 1]|max }}" height="{{ h }}" rx="{{ [2, (passo - 2) / 2]|min }}"><title>{{ rotulos[loop.index0] }}: {{ formato(v) }}</title></rect>{% endif %}
+    </g>
+    {% endfor %}
+    {% for k in [0, n // 2, n - 1] if n %}<text class="rotulo-eixo" x="{{ k * passo + passo / 2 }}" y="{{ altura + 16 }}" text-anchor="middle">{{ rotulos[k] }}</text>{% endfor %}
+  </svg>
+  <div class="discreto">Maior valor: {{ formato(maior) }}</div>
+</figure>
+{% endmacro %}
+{% macro contagem(v) %}{{ v or 0 }} {{ "requisição" if v == 1 else "requisições" }}{% endmacro %}
+{% block conteudo %}
+{% set p = painel %}
+<div class="cabecalho-pagina">
+  <div>
+    <h1>Monitoramento</h1>
+    <p class="resumo">Tempo de resposta do site, erros, serviços externos e o estado do servidor. {{ p.rotulo_periodo }}.</p>
+  </div>
+  <nav class="acoes" aria-label="Período">
+    {% for chave, (rotulo, _, _) in periodos.items() %}
+    <a class="botao{% if chave != p.periodo %} contorno{% endif %} pequeno" href="?periodo={{ chave }}"{% if chave == p.periodo %} aria-current="page"{% endif %}>{{ chave }}</a>
+    {% endfor %}
+  </nav>
+</div>
+
+<div class="numeros-resultados">
+  <div><strong>{{ p.geral.total }}</strong> requisições</div>
+  <div><strong>{{ ms(p.geral.p50) }}</strong> tempo mediano</div>
+  <div><strong>{{ ms(p.geral.p95) }}</strong> 95% respondem em até</div>
+  <div><strong>{{ p.lentas }}</strong> lentas (acima de {{ ms(lenta_ms) }})</div>
+  <div><strong>{{ p.geral.erros }}</strong> erros do servidor{% if p.geral.taxa_erro %} ({{ (p.geral.taxa_erro * 100)|round(1)|num }}%){% endif %}</div>
+</div>
+<p class="discreto">Tempo mediano: metade das requisições responde mais rápido que isso. "95% respondem em até" é o percentil 95, que mostra o que os mais lentos sentem sem ser puxado por um único caso extremo. Erros do servidor são as respostas com código 500 ou mais.</p>
+
+{% if lotes %}
+<div class="aviso aviso-info" role="status">Rodando agora: {% for l in lotes %}{{ l.tipo }} em "{{ l.atividade }}" ({{ l.feitas }} de {{ l.total }}){% if not loop.last %}; {% endif %}{% endfor %}.</div>
+{% endif %}
+
+<h2>Ao longo do período</h2>
+{% set rotulos = p.intervalos|map(attribute="rotulo")|list %}
+<div class="graficos">
+  {{ barras("g-total", "Requisições por intervalo", p.intervalos|map(attribute="total")|list, maior_total, contagem, rotulos) }}
+  {{ barras("g-p95", "Tempo de resposta (percentil 95) por intervalo", p.intervalos|map(attribute="p95")|list, maior_p95, ms, rotulos) }}
+</div>
+
+<h2>Por rota</h2>
+{% if p.por_rota %}
+<div class="rolagem">
+<table>
+  <tr><th>Rota</th><th>Requisições</th><th>Mediana</th><th>Percentil 95</th><th>Máximo</th><th>Erros</th></tr>
+  {% for nome, e in p.por_rota %}
+  <tr>
+    <td><code>{{ nome }}</code></td><td>{{ e.total }}</td><td class="sem-quebra">{{ ms(e.p50) }}</td>
+    <td class="sem-quebra">{% if e.p95 and e.p95 >= lenta_ms %}<strong>{{ ms(e.p95) }}</strong>{% else %}{{ ms(e.p95) }}{% endif %}</td>
+    <td class="sem-quebra">{{ ms(e.maximo) }}</td><td>{{ e.erros or "" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+<p class="discreto">Ordenadas da mais lenta para a mais rápida. As rotas aparecem como estão no código: <code>{codigo}</code> no lugar do código de um aluno, por exemplo. O endereço real nunca é gravado.</p>
+{% else %}
+<p class="pilha-vazia">Nenhuma requisição registrada neste período.</p>
+{% endif %}
+
+<h2>Serviços externos</h2>
+<div class="rolagem">
+<table>
+  <tr><th>Serviço</th><th>Chamadas</th><th>Mediana</th><th>Percentil 95</th><th>Máximo</th><th>Falhas</th></tr>
+  {% for nome, e in p.modelo %}
+  <tr><td>Modelo de linguagem (OpenAI), {{ nome|lower }}</td><td>{{ e.total }}</td><td>{{ ms(e.p50) }}</td><td>{{ ms(e.p95) }}</td><td>{{ ms(e.maximo) }}</td><td>{{ e.erros or "" }}</td></tr>
+  {% else %}
+  <tr><td>Modelo de linguagem (OpenAI)</td><td>0</td><td>-</td><td>-</td><td>-</td><td></td></tr>
+  {% endfor %}
+  <tr><td>Leitura da escrita (Google Cloud Vision)</td><td>{{ p.vision.total }}</td><td>{{ ms(p.vision.p50) }}</td><td>{{ ms(p.vision.p95) }}</td><td>{{ ms(p.vision.maximo) }}</td><td>{{ p.leituras_com_falha or "" }}</td></tr>
+</table>
+</div>
+<p class="discreto">Os tempos das chamadas ao modelo contam só as que deram certo; o detalhe de cada uma está em <a href="/metricas">Métricas</a>. Na leitura, as falhas são páginas que não puderam ser lidas, por qualquer motivo.</p>
+
+<h2>Servidor</h2>
+{% set s = p.servidor %}
+<div class="numeros-resultados">
+  <div><strong>{% if s.memoria_uso is defined %}{{ (s.memoria_uso * 100)|round|int }}%{% else %}-{% endif %}</strong> memória em uso{% if s.memoria_total %} de {{ bytes(s.memoria_total) }}{% endif %}</div>
+  <div><strong>{{ bytes(s.memoria_processo) }}</strong> usados pelo sistema</div>
+  <div><strong>{% if s.swap_total %}{{ bytes(s.swap_total - s.swap_livre) }}{% else %}sem{% endif %}</strong> swap{% if s.swap_total %} em uso de {{ bytes(s.swap_total) }}{% endif %}</div>
+  <div><strong>{% if s.disco_uso is not none %}{{ (s.disco_uso * 100)|round|int }}%{% else %}-{% endif %}</strong> disco em uso ({{ bytes(s.disco_livre) }} livres)</div>
+  <div><strong>{{ bytes(s.banco) }}</strong> banco · <strong>{{ bytes(s.arquivos) }}</strong> digitalizações</div>
+</div>
+<p class="discreto">No ar desde {{ s.no_ar_desde|data_local }}. A memória vem do sistema operacional no momento em que a página abriu. Para acompanhar a memória ao longo do tempo e receber alertas, use o Cloud Monitoring (guia de publicação, seção 7).</p>
+
+<h2>Mais lentas</h2>
+{% if p.mais_lentas %}
+<div class="rolagem">
+<table>
+  <tr><th>Quando</th><th>Rota</th><th>Status</th><th>Duração</th></tr>
+  {% for r in p.mais_lentas %}<tr><td class="sem-quebra">{{ r.criado_em|data_local("%d/%m %H:%M:%S") }}</td><td><code>{{ r.metodo }} {{ r.rota }}</code></td><td>{{ r.status }}</td><td class="sem-quebra">{{ ms(r.duracao_ms) }}</td></tr>{% endfor %}
+</table>
+</div>
+{% else %}<p class="discreto">Nenhuma.</p>{% endif %}
+
+<h2>Erros recentes do servidor</h2>
+{% if p.erros_recentes %}
+<div class="rolagem">
+<table>
+  <tr><th>Quando</th><th>Rota</th><th>Status</th><th>Duração</th></tr>
+  {% for r in p.erros_recentes %}<tr><td class="sem-quebra">{{ r.criado_em|data_local("%d/%m %H:%M:%S") }}</td><td><code>{{ r.metodo }} {{ r.rota }}</code></td><td>{{ r.status }}</td><td class="sem-quebra">{{ ms(r.duracao_ms) }}</td></tr>{% endfor %}
+</table>
+</div>
+<p class="discreto">O detalhe do erro fica no log do servidor: <code>sudo journalctl -u devolutiva -n 100</code>. Um erro 502 não aparece aqui, porque acontece quando o sistema não está respondendo; ele fica no log do Caddy e no Cloud Monitoring.</p>
+{% else %}<p class="discreto">Nenhum erro do servidor neste período.</p>{% endif %}
+
+<p><a href="/monitoramento/requisicoes.csv">Exportar as requisições em CSV</a> (até 30 dias)</p>
+{% endblock %}
