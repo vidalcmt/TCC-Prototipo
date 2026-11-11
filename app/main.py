@@ -18,6 +18,8 @@ from app.digitalizacao.router import router as router_digitalizacao
 from app.inicio import router as router_inicio
 from app.leitura.router import router as router_leitura
 from app.metricas.router import router as router_metricas
+from app.monitoramento.medidor import MedidorDeRequisicoes
+from app.monitoramento.router import router as router_monitoramento
 from app.questoes.discursivas import router as router_discursivas
 from app.questoes.router import router as router_questoes
 from app.resultados.router import router as router_resultados
@@ -37,6 +39,8 @@ app.add_middleware(
     same_site="lax",           # o cookie não acompanha formulários enviados por outros sites
     https_only=config.cookie_seguro,
 )
+# Fica por fora de tudo, para medir o tempo total de cada requisição (app/monitoramento/medidor.py).
+app.add_middleware(MedidorDeRequisicoes)
 app.mount("/static", StaticFiles(directory=RAIZ / "app" / "static"), name="static")
 
 # Rotas públicas: entrar e sair. Todo o resto exige login.
@@ -58,6 +62,7 @@ app.include_router(router_resultados, dependencies=login)
 app.include_router(router_digitalizacao, dependencies=login)
 app.include_router(router_leitura, dependencies=login)
 app.include_router(router_metricas, dependencies=[Depends(exigir_admin)])
+app.include_router(router_monitoramento, dependencies=[Depends(exigir_admin)])
 
 
 @app.get("/saude")
