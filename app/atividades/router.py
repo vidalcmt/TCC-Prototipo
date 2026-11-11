@@ -255,16 +255,20 @@ def descartar(atividade_id: int, sessao: Session = Depends(obter_sessao)):
 
 
 @router.get("/{atividade_id}/folhas/imprimir", response_class=HTMLResponse)
-def imprimir_folhas(request: Request, atividade_id: int, folha: int | None = None,
+def imprimir_folhas(request: Request, atividade_id: int, folha: int | None = None, so_marcas: bool = False,
                     sessao: Session = Depends(obter_sessao)):
-    """Folhas de resposta em A4, uma por aluno, com o layout de app/folhas/layout.py."""
+    """Folhas de resposta em A4, uma por aluno, com o layout de app/folhas/layout.py.
+
+    Com `so_marcas`, imprime só as quatro marcas dos cantos de cada página, para
+    passar de novo na impressora folhas já preenchidas que saíram sem elas.
+    """
     atividade = _buscar(sessao, atividade_id)
     folhas = [f for f in atividade.folhas if folha is None or f.id == folha]
     if not folhas:
         raise HTTPException(status_code=404, detail="Nenhuma folha de resposta gerada.")
     paginas = L.montar(atividade, atividade.linhas_por_resposta)
     return templates.TemplateResponse(request, "folhas_impressao.html", {
-        "atividade": atividade, "folhas": folhas, "paginas": paginas, "L": L,
+        "atividade": atividade, "folhas": folhas, "paginas": paginas, "L": L, "so_marcas": so_marcas,
         "qr": lambda codigo, pagina: qr_svg(L.conteudo_qr(codigo, pagina)),
         "endereco": str(request.base_url).rstrip("/") + "/resultado",
         # QR do canhoto: abre direto a página do aluno, já com o código

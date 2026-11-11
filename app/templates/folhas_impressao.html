@@ -14,13 +14,21 @@
 <div class="controles">
   <a href="/atividades/{{ atividade.id }}#folhas">&larr; Voltar</a>
   <button type="button" onclick="window.print()">Imprimir ou salvar em PDF</button>
-  <span class="dica">Na janela de impressão: papel A4, escala 100% (ou "Tamanho real") e margens "Nenhuma". {{ folhas|length }} {{ "folha" if folhas|length == 1 else "folhas" }}, {{ paginas|length }} {{ "página" if paginas|length == 1 else "páginas" }} cada.</span>
+  {% if so_marcas %}
+  <span class="dica"><strong>Só as marcas dos cantos</strong>, para imprimir por cima de folhas já preenchidas que saíram sem elas. Coloque as folhas na impressora na mesma ordem ({{ folhas|length }} {{ "folha" if folhas|length == 1 else "folhas" }}, {{ paginas|length }} {{ "página" if paginas|length == 1 else "páginas" }} cada) e na mesma posição da primeira impressão. Papel A4, escala 100% e margens "Nenhuma".</span>
+  {% else %}
+  <span class="dica">Na janela de impressão: papel A4, escala 100% (ou "Tamanho real"), margens "Nenhuma" e "Cabeçalhos e rodapés" desmarcado. {{ folhas|length }} {{ "folha" if folhas|length == 1 else "folhas" }}, {{ paginas|length }} {{ "página" if paginas|length == 1 else "páginas" }} cada.</span>
+  {% endif %}
 </div>
 
 {% for folha in folhas %}
 {% for pagina in paginas %}
 <section class="pagina">
-  {% for x, y in L.MARCAS %}<div class="marca" style="left: {{ x }}mm; top: {{ y }}mm; width: {{ L.MARCA }}mm; height: {{ L.MARCA }}mm"></div>{% endfor %}
+  {# As marcas são desenhadas em SVG, e não como fundo preto de um bloco: o
+     navegador não imprime cores de fundo se a opção "Gráficos de fundo"
+     estiver desmarcada, e foi assim que folhas saíram sem as marcas. #}
+  {% for x, y in L.MARCAS %}<svg class="marca" style="left: {{ x }}mm; top: {{ y }}mm; width: {{ L.MARCA }}mm; height: {{ L.MARCA }}mm" viewBox="0 0 10 10" aria-hidden="true"><rect width="10" height="10" fill="#000"/></svg>{% endfor %}
+  {% if not so_marcas %}
 
   <div class="cabecalho" style="left: 24mm; top: 12mm; width: 132mm">
     <div class="titulo">{{ atividade.titulo }}</div>
@@ -50,6 +58,7 @@
     <div>Para ver a sua nota e o feedback, aponte a câmera para o QR code ao lado ou acesse {{ endereco }} e digite o código.</div>
   </div>
   <div class="qr qr-canhoto" style="left: {{ L.QR_CANHOTO_X }}mm; top: {{ L.CANHOTO_Y }}mm; width: {{ L.QR_CANHOTO_LADO }}mm; height: {{ L.QR_CANHOTO_LADO }}mm">{{ qr_link(folha.codigo)|safe }}</div>
+  {% endif %}
   {% endif %}
 </section>
 {% endfor %}

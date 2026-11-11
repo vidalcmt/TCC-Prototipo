@@ -95,6 +95,7 @@
   </table>
   </div>
 </details>
+<p class="discreto">Folhas impressas sem os quadrados pretos dos cantos? Dá para <a href="/atividades/{{ atividade.id }}/folhas/imprimir?so_marcas=1" target="_blank" rel="noopener">imprimir só as marcas</a> por cima delas, mesmo já preenchidas.</p>
 <p class="discreto">Linhas por resposta discursiva: {{ atividade.linhas_por_resposta }}.{% if com_respostas %} As folhas não podem mais ser descartadas, porque já há respostas registradas.{% endif %}</p>
 {% endif %}
 <form class="filtros" method="post" action="/atividades/{{ atividade.id }}/folhas">
