@@ -20,13 +20,15 @@ import httpx
 import numpy as np
 
 from app.config import config
+from app.folhas.layout import LINHA_RESPOSTA
 from app.leitura.alinhamento import ESCALA
 
 ENDERECO = "https://vision.googleapis.com/v1/images:annotate"
 SERVICO = "google-cloud-vision"
 MARGEM_CAIXA = 2.5  # mm: a letra costuma passar um pouco da borda da caixa
+# Resolução da página enviada ao serviço: cerca de 300 dpi, o padrão de digitalização para texto.
+ESCALA_OCR = 12.0
 
-QUEBRAS = {"SPACE": " ", "SURE_SPACE": " ", "EOL_SURE_SPACE": "\n", "LINE_BREAK": "\n", "HYPHEN": "-\n"}
 
 
 class OcrIndisponivel(Exception):
@@ -96,8 +98,8 @@ def explicar_erro(status: int, mensagem: str) -> str:
     return f"O Google Cloud Vision recusou o pedido (HTTP {status}): {mensagem}".strip()
 
 
-def palavras(anotacao: dict) -> list[tuple[str, float, float]]:
-    """Palavras em ordem de leitura, com a quebra que vem depois e o centro em milímetros."""
+def palavras(anotacao: dict, escala: float = ESCALA) -> list[tuple[str, str, float, float]]:
+    """Palavras com a quebra que o serviço detectou depois delas e o centro, em milímetros."""
     saida = []
     for pagina in anotacao.get("pages", []):
         for bloco in pagina.get("blocks", []):
@@ -105,15 +107,13 @@ def palavras(anotacao: dict) -> list[tuple[str, float, float]]:
                 for palavra in paragrafo.get("words", []):
                     simbolos = palavra.get("symbols", [])
                     texto = "".join(s.get("text", "") for s in simbolos)
-                    if not texto:
+                    vertices = (palavra.get("boundingBox") or {}).get("vertices", [])
+                    if not texto or not vertices:
                         continue
                     quebra = ((simbolos[-1].get("property") or {}).get("detectedBreak") or {}).get("type", "")
-                    vertices = (palavra.get("boundingBox") or {}).get("vertices", [])
-                    if not vertices:
-                        continue
-                    cx = sum(v.get("x", 0) for v in vertices) / len(vertices) / ESCALA
-                    cy = sum(v.get("y", 0) for v in vertices) / len(vertices) / ESCALA
-                    saida.append((texto + QUEBRAS.get(quebra, ""), cx, cy))
+                    cx = sum(v.get("x", 0) for v in vertices) / len(vertices) / escala
+                    cy = sum(v.get("y", 0) for v in vertices) / len(vertices) / escala
+                    saida.append((texto, quebra, cx, cy))
     return saida
 
 
@@ -122,18 +122,42 @@ def campo_da_caixa(caixa) -> str:
     return f"q{caixa.questao_id}" if caixa.item is None else f"q{caixa.questao_id}_{caixa.item}"
 
 
-def textos_por_caixa(anotacao: dict, caixas: list) -> dict[str, str]:
-    textos = {campo_da_caixa(c): "" for c in caixas}
-    for texto, x, y in palavras(anotacao):
+PONTUACAO_COLADA_ANTES = set(".,;:!?)]}%")
+PONTUACAO_COLADA_DEPOIS = set("([{")
+
+
+def textos_por_caixa(anotacao: dict, caixas: list, escala: float = ESCALA) -> dict[str, str]:
+    """O texto de cada caixa, montado linha por linha pela pauta impressa.
+
+    O serviço agrupa as palavras em blocos e parágrafos pela aparência, e com
+    letra à mão esse agrupamento costuma sair errado: um pedaço da terceira
+    linha vem antes da primeira, ou uma coluna de palavras vira um parágrafo.
+    Por isso a ordem do serviço é descartada. A caixa tem linhas a cada 8 mm,
+    em posição conhecida; cada palavra vai para a linha da pauta em que está o
+    seu centro, e as palavras de uma linha são lidas da esquerda para a direita.
+    """
+    por_caixa: dict[str, list] = {campo_da_caixa(c): [] for c in caixas}
+    for texto, quebra, x, y in palavras(anotacao, escala):
         for c in caixas:
             if (c.x - MARGEM_CAIXA <= x <= c.x + c.largura + MARGEM_CAIXA
                     and c.y - MARGEM_CAIXA <= y <= c.y + c.altura + MARGEM_CAIXA):
-                textos[campo_da_caixa(c)] += texto
+                linha = min(max(int((y - c.y) // LINHA_RESPOSTA), 0), c.linhas - 1)
+                por_caixa[campo_da_caixa(c)].append((linha, x, texto, quebra))
                 break
-    return {campo: _limpar(t) for campo, t in textos.items()}
+    return {campo: _montar(itens) for campo, itens in por_caixa.items()}
 
 
-def _limpar(texto: str) -> str:
-    """Um espaço entre as palavras e uma linha por linha escrita, sem linhas vazias."""
-    linhas = (" ".join(linha.split()) for linha in texto.split("\n"))
-    return "\n".join(linha for linha in linhas if linha)
+def _montar(itens: list) -> str:
+    linhas: dict[int, list] = {}
+    for linha, x, texto, quebra in sorted(itens):
+        linhas.setdefault(linha, []).append((texto, quebra))
+    saida = []
+    for numero in sorted(linhas):
+        partes = ""
+        for texto, quebra in linhas[numero]:
+            colar = not partes or texto[0] in PONTUACAO_COLADA_ANTES or partes[-1] in PONTUACAO_COLADA_DEPOIS
+            partes += ("" if colar else " ") + texto
+        if linhas[numero] and linhas[numero][-1][1] == "HYPHEN" and not partes.endswith("-"):
+            partes += "-"  # palavra partida no fim da linha
+        saida.append(partes)
+    return "\n".join(saida)
