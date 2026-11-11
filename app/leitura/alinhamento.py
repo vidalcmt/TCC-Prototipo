@@ -1,5 +1,9 @@
 """Endireita a página digitalizada usando as quatro marcas pretas dos cantos.
 
+Quando as marcas não aparecem, a página é alinhada pelo QR code e pelas caixas
+de resposta (app/leitura/elementos.py). O método usado e o erro medido ficam
+guardados com a leitura, para comparar os dois.
+
 Depois do alinhamento, cada milímetro da folha corresponde a ESCALA pixels,
 na mesma posição calculada por app/folhas/layout.py. Assim, a bolinha da
 questão 3, alternativa B, está sempre no mesmo pixel, qualquer que tenha sido
@@ -12,6 +16,7 @@ import cv2
 import numpy as np
 
 from app.folhas import layout as L
+from app.leitura import elementos
 
 ESCALA = 8.0  # pixels por milímetro na imagem alinhada (cerca de 200 dpi)
 LARGURA_PX, ALTURA_PX = round(L.LARGURA * ESCALA), round(L.ALTURA * ESCALA)
@@ -21,10 +26,21 @@ class AlinhamentoFalhou(ValueError):
     pass
 
 
+MARCAS, ELEMENTOS, APROXIMADO = "marcas", "elementos", "aproximado"
+ROTULOS_METODO = {
+    MARCAS: "pelas marcas dos cantos",
+    ELEMENTOS: "pelo QR code e pelas caixas de resposta, sem as marcas dos cantos",
+    APROXIMADO: "de forma aproximada, pelas bordas da imagem, sem as marcas dos cantos",
+}
+
+
 @dataclass
 class PaginaAlinhada:
     imagem: np.ndarray        # tons de cinza, LARGURA_PX x ALTURA_PX
     girada: bool              # a página estava de cabeça para baixo
+    metodo: str = MARCAS      # "marcas", "elementos" (QR code e caixas) ou "aproximado" (bordas da imagem)
+    erro_mm: float | None = None   # distância média entre as caixas esperadas e as encontradas
+    caixas_usadas: int = 0
 
 
 def centros_esperados_mm() -> np.ndarray:
@@ -108,7 +124,73 @@ def _tinta_no_qr(alinhada: np.ndarray) -> float:
     return float((regiao < np.percentile(alinhada, 90) * 0.6).mean())
 
 
-def alinhar(imagem: np.ndarray) -> PaginaAlinhada:
+def alinhar(imagem: np.ndarray, pagina_layout=None) -> PaginaAlinhada:
+    """Alinha pelas marcas e, sem elas, pelo QR code e pelas caixas da página do layout."""
+    try:
+        alinhada = alinhar_pelas_marcas(imagem)
+    except AlinhamentoFalhou as erro_marcas:
+        if pagina_layout is None:
+            raise
+        try:
+            return alinhar_pelos_elementos(imagem, pagina_layout)
+        except elementos.ElementosInsuficientes as erro:
+            raise AlinhamentoFalhou(f"{erro_marcas} {erro}")
+    if pagina_layout is not None and pagina_layout.caixas:
+        alinhada.erro_mm, alinhada.caixas_usadas = erro_das_caixas(alinhada.imagem, pagina_layout)
+    return alinhada
+
+
+def alinhar_pelos_elementos(imagem: np.ndarray, pagina_layout) -> PaginaAlinhada:
+    # As caixas são procuradas de cima para baixo: a página precisa estar em pé antes.
+    girada = _de_cabeca_para_baixo(imagem)
+    if girada:
+        imagem = cv2.rotate(imagem, cv2.ROTATE_180)
+    imagem = _endireitar(imagem)
+    matriz, erro, usadas = elementos.homografia(imagem, pagina_layout)
+    # a homografia leva mm para pixels da imagem; a imagem alinhada precisa de pixels para mm x ESCALA
+    inversa = np.diag([ESCALA, ESCALA, 1.0]) @ np.linalg.inv(matriz)
+    alinhada = cv2.warpPerspective(imagem, inversa, (LARGURA_PX, ALTURA_PX), flags=cv2.INTER_LINEAR,
+                                   borderMode=cv2.BORDER_CONSTANT, borderValue=255)
+    metodo = ELEMENTOS if usadas else APROXIMADO
+    return PaginaAlinhada(imagem=alinhada, girada=girada, metodo=metodo, erro_mm=erro, caixas_usadas=usadas)
+
+
+def _endireitar(imagem: np.ndarray) -> np.ndarray:
+    """Corrige a inclinação pela borda de cima do QR code.
+
+    As linhas das caixas são procuradas como traços horizontais longos; numa
+    página inclinada 1 grau, uma linha de 170 mm sobe ou desce 3 mm de uma ponta
+    à outra e deixa de ser horizontal para essa busca.
+    """
+    qr = elementos.cantos_do_qr(imagem)
+    if qr is None:
+        return imagem
+    angulo = float(np.degrees(np.arctan2(qr[1][1] - qr[0][1], qr[1][0] - qr[0][0])))
+    if abs(angulo) < 0.1 or abs(angulo) > 20:
+        return imagem
+    altura, largura = imagem.shape[:2]
+    matriz = cv2.getRotationMatrix2D((largura / 2, altura / 2), angulo, 1.0)
+    return cv2.warpAffine(imagem, matriz, (largura, altura), flags=cv2.INTER_LINEAR,
+                          borderMode=cv2.BORDER_CONSTANT, borderValue=255)
+
+
+def erro_das_caixas(alinhada: np.ndarray, pagina_layout) -> tuple[float | None, int]:
+    """Na página já alinhada, a distância média, em mm, entre os cantos das caixas encontradas e os esperados.
+
+    No alinhamento pelas marcas, as caixas não entram no cálculo e servem de
+    conferência independente. No alinhamento pelos elementos, elas entram, e a
+    medida é o erro do próprio ajuste.
+    """
+    erros = []
+    for caixa in pagina_layout.caixas:
+        esperado = elementos.cantos_esperados_caixa(caixa) * ESCALA
+        encontrado = elementos.localizar_caixa(alinhada, esperado, caixa, ESCALA)
+        if encontrado is not None:
+            erros.append(float(np.linalg.norm(encontrado - esperado, axis=1).mean() / ESCALA))
+    return (float(np.mean(erros)) if erros else None), len(erros)
+
+
+def alinhar_pelas_marcas(imagem: np.ndarray) -> PaginaAlinhada:
     """Alinha a página e confere a orientação pela posição do QR code.
 
     As quatro marcas são iguais, então elas sozinhas não dizem se a página está

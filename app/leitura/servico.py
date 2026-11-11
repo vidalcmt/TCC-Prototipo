@@ -19,7 +19,7 @@ from app.config import config
 from app.digitalizacao.servico import IDENTIFICADA, caminho
 from app.folhas import layout as L
 from app.leitura import ocr
-from app.leitura.alinhamento import AlinhamentoFalhou, alinhar, recorte
+from app.leitura.alinhamento import APROXIMADO, AlinhamentoFalhou, alinhar, recorte
 from app.leitura.bolhas import ler_bolhas
 from app.models import Atividade, Folha, LeituraPagina, PaginaDigitalizada, agora
 
@@ -54,7 +54,8 @@ def ler_pagina(sessao: Session, pagina: PaginaDigitalizada, usuario_id: int | No
         sessao.commit()
         return leitura
     try:
-        alinhada = alinhar(imagem).imagem
+        resultado_alinhamento = alinhar(imagem, pagina_layout)
+        alinhada = resultado_alinhamento.imagem
     except AlinhamentoFalhou as erro:
         leitura.motivo = str(erro)
         sessao.commit()
@@ -64,9 +65,14 @@ def ler_pagina(sessao: Session, pagina: PaginaDigitalizada, usuario_id: int | No
     cv2.imwrite(str(Path(config.pasta_arquivos) / relativo), alinhada, [cv2.IMWRITE_JPEG_QUALITY, 90])
     leitura.arquivo_alinhado = relativo.as_posix()
 
-    objetivas = {str(qid): {"marcada": l.marcada, "duvida": l.duvida, "preenchimento": l.preenchimento}
+    aproximado = resultado_alinhamento.metodo == APROXIMADO
+    # Num alinhamento aproximado, as bolinhas podem estar alguns milímetros fora do lugar: todas vão para conferência.
+    objetivas = {str(qid): {"marcada": l.marcada, "duvida": l.duvida or aproximado, "preenchimento": l.preenchimento}
                  for qid, l in ler_bolhas(alinhada, pagina_layout).items()}
     textos, avisos = {}, []
+    if aproximado:
+        avisos.append("A página foi alinhada de forma aproximada, sem as marcas dos cantos e sem encontrar as "
+                      "caixas: confira todas as respostas com a imagem.")
     if pagina_layout.caixas:
         try:
             anotacao, leitura.latencia_ocr_ms = ocr.anotar(alinhada, http)
@@ -76,7 +82,11 @@ def ler_pagina(sessao: Session, pagina: PaginaDigitalizada, usuario_id: int | No
             avisos.append(str(erro))
         except ocr.OcrFalhou as erro:
             avisos.append(str(erro))
-    leitura.resultado_json = json.dumps({"objetivas": objetivas, "textos": textos}, ensure_ascii=False)
+    alinhamento = {"metodo": resultado_alinhamento.metodo, "girada": resultado_alinhamento.girada,
+                   "erro_mm": None if resultado_alinhamento.erro_mm is None else round(resultado_alinhamento.erro_mm, 3),
+                   "caixas": resultado_alinhamento.caixas_usadas}
+    leitura.resultado_json = json.dumps({"objetivas": objetivas, "textos": textos, "alinhamento": alinhamento},
+                                        ensure_ascii=False)
     leitura.situacao = LIDA
     leitura.motivo = " ".join(avisos) or None
     sessao.commit()

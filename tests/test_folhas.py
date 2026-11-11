@@ -115,7 +115,7 @@ def test_folhas_impressas_com_codigo_qr_e_canhoto(fabrica_sessao, cliente_web):
     for c in codigos:
         assert html.count(c) >= 2  # no cabeçalho e no canhoto
     assert html.count('class="pagina"') == 3  # uma página por folha nesta atividade
-    assert html.count("<svg") == 6 and html.count('class="marca"') == 12  # QR da folha e do canhoto
+    assert html.count("<svg") == 18 and html.count('class="marca"') == 12  # QR da folha, do canhoto e marcas
     assert html.count('class="bolha"') == 30 and html.count('class="caixa"') == 6
     assert "Nome" not in html and "/resultado" in html
 
@@ -190,3 +190,13 @@ def test_objetiva_sem_alternativas_cadastradas_recebe_a_a_e(fabrica_sessao):
     assert [b.letra for b in paginas[0].bolhas if b.numero == 1] == list("ABCDE")
     ultima = max(b.y + b.r for b in paginas[0].bolhas)
     assert paginas[0].caixas[0].y - L.ROTULO_SECAO > ultima  # a caixa começa abaixo da grade
+
+
+def test_marcas_em_svg_e_impressao_so_das_marcas(fabrica_sessao, cliente_web):
+    aid, _ = _atividade(fabrica_sessao, [_objetiva(1), _discursiva(2)])
+    cliente_web.post(f"/atividades/{aid}/folhas", data={"quantidade": "2", "linhas": "8"})
+    html = cliente_web.get(f"/atividades/{aid}/folhas/imprimir").text
+    assert html.count('<svg class="marca"') == 8  # cores de fundo podem não sair na impressão; SVG sai
+    so = cliente_web.get(f"/atividades/{aid}/folhas/imprimir?so_marcas=1").text
+    assert so.count('<svg class="marca"') == 8 and so.count('class="pagina"') == 2
+    assert 'class="qr"' not in so and 'class="bolha"' not in so and "Só as marcas dos cantos" in so
