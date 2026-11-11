@@ -106,7 +106,7 @@ function tabela(cabecalho, linhas, proporcoes) {
 // =====================================================================
 // CAPA
 // =====================================================================
-const VERSAO = "0.22";
+const VERSAO = "0.23";
 const DATA = "11/11/2026";
 
 conteudo.push(new Paragraph({ spacing: { before: 2400 }, children: [] }));
@@ -942,7 +942,8 @@ tabela(["Etapa", "Como é feita"], [
   ["Alinhamento", "Uma transformação de perspectiva (homografia) leva os centros das quatro marcas às posições calculadas em `layout.py`. A imagem resultante tem 8 pixels por milímetro e cada elemento fica no pixel previsto, qualquer que tenha sido a inclinação, a escala ou a perspectiva da digitalização"],
   ["Bolinhas", "Em cada bolinha, mede-se a fração de pixels escuros num disco de 72% do raio, para não contar o contorno impresso. A partir de 40%, a bolinha está marcada; entre 20% e 40% (um X, um preenchimento fraco), a leitura fica marcada como duvidosa. Mais de uma marcada vira \"mais de uma\"; nenhuma vira \"em branco\""],
   ["Escrita", "A página é alinhada de novo, com 12 pixels por milímetro (cerca de 300 dpi), e enviada numa única chamada ao Google Cloud Vision, com o recurso de detecção de texto em documentos e a indicação do português. Cada palavra devolvida vem com a posição; a palavra é atribuída à caixa em que o seu centro está, com 2,5 mm de folga, e o texto impresso fora das caixas é descartado. A transcrição é literal: nenhum ajuste é feito"],
-  ["Ordem das palavras", "A ordem em que o serviço devolve as palavras não é usada. Com letra à mão, o agrupamento em blocos e parágrafos costuma sair errado, e um trecho de uma linha de baixo vinha antes da primeira. Cada palavra vai para a linha da pauta da caixa em que está o seu centro (as linhas ficam a cada 8 mm, em posição conhecida) e, dentro da linha, as palavras seguem da esquerda para a direita. A pontuação é colada à palavra anterior, e uma palavra partida no fim da linha mantém o hífen"],
+  ["Ordem das palavras", "A ordem em que o serviço devolve as palavras não é usada. Com letra à mão, o agrupamento em blocos e parágrafos costuma sair errado, e um trecho de uma linha de baixo vinha antes da primeira. Cada palavra vai para a linha da pauta da caixa em que está o seu centro (as linhas ficam a cada 8 mm, em posição conhecida) e, dentro da linha, as palavras seguem da esquerda para a direita. A pontuação é colada à palavra anterior. As linhas da pauta são unidas num texto corrido, porque a quebra de linha na folha é só o fim do espaço, e não um novo parágrafo; uma palavra partida com hífen no fim da linha é reunida"],
+  ["Serviço de leitura", "A escrita pode ser lida pelo Google Cloud Vision ou pelo Google Document AI (processador Enterprise Document OCR), escolhido em `LEITURA_SERVICO`. Os dois entregam palavras com posição, e a montagem pela pauta é a mesma. O Document AI usa a conta de serviço da máquina em vez de chave de API (`app/leitura/documentai.py`)"],
 ], [3, 7]);
 h3("Alinhamento sem as marcas dos cantos (elementos.py)");
 p("Quando as marcas não são encontradas, a página é alinhada pelos elementos que a própria folha já tem em posições conhecidas: os quatro cantos do QR code e os quatro cantos de cada caixa de resposta. Cada canto é um par de pontos, onde ele está na imagem e onde deveria estar na folha, e a homografia é calculada com todos os pares, pelo método RANSAC, que descarta pares incoerentes.");
@@ -964,6 +965,8 @@ tabela(["Rota", "O que faz"], [
 ], [4, 6]);
 h3("Teste da chave: scripts/teste_vision.py");
 p("Confere a configuração do Google Cloud Vision sem depender de uma folha: desenha uma frase numa imagem, envia ao serviço e mostra o que foi lido e o tempo da chamada. A chave nunca é exibida, só o seu tamanho e os quatro últimos caracteres. Quando o serviço recusa o pedido, a mensagem explica a causa provável, para os erros mais comuns de configuração: chave inválida, API não ativada, chave sem permissão para o Vision, restrição de endereço IP e faturamento inativo. As mesmas explicações aparecem na página da folha quando uma leitura falha. O passo a passo da configuração está no guia de publicação, seção 6.");
+h3("Comparação entre os serviços: scripts/comparar_ocr.py");
+p("Lê de novo as páginas já conferidas com os dois serviços e compara o texto de cada caixa com a resposta salva pelo professor, que serve de referência. Como a letra, a imagem e o alinhamento são os mesmos, a diferença entre as taxas de erro (CER e WER) é efeito só do serviço. Não altera nenhuma leitura nem resposta, e grava uma linha por campo e serviço com `--csv`.");
 h3("Medida da taxa de acerto: scripts/medir_leitura.py");
 p("Compara o que foi lido com o que o professor conferiu, nas leituras já conferidas. Nas objetivas, informa a proporção de marcações lidas corretamente, no total e entre as não duvidosas. Nas discursivas, calcula a taxa de erro de caracteres (CER) e de palavras (WER): a distância de edição de Levenshtein entre o texto lido e o conferido, dividida pelo tamanho do conferido. Com `--csv`, grava uma linha por campo. Esses números entram no artigo como resultado da leitura, separados dos resultados da correção.");
 
@@ -1000,6 +1003,8 @@ tabela(["Variável", "Obrigatória", "Significado"], [
   ["`COOKIE_SEGURO`", "Não", "`true` só com HTTPS, no servidor publicado: o navegador passa a enviar o cookie apenas por conexão criptografada"],
   ["`LIMITE_CHAMADAS_DIA`", "Não", "Máximo de chamadas ao modelo por pessoa por dia; padrão 60. Uma turma de 40 alunos com duas discursivas exige 80 chamadas: para corrigir a turma num dia, aumente o valor"],
   ["`NOME_SISTEMA`", "Não", "Nome exibido nas páginas; padrão Devolutiva"],
+  ["`LEITURA_SERVICO`", "Não", "Serviço que lê a escrita: `vision` (padrão) ou `documentai`"],
+  ["`DOCUMENTAI_PROCESSADOR`", "Não", "Nome completo do processador de OCR do Document AI, no formato `projects/PROJETO/locations/us/processors/ID` (guia de publicação, seção 6.5)"],
   ["`GOOGLE_VISION_API_KEY`", "Não", "Chave do Google Cloud Vision para transcrever a escrita das discursivas. Sem ela, só as bolinhas são lidas. Deve ser restrita à Cloud Vision API e ao IP do servidor (guia de publicação, seção 6)"],
   ["`PASTA_ARQUIVOS`", "Não", "Pasta das folhas digitalizadas, com caminho absoluto; padrão `arquivos` na raiz do projeto"],
 ], [3, 2, 6]);
@@ -1068,7 +1073,7 @@ tabela(["Arquivo", "O que faz"], [
 
 // ---------------------------------------------------------------------
 h1("6. Testes automatizados");
-p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 278 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
+p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 286 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
 tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_precos.py`", "Custo correto para o modelo em uso; preço de cache aplicado; nome com sufixo de versão; modelo desconhecido não gera custo inventado"],
   ["`tests/test_llm.py`", "Sucesso grava tokens, custo, latência, modelo e prompt; resposta sem formato válido vira falha com tokens; erro de rede vira falha com motivo; cliente sem novas tentativas automáticas"],
@@ -1086,6 +1091,7 @@ tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_digitalizacao.py`", "QR code lido em página reta, de cabeça para baixo e com ruído, em folhas sintéticas com o layout real; página sem QR code; PDF com várias folhas e foto sem QR code; página de outra atividade e reenvio que substitui; arquivos recusados; atividade sem folhas; indicação manual da folha com código e página inválidos; exclusão da página e do arquivo; imagem só com login e na atividade certa; atividade com digitalizações não excluída"],
   ["`tests/test_leitura.py`", "Bolinhas lidas em folhas sintéticas com o layout real, retas, inclinadas, com perspectiva e de cabeça para baixo, incluindo mais de uma marcada e X como duvidoso; página sem marcas; palavras atribuídas às caixas, sem o texto impresso; pedido ao Google Cloud Vision com chave, recurso e idioma; erros do serviço; sem chave; ordem das palavras pela pauta da caixa, e não pela ordem do serviço; página ampliada para a escrita; alinhamento sem as marcas pelo QR code e pelas caixas, com a página reta e de cabeça para baixo; alinhamento aproximado sem marcas e sem caixas; erro medido nas caixas quando há marcas; leitura sem marcas registrando o método; explicação dos erros comuns de configuração; script de teste da chave, sem exibir a chave; leitura, conferência e medida pela tela; só bolinhas sem chave; leitura que não muda respostas salvas; falha de alinhamento exibida; distância de edição, CER e WER"],
   ["`tests/test_monitoramento.py`", "Rota declarada gravada no lugar do endereço real, sem estáticos nem /saude; requisição lenta e erro do servidor no log; registros antigos apagados; cálculo do percentil; resumo do período por rota, por intervalo, das chamadas ao modelo e do servidor; página e exportação só para administradores"],
+  ["`tests/test_documentai.py`", "Palavras do Document AI convertidas em milímetros e montadas pela pauta, com palavra partida reunida; pedido com endereço do processador, token e idioma; erros de permissão, processador e escopo explicados; processador mal escrito; serviço escolhido pela configuração; leitura pela tela com o Document AI e comparação entre os dois serviços"],
   ["`tests/test_lista_questoes.py`", "Páginas de 50 e página fora do intervalo; cada filtro, inclusive situação pendente e sem correção; filtros mantidos ao trocar de página; filtro sem resultado; opções dos filtros vindas do banco"],
   ["`tests/test_importar_enem.py`", "Paginação; parada após recusas seguidas; exclusão de numeração fora da área e de repetidas; filtro de área e de imagens; montagem do enunciado; importação com gabarito e sem duplicar"],
 ], [3, 7]);
@@ -1277,6 +1283,7 @@ tabela(["Termo", "Significado"], [
 // ---------------------------------------------------------------------
 h1("10. Histórico de versões");
 tabela(["Data", "Versão", "Referência", "Mudança"], [
+  ["11/11/2026", "0.23", "pull request do Document AI", "Linhas da pauta unidas num texto corrido; Google Document AI como alternativa ao Vision, escolhida no .env; script de comparação entre os dois serviços nas mesmas folhas; guia de configuração do Document AI"],
   ["11/11/2026", "0.22", "pull request da ordem de leitura", "Palavras da escrita ordenadas pelas linhas da pauta de cada caixa, e não pela ordem devolvida pelo serviço; página enviada ao Google Cloud Vision com 12 pixels por milímetro em vez de 8"],
   ["11/11/2026", "0.21", "pull request do monitoramento", "Página de monitoramento com o tempo de resposta por rota, percentis, gráficos por intervalo, serviços externos e servidor; medida de cada requisição sem dados de alunos; log de acesso do uvicorn desligado; guia do Cloud Monitoring e configuração do Ops Agent"],
   ["10/11/2026", "0.20", "pull request da leitura sem as marcas dos cantos", "Marcas dos cantos desenhadas em SVG, para sair na impressão mesmo sem a opção de gráficos de fundo; impressão só das marcas; alinhamento pelo QR code e pelas caixas quando as marcas não aparecem, com o método e o erro guardados na leitura e separados na medida"],
@@ -1314,6 +1321,8 @@ marcadores([
   "BRAILLE INSTITUTE. Atkinson Hyperlegible Font. Disponível em: https://www.brailleinstitute.org/freefont/. Acesso em: 23 out. 2026.",
   "OPENCV. OpenCV: Open Source Computer Vision Library. Disponível em: https://opencv.org/. Acesso em: 31 out. 2026.",
   "ARTIFEX. PyMuPDF Documentation. Disponível em: https://pymupdf.readthedocs.io/. Acesso em: 31 out. 2026.",
+  "GOOGLE CLOUD. Enterprise Document OCR (Document AI). Disponível em: https://docs.cloud.google.com/document-ai/docs/enterprise-document-ocr. Acesso em: 11 nov. 2026.",
+  "GOOGLE CLOUD. Document AI pricing. Disponível em: https://cloud.google.com/document-ai/pricing. Acesso em: 11 nov. 2026.",
   "GOOGLE CLOUD. Install the Ops Agent on an individual VM. Disponível em: https://docs.cloud.google.com/monitoring/agent/ops-agent/installation. Acesso em: 11 nov. 2026.",
   "GOOGLE CLOUD. Google Cloud Observability pricing. Disponível em: https://cloud.google.com/monitoring/pricing. Acesso em: 11 nov. 2026.",
   "GOOGLE CLOUD. Detect text in images (Cloud Vision API). Disponível em: https://cloud.google.com/vision/docs/ocr. Acesso em: 31 out. 2026.",
