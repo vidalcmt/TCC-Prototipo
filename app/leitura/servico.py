@@ -75,9 +75,11 @@ def ler_pagina(sessao: Session, pagina: PaginaDigitalizada, usuario_id: int | No
                       "caixas: confira todas as respostas com a imagem.")
     if pagina_layout.caixas:
         try:
-            anotacao, leitura.latencia_ocr_ms = ocr.anotar(alinhada, http)
+            imagem_ocr = resultado_alinhamento.ampliada(ocr.ESCALA_OCR)
+            escala_ocr = ocr.ESCALA_OCR if imagem_ocr is not alinhada else ocr.ESCALA
+            anotacao, leitura.latencia_ocr_ms = ocr.anotar(imagem_ocr, http)
             leitura.servico_ocr = ocr.SERVICO
-            textos = ocr.textos_por_caixa(anotacao, pagina_layout.caixas)
+            textos = ocr.textos_por_caixa(anotacao, pagina_layout.caixas, escala_ocr)
         except ocr.OcrIndisponivel as erro:
             avisos.append(str(erro))
         except ocr.OcrFalhou as erro:
