@@ -29,8 +29,8 @@
 </form>
 
 <h2 id="leitura">Leitura automática</h2>
-<p class="discreto">O sistema endireita cada página pelas marcas dos cantos, lê as bolinhas das objetivas e{% if ocr_disponivel %} transcreve a escrita das discursivas com o Google Cloud Vision{% else %}, quando configurado, transcreve a escrita{% endif %}. Nada é gravado como resposta sem a sua conferência: a leitura preenche o formulário da folha, e você confere com a imagem e salva.</p>
-{% if not ocr_disponivel %}<div class="aviso aviso-erro">A leitura da escrita está desligada: falta a chave <code>GOOGLE_VISION_API_KEY</code> no arquivo .env. As bolinhas são lidas normalmente; as discursivas ficam para digitar.</div>{% endif %}
+<p class="discreto">O sistema endireita cada página pelas marcas dos cantos, lê as bolinhas das objetivas e{% if ocr_disponivel %} transcreve a escrita das discursivas com o {{ ocr_servico }}{% else %}, quando configurado, transcreve a escrita{% endif %}. Nada é gravado como resposta sem a sua conferência: a leitura preenche o formulário da folha, e você confere com a imagem e salva.</p>
+{% if not ocr_disponivel %}<div class="aviso aviso-erro">A leitura da escrita está desligada: falta configurar o {{ ocr_servico }} no arquivo .env ({{ "DOCUMENTAI_PROCESSADOR" if ocr_servico == "Google Document AI" else "GOOGLE_VISION_API_KEY" }}). As bolinhas são lidas normalmente; as discursivas ficam para digitar.</div>{% endif %}
 {% if andamento and andamento.em_andamento %}
 <div class="aviso aviso-info" role="status">Lendo: {{ andamento.feitas + andamento.falhas }} de {{ andamento.total }} páginas. A página se atualiza sozinha.</div>
 {% else %}

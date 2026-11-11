@@ -61,7 +61,7 @@ def pagina(request: Request, atividade_id: int, aviso: str | None = None, sessao
     andamento = lote_leitura.andamento(atividade.id)
     return templates.TemplateResponse(request, "digitalizacoes.html", {
         "a_ler": len(paginas_para_ler(sessao, atividade)), "andamento": andamento,
-        "ocr_disponivel": ocr.disponivel(), "leitura_por_folha": leitura_por_folha,
+        "ocr_disponivel": ocr.disponivel(), "ocr_servico": ocr.nome_do_servico(), "leitura_por_folha": leitura_por_folha,
         "atividade": atividade, "aviso": aviso, "rotulos": ROTULOS,
         "pendentes": [p for p in paginas if p.situacao in (SEM_QR, OUTRA_ATIVIDADE)],
         "identificadas": len(identificadas), "por_folha": por_folha, "paginas_por_folha": total_paginas,

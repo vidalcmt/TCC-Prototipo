@@ -21,6 +21,12 @@ class Configuracao(BaseSettings):
     # Chave de API do Google Cloud Vision, para ler a escrita das folhas
     # digitalizadas. Sem ela, só as bolinhas das objetivas são lidas.
     google_vision_api_key: str = ""
+    # Serviço que lê a escrita: "vision" (Google Cloud Vision, com a chave acima)
+    # ou "documentai" (Google Document AI, com o processador abaixo).
+    leitura_servico: str = "vision"
+    # Nome completo do processador de OCR do Document AI:
+    # projects/PROJETO/locations/us/processors/ID (guia de publicação, seção 6.5).
+    documentai_processador: str = ""
 
     nome_sistema: str = "Devolutiva"
 
