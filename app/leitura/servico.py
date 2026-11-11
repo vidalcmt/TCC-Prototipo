@@ -12,13 +12,14 @@ from pathlib import Path
 
 import cv2
 import httpx
+from openai import OpenAI
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import config
 from app.digitalizacao.servico import IDENTIFICADA, caminho
 from app.folhas import layout as L
-from app.leitura import ocr
+from app.leitura import ocr, revisor
 from app.leitura.alinhamento import APROXIMADO, AlinhamentoFalhou, alinhar, recorte
 from app.leitura.bolhas import ler_bolhas
 from app.models import Atividade, Folha, LeituraPagina, PaginaDigitalizada, agora
@@ -31,7 +32,7 @@ def paginas_do_layout(atividade: Atividade) -> list:
 
 
 def ler_pagina(sessao: Session, pagina: PaginaDigitalizada, usuario_id: int | None,
-               http: httpx.Client | None = None) -> LeituraPagina:
+               http: httpx.Client | None = None, cliente: OpenAI | None = None) -> LeituraPagina:
     """Lê (ou lê de novo) uma página identificada. Uma leitura anterior é substituída."""
     atividade = sessao.get(Atividade, pagina.atividade_id)
     if pagina.leitura is not None:
@@ -69,7 +70,7 @@ def ler_pagina(sessao: Session, pagina: PaginaDigitalizada, usuario_id: int | No
     # Num alinhamento aproximado, as bolinhas podem estar alguns milímetros fora do lugar: todas vão para conferência.
     objetivas = {str(qid): {"marcada": l.marcada, "duvida": l.duvida or aproximado, "preenchimento": l.preenchimento}
                  for qid, l in ler_bolhas(alinhada, pagina_layout).items()}
-    textos, avisos = {}, []
+    textos, textos_ocr, revisoes, avisos = {}, {}, {}, []
     if aproximado:
         avisos.append("A página foi alinhada de forma aproximada, sem as marcas dos cantos e sem encontrar as "
                       "caixas: confira todas as respostas com a imagem.")
@@ -79,6 +80,13 @@ def ler_pagina(sessao: Session, pagina: PaginaDigitalizada, usuario_id: int | No
             escala_ocr = ocr.ESCALA_OCR if imagem_ocr is not alinhada else ocr.ESCALA
             textos, leitura.latencia_ocr_ms, leitura.servico_ocr = ocr.transcrever(
                 imagem_ocr, escala_ocr, pagina_layout.caixas, http)
+            textos_ocr = dict(textos)
+            if revisor.ligada():
+                textos, revisoes = _revisar(sessao, imagem_ocr, escala_ocr, pagina_layout.caixas, textos,
+                                            cliente, usuario_id)
+                descartadas = {r["descartada"] for r in revisoes.values() if r.get("descartada")}
+                if descartadas:
+                    avisos.append("A revisão da IA não foi aplicada em algumas respostas: " + "; ".join(sorted(descartadas)) + ".")
         except ocr.OcrIndisponivel as erro:
             avisos.append(str(erro))
         except ocr.OcrFalhou as erro:
@@ -86,12 +94,37 @@ def ler_pagina(sessao: Session, pagina: PaginaDigitalizada, usuario_id: int | No
     alinhamento = {"metodo": resultado_alinhamento.metodo, "girada": resultado_alinhamento.girada,
                    "erro_mm": None if resultado_alinhamento.erro_mm is None else round(resultado_alinhamento.erro_mm, 3),
                    "caixas": resultado_alinhamento.caixas_usadas}
-    leitura.resultado_json = json.dumps({"objetivas": objetivas, "textos": textos, "alinhamento": alinhamento},
-                                        ensure_ascii=False)
+    leitura.resultado_json = json.dumps({"objetivas": objetivas, "textos": textos, "textos_ocr": textos_ocr,
+                                         "revisoes": revisoes, "alinhamento": alinhamento}, ensure_ascii=False)
     leitura.situacao = LIDA
     leitura.motivo = " ".join(avisos) or None
     sessao.commit()
     return leitura
+
+
+def _revisar(sessao, imagem_ocr, escala, caixas, textos: dict, cliente, usuario_id) -> tuple[dict, dict]:
+    """Passa o texto de cada caixa pelo revisor, com o recorte da caixa na mesma resolução enviada ao OCR."""
+    revisados, revisoes = dict(textos), {}
+    for caixa in caixas:
+        campo = ocr.campo_da_caixa(caixa)
+        if not textos.get(campo, "").strip():
+            continue
+        x0, y0 = max(0, round((caixa.x - 2) * escala)), max(0, round((caixa.y - 2) * escala))
+        x1, y1 = round((caixa.x + caixa.largura + 2) * escala), round((caixa.y + caixa.altura + 2) * escala)
+        resultado = revisor.revisar(sessao, imagem_ocr[y0:y1, x0:x1], textos[campo], cliente, usuario_id)
+        revisados[campo] = resultado.texto
+        revisoes[campo] = {"alteracoes": resultado.alteracoes, "incertos": resultado.incertos,
+                           "descartada": resultado.descartada}
+    return revisados, revisoes
+
+
+def revisoes_da_folha(folha: Folha) -> dict[str, dict]:
+    """O que a revisão da IA mudou em cada campo, para mostrar ao professor na conferência."""
+    revisoes = {}
+    for leitura in leituras_da_folha(folha):
+        if leitura.situacao == LIDA:
+            revisoes.update(json.loads(leitura.resultado_json).get("revisoes", {}))
+    return revisoes
 
 
 def _apagar_alinhada(leitura: LeituraPagina) -> None:
@@ -135,6 +168,9 @@ def valores_lidos(folha: Folha) -> tuple[dict[str, str], set[str], list[str], bo
                 duvidas.add(f"q{qid}")
         for campo, texto in resultado.get("textos", {}).items():
             valores[campo] = texto
+        for campo, revisao in resultado.get("revisoes", {}).items():
+            if revisao.get("incertos"):
+                duvidas.add(campo)
     return valores, duvidas, avisos, pendente
 
 

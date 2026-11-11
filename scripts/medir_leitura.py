@@ -17,6 +17,11 @@ conferiu e salvou. Só entram as páginas cuja leitura já foi conferida.
   cantos, QR code e caixas, ou aproximado pelas bordas), o erro médio medido
   nas caixas, em milímetros, e os resultados acima separados por método. É a
   comparação entre folhas com e sem as marcas dos cantos.
+- Revisão da IA: nos campos em que a revisão foi aplicada, o CER do texto do
+  OCR sozinho e o do texto revisado, contra o mesmo texto conferido, e em
+  quantos campos a revisão melhorou ou piorou. Piorar quer dizer que o
+  professor voltou atrás numa troca, quase sempre um erro do aluno que a IA
+  corrigiu ou uma palavra que ela adivinhou.
 
 O CSV tem uma linha por campo e não contém nenhum dado de aluno além do
 código da folha.
@@ -30,32 +35,9 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.leitura.medida import distancia, taxa_de_erro  # noqa: F401  (usadas também pelos testes)
 from app.models import LeituraPagina, Submissao
 from app.resultados.servico import MARCACAO_MULTIPLA
-
-
-def distancia(a: list | str, b: list | str) -> int:
-    """Distância de edição (Levenshtein): inserções, remoções e trocas."""
-    anterior = list(range(len(b) + 1))
-    for i, x in enumerate(a, start=1):
-        atual = [i]
-        for j, y in enumerate(b, start=1):
-            atual.append(min(anterior[j] + 1, atual[j - 1] + 1, anterior[j - 1] + (x != y)))
-        anterior = atual
-    return anterior[-1]
-
-
-def _normalizar(texto: str) -> str:
-    return " ".join((texto or "").split())
-
-
-def taxa_de_erro(lido: str, conferido: str, por_palavra: bool = False) -> float:
-    a, b = _normalizar(lido), _normalizar(conferido)
-    if por_palavra:
-        a, b = a.split(), b.split()
-    if not b:
-        return 0.0 if not a else 1.0
-    return distancia(a, b) / len(b)
 
 
 @dataclass
@@ -68,6 +50,11 @@ class Medida:
     textos: int = 0
     soma_cer: float = 0.0
     soma_wer: float = 0.0
+    revisados: int = 0
+    soma_cer_ocr: float = 0.0
+    soma_cer_revisado: float = 0.0
+    melhorou: int = 0
+    piorou: int = 0
     linhas: list[dict] = field(default_factory=list)
     # por método de alinhamento: páginas, erros em mm, objetivas, acertos, textos, soma do CER
     metodos: dict = field(default_factory=dict)
@@ -87,6 +74,11 @@ class Medida:
         if self.textos:
             partes.append(f"Discursivas: {self.textos} campos; CER médio {self.soma_cer / self.textos:.1%}, "
                           f"WER médio {self.soma_wer / self.textos:.1%}.")
+        if self.revisados:
+            partes.append(f"Revisão da IA: {self.revisados} campo(s) revisado(s); CER do OCR sozinho "
+                          f"{self.soma_cer_ocr / self.revisados:.1%}, com a revisão "
+                          f"{self.soma_cer_revisado / self.revisados:.1%}; melhorou {self.melhorou}, "
+                          f"piorou {self.piorou}.")
         for nome, m in sorted(self.metodos.items()):
             linha = f"Alinhamento {nome}: {m['paginas']} páginas"
             if m["erros"]:
@@ -136,7 +128,8 @@ def medir(sessao: Session) -> Medida:
                 medida.acertos_sem_duvida += certo
             medida.linhas.append({"folha": folha.codigo, "alinhamento": alinhamento["metodo"], "campo": f"q{qid}", "tipo": "objetiva",
                                   "lido": lido["marcada"], "conferido": final, "duvida": lido["duvida"],
-                                  "acerto": certo, "cer": "", "wer": ""})
+                                  "acerto": certo, "cer": "", "wer": "", "lido_ocr": "", "cer_ocr": ""})
+        textos_ocr, revisoes = resultado.get("textos_ocr", {}), resultado.get("revisoes", {})
         for campo, texto in resultado.get("textos", {}).items():
             partes = campo[1:].split("_")
             submissao = respostas.get(int(partes[0]))
@@ -149,9 +142,20 @@ def medir(sessao: Session) -> Medida:
             medida.soma_wer += wer
             metodo["textos"] += 1
             metodo["soma_cer"] += cer
+            lido_ocr, cer_ocr = "", ""
+            revisao = revisoes.get(campo)
+            if revisao is not None and not revisao.get("descartada") and campo in textos_ocr:
+                lido_ocr = textos_ocr[campo]
+                cer_ocr = taxa_de_erro(lido_ocr, final)
+                medida.revisados += 1
+                medida.soma_cer_ocr += cer_ocr
+                medida.soma_cer_revisado += cer
+                medida.melhorou += cer < cer_ocr
+                medida.piorou += cer > cer_ocr
+                cer_ocr = round(cer_ocr, 4)
             medida.linhas.append({"folha": folha.codigo, "alinhamento": alinhamento["metodo"], "campo": campo, "tipo": "discursiva", "lido": texto,
                                   "conferido": final, "duvida": "", "acerto": "", "cer": round(cer, 4),
-                                  "wer": round(wer, 4)})
+                                  "wer": round(wer, 4), "lido_ocr": lido_ocr, "cer_ocr": cer_ocr})
     return medida
 
 
@@ -167,7 +171,7 @@ def main() -> None:
     if args.csv:
         with open(args.csv, "w", newline="", encoding="utf-8") as arquivo:
             escritor = csv.DictWriter(arquivo, fieldnames=["folha", "alinhamento", "campo", "tipo", "lido", "conferido", "duvida",
-                                                           "acerto", "cer", "wer"])
+                                                           "acerto", "cer", "wer", "lido_ocr", "cer_ocr"])
             escritor.writeheader()
             escritor.writerows(medida.linhas)
         print(f"{len(medida.linhas)} linhas gravadas em {args.csv}.")

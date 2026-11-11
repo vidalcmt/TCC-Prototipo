@@ -27,6 +27,9 @@ class Configuracao(BaseSettings):
     # Nome completo do processador de OCR do Document AI:
     # projects/PROJETO/locations/us/processors/ID (guia de publicação, seção 6.5).
     documentai_processador: str = ""
+    # Revisão da transcrição por um modelo que vê a imagem da caixa e corrige os
+    # erros de leitura do OCR, mantendo os do aluno (app/leitura/revisor.py).
+    leitura_revisao_ia: bool = False
 
     nome_sistema: str = "Devolutiva"
 

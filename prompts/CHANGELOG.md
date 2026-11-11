@@ -4,6 +4,13 @@ Cada versão usada na coleta fica congelada. Uma mudança gera um arquivo novo
 (v2, v3...) e uma entrada aqui, com a data e o motivo. A coluna prompt_versao
 da tabela metrica_requisicao aponta para estas versões.
 
+## transcricao_v1 (11/11/2026)
+
+Primeira versão do revisor da transcrição das folhas digitalizadas. Recebe o
+texto lido pelo OCR e a imagem da caixa, e corrige só os erros de leitura do
+programa, mantendo os erros do aluno. Não recebe o enunciado nem a resposta
+esperada, para não puxar o texto para a resposta certa.
+
 ## objetiva_v3 (24/10/2026)
 
 Pedido do autor após usar a v2: a explicação ficou cansativa, com três blocos

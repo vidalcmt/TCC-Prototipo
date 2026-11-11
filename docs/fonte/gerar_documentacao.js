@@ -106,7 +106,7 @@ function tabela(cabecalho, linhas, proporcoes) {
 // =====================================================================
 // CAPA
 // =====================================================================
-const VERSAO = "0.23";
+const VERSAO = "0.24";
 const DATA = "11/11/2026";
 
 conteudo.push(new Paragraph({ spacing: { before: 2400 }, children: [] }));
@@ -248,7 +248,7 @@ tabela(
     ["`app/atividades/`", "Atividades: montagem de conjuntos de questões, caderno de questões em A4 e rotas das folhas de resposta (`router.py`)"],
     ["`app/digitalizacao/`", "Folhas digitalizadas: conversão de PDF e fotos em imagens, leitura do QR code, armazenamento e conferência (`servico.py` e `router.py`)"],
     ["`app/monitoramento/`", "Medida do tempo de cada requisição (`medidor.py`), cálculo dos números da página (`resumo.py`) e rotas (`router.py`)"],
-    ["`app/leitura/`", "Leitura automática: alinhamento pelas marcas (`alinhamento.py`), bolinhas (`bolhas.py`), transcrição com o Google Cloud Vision (`ocr.py`), regras e conferência (`servico.py`), leitura em lote (`lote.py`) e rotas (`router.py`)"],
+    ["`app/leitura/`", "Leitura automática: alinhamento pelas marcas (`alinhamento.py`), bolinhas (`bolhas.py`), transcrição com o Google Cloud Vision (`ocr.py`), revisão opcional da transcrição por IA (`revisor.py`), regras e conferência (`servico.py`), leitura em lote (`lote.py`) e rotas (`router.py`)"],
     ["`app/aluno/`", "Página pública do aluno: o que ele pode ver do próprio resultado (`servico.py`) e as rotas de consulta pelo código (`router.py`)"],
     ["`app/resultados/`", "Respostas de cada folha, nota da folha e liberação (`servico.py`), correção em lote das discursivas (`lote.py`) e páginas do painel e da folha (`router.py`)"],
     ["`app/folhas/`", "Folhas de resposta: posição de cada elemento na página (`layout.py`) e geração dos códigos e do QR code (`servico.py`)"],
@@ -944,7 +944,18 @@ tabela(["Etapa", "Como é feita"], [
   ["Escrita", "A página é alinhada de novo, com 12 pixels por milímetro (cerca de 300 dpi), e enviada numa única chamada ao Google Cloud Vision, com o recurso de detecção de texto em documentos e a indicação do português. Cada palavra devolvida vem com a posição; a palavra é atribuída à caixa em que o seu centro está, com 2,5 mm de folga, e o texto impresso fora das caixas é descartado. A transcrição é literal: nenhum ajuste é feito"],
   ["Ordem das palavras", "A ordem em que o serviço devolve as palavras não é usada. Com letra à mão, o agrupamento em blocos e parágrafos costuma sair errado, e um trecho de uma linha de baixo vinha antes da primeira. Cada palavra vai para a linha da pauta da caixa em que está o seu centro (as linhas ficam a cada 8 mm, em posição conhecida) e, dentro da linha, as palavras seguem da esquerda para a direita. A pontuação é colada à palavra anterior. As linhas da pauta são unidas num texto corrido, porque a quebra de linha na folha é só o fim do espaço, e não um novo parágrafo; uma palavra partida com hífen no fim da linha é reunida"],
   ["Serviço de leitura", "A escrita pode ser lida pelo Google Cloud Vision ou pelo Google Document AI (processador Enterprise Document OCR), escolhido em `LEITURA_SERVICO`. Os dois entregam palavras com posição, e a montagem pela pauta é a mesma. O Document AI usa a conta de serviço da máquina em vez de chave de API (`app/leitura/documentai.py`)"],
+  ["Revisão da IA (opcional)", "Com `LEITURA_REVISAO_IA=true`, o texto de cada caixa passa por um modelo de linguagem que vê a imagem da caixa e corrige os erros de leitura do OCR, mantendo os erros do aluno. Ver a seção abaixo"],
 ], [3, 7]);
+h3("Revisão da transcrição pela IA (revisor.py)");
+p("O OCR erra de um jeito que nenhuma pessoa erraria: lê \"perede\" onde a imagem mostra \"parede\", ou \"vim organizmo\" onde está escrito \"um organismo\", porque o formato de uma letra lembra o de outra. Já um erro como \"assasino\", com um s só, é comum entre alunos e precisa ser mantido, porque faz parte da resposta que será avaliada. A revisão tenta separar os dois casos: o modelo recebe o texto lido e a imagem da caixa e devolve o texto revisado, a lista do que trocou, com o motivo, e os trechos em que a imagem não permite decidir.");
+p("O risco é o modelo corrigir também os erros do aluno, e a correção avaliaria então um texto que o aluno não escreveu. As salvaguardas são estas:");
+marcadores([
+  "**Sem contexto da questão:** o modelo recebe só a imagem e o texto lido, nunca o enunciado, a resposta esperada ou a rubrica, para não puxar a transcrição em direção à resposta certa.",
+  "**Regra explícita no prompt:** o prompt `prompts/transcricao/v1.md` descreve os dois tipos de erro, com exemplos, e manda decidir pela imagem. O conhecimento da língua serve só para escolher entre leituras que a imagem permite.",
+  "**Limite de mudança:** uma revisão que muda mais de 40% dos caracteres do texto lido é descartada, e fica o texto do OCR. A chamada é registrada como falha nas métricas, com o motivo. Uma revisão que esvazia a caixa também é descartada, porque uma resposta em branco vale zero sem passar pela correção.",
+  "**Conferência do professor:** na página da folha, cada troca aparece abaixo do texto (o que foi lido, riscado, e o que entrou no lugar), junto dos trechos incertos. O campo com trecho incerto recebe a etiqueta \"confira\". Nada é gravado antes de o professor salvar.",
+]);
+p("O texto do OCR sozinho fica guardado com a leitura, ao lado do revisado. Assim, o `scripts/medir_leitura.py` compara as duas taxas de erro contra o mesmo texto conferido e conta em quantos campos a revisão melhorou ou piorou a transcrição. Piorar indica que o professor desfez uma troca, quase sempre um erro do aluno que o modelo corrigiu. Cada caixa com texto é uma chamada ao modelo, com a imagem reduzida a no máximo 1600 pixels no lado maior; a chamada entra nas métricas, com o tipo `transcricao`, e conta no limite diário de chamadas.");
 h3("Alinhamento sem as marcas dos cantos (elementos.py)");
 p("Quando as marcas não são encontradas, a página é alinhada pelos elementos que a própria folha já tem em posições conhecidas: os quatro cantos do QR code e os quatro cantos de cada caixa de resposta. Cada canto é um par de pontos, onde ele está na imagem e onde deveria estar na folha, e a homografia é calculada com todos os pares, pelo método RANSAC, que descarta pares incoerentes.");
 tabela(["Etapa", "Como é feita"], [
@@ -968,7 +979,7 @@ p("Confere a configuração do Google Cloud Vision sem depender de uma folha: de
 h3("Comparação entre os serviços: scripts/comparar_ocr.py");
 p("Lê de novo as páginas já conferidas com os dois serviços e compara o texto de cada caixa com a resposta salva pelo professor, que serve de referência. Como a letra, a imagem e o alinhamento são os mesmos, a diferença entre as taxas de erro (CER e WER) é efeito só do serviço. Não altera nenhuma leitura nem resposta, e grava uma linha por campo e serviço com `--csv`.");
 h3("Medida da taxa de acerto: scripts/medir_leitura.py");
-p("Compara o que foi lido com o que o professor conferiu, nas leituras já conferidas. Nas objetivas, informa a proporção de marcações lidas corretamente, no total e entre as não duvidosas. Nas discursivas, calcula a taxa de erro de caracteres (CER) e de palavras (WER): a distância de edição de Levenshtein entre o texto lido e o conferido, dividida pelo tamanho do conferido. Com `--csv`, grava uma linha por campo. Esses números entram no artigo como resultado da leitura, separados dos resultados da correção.");
+p("Compara o que foi lido com o que o professor conferiu, nas leituras já conferidas. Nas objetivas, informa a proporção de marcações lidas corretamente, no total e entre as não duvidosas. Nas discursivas, calcula a taxa de erro de caracteres (CER) e de palavras (WER): a distância de edição de Levenshtein entre o texto lido e o conferido, dividida pelo tamanho do conferido. Quando a revisão da IA foi aplicada, informa também o CER do OCR sozinho e o do texto revisado, e em quantos campos a revisão melhorou ou piorou. Com `--csv`, grava uma linha por campo, com o texto do OCR e o seu CER nas colunas `lido_ocr` e `cer_ocr`. Esses números entram no artigo como resultado da leitura, separados dos resultados da correção.");
 
 // ---------------------------------------------------------------------
 h2("4.28 Monitoramento: app/monitoramento/");
@@ -1004,6 +1015,7 @@ tabela(["Variável", "Obrigatória", "Significado"], [
   ["`LIMITE_CHAMADAS_DIA`", "Não", "Máximo de chamadas ao modelo por pessoa por dia; padrão 60. Uma turma de 40 alunos com duas discursivas exige 80 chamadas: para corrigir a turma num dia, aumente o valor"],
   ["`NOME_SISTEMA`", "Não", "Nome exibido nas páginas; padrão Devolutiva"],
   ["`LEITURA_SERVICO`", "Não", "Serviço que lê a escrita: `vision` (padrão) ou `documentai`"],
+  ["`LEITURA_REVISAO_IA`", "Não", "`true` liga a revisão da transcrição por IA (seção 4.27). Padrão `false`. Cada caixa com texto é uma chamada ao modelo, contada no `LIMITE_CHAMADAS_DIA`"],
   ["`DOCUMENTAI_PROCESSADOR`", "Não", "Nome completo do processador de OCR do Document AI, no formato `projects/PROJETO/locations/us/processors/ID` (guia de publicação, seção 6.5)"],
   ["`GOOGLE_VISION_API_KEY`", "Não", "Chave do Google Cloud Vision para transcrever a escrita das discursivas. Sem ela, só as bolinhas são lidas. Deve ser restrita à Cloud Vision API e ao IP do servidor (guia de publicação, seção 6)"],
   ["`PASTA_ARQUIVOS`", "Não", "Pasta das folhas digitalizadas, com caminho absoluto; padrão `arquivos` na raiz do projeto"],
@@ -1092,6 +1104,7 @@ tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_leitura.py`", "Bolinhas lidas em folhas sintéticas com o layout real, retas, inclinadas, com perspectiva e de cabeça para baixo, incluindo mais de uma marcada e X como duvidoso; página sem marcas; palavras atribuídas às caixas, sem o texto impresso; pedido ao Google Cloud Vision com chave, recurso e idioma; erros do serviço; sem chave; ordem das palavras pela pauta da caixa, e não pela ordem do serviço; página ampliada para a escrita; alinhamento sem as marcas pelo QR code e pelas caixas, com a página reta e de cabeça para baixo; alinhamento aproximado sem marcas e sem caixas; erro medido nas caixas quando há marcas; leitura sem marcas registrando o método; explicação dos erros comuns de configuração; script de teste da chave, sem exibir a chave; leitura, conferência e medida pela tela; só bolinhas sem chave; leitura que não muda respostas salvas; falha de alinhamento exibida; distância de edição, CER e WER"],
   ["`tests/test_monitoramento.py`", "Rota declarada gravada no lugar do endereço real, sem estáticos nem /saude; requisição lenta e erro do servidor no log; registros antigos apagados; cálculo do percentil; resumo do período por rota, por intervalo, das chamadas ao modelo e do servidor; página e exportação só para administradores"],
   ["`tests/test_documentai.py`", "Palavras do Document AI convertidas em milímetros e montadas pela pauta, com palavra partida reunida; pedido com endereço do processador, token e idioma; erros de permissão, processador e escopo explicados; processador mal escrito; serviço escolhido pela configuração; leitura pela tela com o Document AI e comparação entre os dois serviços"],
+  ["`tests/test_revisor.py`", "Erro de leitura corrigido e erro do aluno mantido, com as trocas listadas; imagem da caixa reduzida e enviada junto do texto lido; revisão que muda demais descartada e registrada como falha; falha do modelo e caixa esvaziada mantendo o texto do OCR; caixa vazia sem chamada; leitura pela tela com as trocas e os trechos incertos na página, sem o enunciado no pedido ao modelo; medida com e sem a revisão; revisão desligada sem chamada"],
   ["`tests/test_lista_questoes.py`", "Páginas de 50 e página fora do intervalo; cada filtro, inclusive situação pendente e sem correção; filtros mantidos ao trocar de página; filtro sem resultado; opções dos filtros vindas do banco"],
   ["`tests/test_importar_enem.py`", "Paginação; parada após recusas seguidas; exclusão de numeração fora da área e de repetidas; filtro de área e de imagens; montagem do enunciado; importação com gabarito e sem duplicar"],
 ], [3, 7]);
@@ -1197,6 +1210,7 @@ marcadores([
   "**Correções do teste piloto:** as correções feitas com a v1 continuam no banco e identificadas pela versão do prompt. A comparação entre condições deve usar apenas correções da mesma versão.",
   "**Critérios sem rubrica:** quando o professor não informa rubrica, o modelo define os critérios a cada correção, e eles podem variar entre correções da mesma questão. Para comparar condições, o corpus deve usar questões com rubrica.",
   "**Geração na própria requisição da página:** o navegador espera a resposta do modelo, o que leva alguns segundos. É adequado para um usuário por vez; a execução em lote da etapa 5 roda por linha de comando.",
+  "**Revisão da transcrição pela IA:** o modelo pode trocar um erro do aluno por uma palavra correta, ou adivinhar uma palavra ilegível. As salvaguardas da seção 4.27 reduzem o problema, mas não o eliminam, e o professor que confere pode ser puxado a aceitar a troca. Por isso, o artigo deve relatar a taxa de erro com e sem a revisão e o número de trocas desfeitas pelo professor, e a referência da medida deve ser transcrita letra por letra a partir da imagem.",
   "**Explicações anteriores:** a página mostra só a explicação mais recente. As anteriores continuam no banco e entram na análise.",
   "**Latência e rede:** a latência inclui o tempo de rede do computador onde o sistema roda. Medições comparadas entre si devem vir da mesma máquina e conexão.",
   "**Busca no enunciado:** o SQLite só ignora a diferença entre maiúsculas e minúsculas em letras sem acento. Buscar \"REVOLUÇÃO\" não encontra \"revolução\"; buscar em minúsculas, ou por parte da palavra sem acento (\"revolu\"), encontra.",
@@ -1283,6 +1297,7 @@ tabela(["Termo", "Significado"], [
 // ---------------------------------------------------------------------
 h1("10. Histórico de versões");
 tabela(["Data", "Versão", "Referência", "Mudança"], [
+  ["11/11/2026", "0.24", "pull request da revisão da transcrição", "Revisão opcional da transcrição por um modelo que vê a imagem da caixa, mantendo os erros do aluno; trocas e trechos incertos exibidos na conferência; texto do OCR guardado ao lado do revisado; medida com e sem a revisão"],
   ["11/11/2026", "0.23", "pull request do Document AI", "Linhas da pauta unidas num texto corrido; Google Document AI como alternativa ao Vision, escolhida no .env; script de comparação entre os dois serviços nas mesmas folhas; guia de configuração do Document AI"],
   ["11/11/2026", "0.22", "pull request da ordem de leitura", "Palavras da escrita ordenadas pelas linhas da pauta de cada caixa, e não pela ordem devolvida pelo serviço; página enviada ao Google Cloud Vision com 12 pixels por milímetro em vez de 8"],
   ["11/11/2026", "0.21", "pull request do monitoramento", "Página de monitoramento com o tempo de resposta por rota, percentis, gráficos por intervalo, serviços externos e servidor; medida de cada requisição sem dados de alunos; log de acesso do uvicorn desligado; guia do Cloud Monitoring e configuração do Ops Agent"],

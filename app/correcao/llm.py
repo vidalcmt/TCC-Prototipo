@@ -9,6 +9,7 @@ Toda requisição passa por chamar_modelo(), que:
 Assim, nenhuma chamada fica sem medição, inclusive as que falham.
 """
 
+import base64
 import time
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar
@@ -82,6 +83,7 @@ def chamar_modelo(
     usuario_id: int | None = None,
     questao_id: int | None = None,
     submissao_id: int | None = None,
+    imagem_jpeg: bytes | None = None,
 ) -> ResultadoChamada[Formato]:
     modelo = modelo or config.modelo
     metrica = MetricaRequisicao(
@@ -99,9 +101,17 @@ def chamar_modelo(
 
     inicio = time.perf_counter()
     try:
+        mensagens = prompt.mensagens(**campos)
+        if imagem_jpeg is not None:
+            # A imagem vai junto da mensagem do usuário, no formato da Responses API.
+            texto = mensagens[-1]["content"]
+            mensagens[-1]["content"] = [
+                {"type": "input_text", "text": texto},
+                {"type": "input_image", "image_url": "data:image/jpeg;base64," + base64.b64encode(imagem_jpeg).decode()},
+            ]
         resposta = (cliente or cliente_padrao()).responses.parse(
             model=modelo,
-            input=prompt.mensagens(**campos),
+            input=mensagens,
             text_format=formato,
         )
         metrica.latencia_ms = (time.perf_counter() - inicio) * 1000

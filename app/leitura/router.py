@@ -5,6 +5,7 @@ from urllib.parse import quote
 import cv2
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response
+from openai import OpenAI
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.database import obter_fabrica_sessao, obter_sessao
@@ -12,6 +13,7 @@ from app.digitalizacao.servico import IDENTIFICADA
 from app.leitura import lote
 from app.leitura.servico import FALHA, ler_pagina, paginas_para_ler, recorte_da_caixa
 from app.models import Atividade, Folha
+from app.questoes.cliente import obter_cliente_llm
 
 router = APIRouter(prefix="/atividades", tags=["leitura"])
 
@@ -32,24 +34,26 @@ def _folha(sessao: Session, atividade: Atividade, folha_id: int) -> Folha:
 
 @router.post("/{atividade_id}/digitalizacoes/ler")
 def ler_todas(request: Request, atividade_id: int, sessao: Session = Depends(obter_sessao),
-              fabrica: sessionmaker = Depends(obter_fabrica_sessao)):
+              fabrica: sessionmaker = Depends(obter_fabrica_sessao),
+              cliente: OpenAI | None = Depends(obter_cliente_llm)):
     atividade = _atividade(sessao, atividade_id)
     destino = f"/atividades/{atividade.id}/digitalizacoes"
     if not paginas_para_ler(sessao, atividade):
         return RedirectResponse(f"{destino}?aviso={quote('Não há páginas identificadas esperando leitura.')}#leitura",
                                 status_code=303)
-    if lote.iniciar(fabrica, atividade.id, request.state.usuario.id) is None:
+    if lote.iniciar(fabrica, atividade.id, request.state.usuario.id, cliente) is None:
         return RedirectResponse(f"{destino}?aviso={quote('Já há uma leitura em andamento.')}#leitura", status_code=303)
     return RedirectResponse(f"{destino}#leitura", status_code=303)
 
 
 @router.post("/{atividade_id}/folhas/{folha_id:int}/ler")
-def ler_folha(request: Request, atividade_id: int, folha_id: int, sessao: Session = Depends(obter_sessao)):
+def ler_folha(request: Request, atividade_id: int, folha_id: int, sessao: Session = Depends(obter_sessao),
+              cliente: OpenAI | None = Depends(obter_cliente_llm)):
     """Lê de novo as páginas desta folha, na hora. Útil depois de ligar uma página à mão."""
     atividade = _atividade(sessao, atividade_id)
     folha = _folha(sessao, atividade, folha_id)
     paginas = [p for p in folha.digitalizacoes if p.situacao == IDENTIFICADA]
-    falhas = sum(1 for p in paginas if ler_pagina(sessao, p, request.state.usuario.id).situacao == FALHA)
+    falhas = sum(1 for p in paginas if ler_pagina(sessao, p, request.state.usuario.id, cliente=cliente).situacao == FALHA)
     if not paginas:
         mensagem = "Esta folha não tem páginas digitalizadas."
     elif falhas:
