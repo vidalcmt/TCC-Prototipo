@@ -79,7 +79,7 @@ def test_palavras_atribuidas_a_cada_caixa():
         _palavra("cresceu.", a.x + 10, a.y + 12, "LINE_BREAK"),
         _palavra("Não", b.x + 10, b.y + 4), _palavra("sei", b.x + 25, b.y + 4, "LINE_BREAK"),
     ])
-    assert ocr.textos_por_caixa(texto, caixas) == {"q100": "O êxodo rural\ncresceu.", "q101": "Não sei"}
+    assert ocr.textos_por_caixa(texto, caixas) == {"q100": "O êxodo rural cresceu.", "q101": "Não sei"}
 
 
 def test_chamada_ao_google_cloud_vision(monkeypatch):
@@ -243,11 +243,11 @@ def test_script_de_teste_da_chave(monkeypatch, capsys):
     from scripts import teste_vision
 
     monkeypatch.setattr(config, "google_vision_api_key", "")
-    assert teste_vision.main() == 1 and "não está no .env" in capsys.readouterr().out
+    assert teste_vision.main([]) == 1 and "não está no .env" in capsys.readouterr().out
 
     monkeypatch.setattr(config, "google_vision_api_key", "AIzaChaveDeTesteXYZ1")
     monkeypatch.setattr(ocr, "anotar", lambda img: ({"text": "Devolutiva teste\n2026"}, 420.0))
-    assert teste_vision.main() == 0
+    assert teste_vision.main([]) == 0
     saida = capsys.readouterr().out
     assert "Funcionou em 420 ms" in saida and "Lido pelo Vision:  Devolutiva teste 2026" in saida
     assert "AIzaChaveDeTeste" not in saida and "...XYZ1" in saida  # a chave não aparece
@@ -255,7 +255,7 @@ def test_script_de_teste_da_chave(monkeypatch, capsys):
     def falhar(img):
         raise ocr.OcrFalhou(ocr.explicar_erro(400, "API key not valid."))
     monkeypatch.setattr(ocr, "anotar", falhar)
-    assert teste_vision.main() == 1 and "a chave está errada" in capsys.readouterr().out
+    assert teste_vision.main([]) == 1 and "a chave está errada" in capsys.readouterr().out
 
 
 # ---------- sem as marcas dos cantos ----------
@@ -319,19 +319,19 @@ def test_leitura_sem_marcas_registra_o_metodo_e_avisa_quando_aproximada(fabrica_
 
 
 def test_ordem_pela_pauta_e_nao_pela_ordem_do_servico():
-    """O serviço devolve blocos fora de ordem; a pauta da caixa decide a ordem."""
+    """O serviço devolve blocos fora de ordem; a pauta da caixa decide a ordem, e as linhas viram texto corrido."""
     caixa = _layout(0, 1)[0].caixas[0]
     y1, y2, y3 = (caixa.y + k * 8 - 3 for k in (1, 2, 3))  # palavras escritas sobre a 1ª, a 2ª e a 3ª linha
     texto = {"pages": [{"blocks": [
         {"paragraphs": [{"words": [_palavra("terceira", caixa.x + 10, y3), _palavra("linha.", caixa.x + 35, y3)]}]},
-        {"paragraphs": [{"words": [_palavra("segunda", caixa.x + 10, y2)]}]},
+        {"paragraphs": [{"words": [_palavra("linha", caixa.x + 40, y2)]}]},
         {"paragraphs": [{"words": [_palavra("linha", caixa.x + 30, y1), _palavra("Primeira", caixa.x + 8, y1),
                                    _palavra(",", caixa.x + 44, y1), _palavra("com", caixa.x + 50, y1),
                                    _palavra("divi", caixa.x + 70, y1, "HYPHEN")]}]},
-        {"paragraphs": [{"words": [_palavra("são", caixa.x + 30, y2)]}]},
+        {"paragraphs": [{"words": [_palavra("são", caixa.x + 8, y2), _palavra("da", caixa.x + 25, y2)]}]},
     ]}]}
     assert ocr.textos_por_caixa(texto, [caixa]) == {
-        f"q{caixa.questao_id}": "Primeira linha, com divi-\nsegunda são\nterceira linha."}
+        f"q{caixa.questao_id}": "Primeira linha, com divisão da linha terceira linha."}
 
 
 def test_pagina_ampliada_para_a_escrita():
