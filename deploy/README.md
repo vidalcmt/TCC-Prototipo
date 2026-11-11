@@ -198,9 +198,13 @@ então as páginas são lidas lá.
    https://console.cloud.google.com/apis/library/documentai.googleapis.com
    (projeto da máquina) e clique em **Ativar**.
 2. **Criar o processador:** em https://console.cloud.google.com/ai/document-ai
-   abra a **Galeria de processadores**, escolha **Enterprise Document OCR**,
-   dê o nome `devolutiva-ocr`, região **US** e clique em **Criar**. Na página
-   do processador, copie o **Endpoint de previsão**: é um endereço como
+   abra a **Galeria de processadores** e, em **Geral**, escolha **Document
+   OCR** (é o nome que o console dá ao Enterprise Document OCR). Dê o nome
+   `devolutiva-ocr`, região **US** e clique em **Criar**. Em **Gerenciar
+   versões**, deixe como padrão a versão estável mais recente
+   (`pretrained-ocr-v2.1-2024-08-07` ou posterior), que melhorou a ordem de
+   leitura. Na página do processador, copie o **Endpoint de previsão**: é um
+   endereço como
    `https://us-documentai.googleapis.com/v1/projects/123/locations/us/processors/abc:process`.
    O que interessa é o trecho entre `v1/` e `:process`.
 3. **Dar permissão à máquina:** em https://console.cloud.google.com/iam-admin/iam,
