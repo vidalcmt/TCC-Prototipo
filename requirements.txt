@@ -15,3 +15,5 @@ tzdata>=2024.1
 qrcode>=8.0
 pymupdf>=1.24.3
 opencv-python-headless>=4.9
+google-auth>=2.30
+requests>=2.31

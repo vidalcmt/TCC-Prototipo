@@ -40,7 +40,32 @@ class OcrFalhou(Exception):
 
 
 def disponivel() -> bool:
+    """Se a escrita pode ser lida com o serviço escolhido em LEITURA_SERVICO."""
+    if config.leitura_servico == "documentai":
+        from app.leitura import documentai
+        return documentai.disponivel()
     return bool(config.google_vision_api_key)
+
+
+def nome_do_servico() -> str:
+    return "Google Document AI" if config.leitura_servico == "documentai" else "Google Cloud Vision"
+
+
+def transcrever(imagem: np.ndarray, escala: float, caixas: list, http: httpx.Client | None = None,
+                servico: str | None = None) -> tuple[dict[str, str], float, str]:
+    """Lê a escrita da página alinhada com o serviço escolhido.
+
+    Devolve o texto de cada caixa, a latência em milissegundos e o nome do
+    serviço. Os dois serviços entregam palavras com posição; daí em diante, a
+    montagem pela pauta é a mesma.
+    """
+    servico = servico or config.leitura_servico
+    if servico == "documentai":
+        from app.leitura import documentai
+        lista, latencia = documentai.palavras_da_pagina(imagem, http)
+        return textos_das_palavras(lista, caixas), latencia, documentai.SERVICO
+    anotacao, latencia = anotar(imagem, http)
+    return textos_por_caixa(anotacao, caixas, escala), latencia, SERVICO
 
 
 def anotar(imagem: np.ndarray, http: httpx.Client | None = None) -> tuple[dict, float]:
@@ -127,6 +152,11 @@ PONTUACAO_COLADA_DEPOIS = set("([{")
 
 
 def textos_por_caixa(anotacao: dict, caixas: list, escala: float = ESCALA) -> dict[str, str]:
+    """O texto de cada caixa a partir da resposta do Google Cloud Vision."""
+    return textos_das_palavras(palavras(anotacao, escala), caixas)
+
+
+def textos_das_palavras(lista: list[tuple[str, str, float, float]], caixas: list) -> dict[str, str]:
     """O texto de cada caixa, montado linha por linha pela pauta impressa.
 
     O serviço agrupa as palavras em blocos e parágrafos pela aparência, e com
@@ -137,7 +167,7 @@ def textos_por_caixa(anotacao: dict, caixas: list, escala: float = ESCALA) -> di
     seu centro, e as palavras de uma linha são lidas da esquerda para a direita.
     """
     por_caixa: dict[str, list] = {campo_da_caixa(c): [] for c in caixas}
-    for texto, quebra, x, y in palavras(anotacao, escala):
+    for texto, quebra, x, y in lista:
         for c in caixas:
             if (c.x - MARGEM_CAIXA <= x <= c.x + c.largura + MARGEM_CAIXA
                     and c.y - MARGEM_CAIXA <= y <= c.y + c.altura + MARGEM_CAIXA):
@@ -148,16 +178,24 @@ def textos_por_caixa(anotacao: dict, caixas: list, escala: float = ESCALA) -> di
 
 
 def _montar(itens: list) -> str:
-    linhas: dict[int, list] = {}
-    for linha, x, texto, quebra in sorted(itens):
-        linhas.setdefault(linha, []).append((texto, quebra))
-    saida = []
-    for numero in sorted(linhas):
-        partes = ""
-        for texto, quebra in linhas[numero]:
-            colar = not partes or texto[0] in PONTUACAO_COLADA_ANTES or partes[-1] in PONTUACAO_COLADA_DEPOIS
-            partes += ("" if colar else " ") + texto
-        if linhas[numero] and linhas[numero][-1][1] == "HYPHEN" and not partes.endswith("-"):
-            partes += "-"  # palavra partida no fim da linha
-        saida.append(partes)
-    return "\n".join(saida)
+    """Junta as linhas da pauta num texto corrido.
+
+    A quebra de linha na folha é só o fim do espaço da pauta, e não um novo
+    parágrafo; por isso as linhas são unidas com um espaço. Uma palavra partida
+    com hífen no fim da linha é reunida (\"divi-\" + \"são\" vira \"divisão\").
+    """
+    palavras_em_ordem = []
+    for linha, _, texto, quebra in sorted(itens):
+        palavras_em_ordem.append((linha, texto, quebra))
+    texto_final, linha_anterior, partida = "", None, False
+    for linha, texto, quebra in palavras_em_ordem:
+        mudou_de_linha = linha_anterior is not None and linha != linha_anterior
+        if partida and mudou_de_linha:
+            texto_final = texto_final.rstrip("-") + texto  # continuação da palavra partida
+        else:
+            colar = (not texto_final or texto[0] in PONTUACAO_COLADA_ANTES
+                     or texto_final[-1] in PONTUACAO_COLADA_DEPOIS)
+            texto_final += ("" if colar else " ") + texto
+        partida = quebra == "HYPHEN" or texto.endswith("-")
+        linha_anterior = linha
+    return texto_final

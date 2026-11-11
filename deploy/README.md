@@ -185,6 +185,62 @@ A chave do servidor não funciona fora dele, por causa da restrição de IP.
 Para testar no computador, crie uma segunda chave, com a restrição de API mas
 sem a de IP, coloque no `.env` local e apague essa chave quando terminar.
 
+### 6.5 Usar o Google Document AI em vez do Vision (opcional)
+
+O Document AI é o outro serviço de OCR do Google, com um modelo mais recente,
+leitura de letra à mão ligada por padrão e melhorias na ordem de leitura. O
+preço é o mesmo do Vision (as primeiras 1.000 páginas por mês são gratuitas).
+A diferença está na configuração: ele não aceita chave de API, e sim a conta
+de serviço da máquina. Os processadores ficam nos Estados Unidos ou na Europa,
+então as páginas são lidas lá.
+
+1. **Ativar a API:** abra
+   https://console.cloud.google.com/apis/library/documentai.googleapis.com
+   (projeto da máquina) e clique em **Ativar**.
+2. **Criar o processador:** em https://console.cloud.google.com/ai/document-ai
+   abra a **Galeria de processadores** e, em **Geral**, escolha **Document
+   OCR** (é o nome que o console dá ao Enterprise Document OCR). Dê o nome
+   `devolutiva-ocr`, região **US** e clique em **Criar**. Em **Gerenciar
+   versões**, deixe como padrão a versão estável mais recente
+   (`pretrained-ocr-v2.1-2024-08-07` ou posterior), que melhorou a ordem de
+   leitura. Na página do processador, copie o **Endpoint de previsão**: é um
+   endereço como
+   `https://us-documentai.googleapis.com/v1/projects/123/locations/us/processors/abc:process`.
+   O que interessa é o trecho entre `v1/` e `:process`.
+3. **Dar permissão à máquina:** em https://console.cloud.google.com/iam-admin/iam,
+   ache a conta **Compute Engine default service account**, clique no lápis,
+   **Adicionar outro papel** e escolha **Usuário da API Document AI**. Salve.
+4. **Liberar o acesso da máquina às APIs:** em **Compute Engine > Instâncias de
+   VM > devolutiva**, veja **Escopos de acesso da API**. Se estiver como
+   acesso padrão, clique em **Parar** (o site fica fora do ar por um ou dois
+   minutos; o IP fixo continua o mesmo), depois **Editar**, em escopos escolha
+   **Permitir acesso total a todas as APIs do Cloud**, salve e clique em
+   **Iniciar**. O que a máquina pode fazer continua limitado pelos papéis da
+   conta de serviço.
+5. **Configurar:** `sudo nano /opt/devolutiva/.env` e acrescente, com o trecho
+   copiado no passo 2:
+
+   ```
+   LEITURA_SERVICO=documentai
+   DOCUMENTAI_PROCESSADOR=projects/123/locations/us/processors/abc
+   ```
+
+   Mantenha a `GOOGLE_VISION_API_KEY`: ela é usada na comparação abaixo. Depois,
+   `sudo systemctl restart devolutiva`.
+6. **Testar:**
+   `cd /opt/devolutiva && sudo -u devolutiva .venv/bin/python -m scripts.teste_vision --documentai`
+
+Para voltar ao Vision, troque para `LEITURA_SERVICO=vision` e reinicie.
+
+**Comparar os dois nas mesmas folhas:** depois de conferir e salvar algumas
+folhas lidas, rode
+`cd /opt/devolutiva && sudo -u devolutiva .venv/bin/python -m scripts.comparar_ocr --csv /tmp/comparacao.csv`.
+O script lê de novo as mesmas páginas com os dois serviços, sem mudar nada no
+sistema, e mostra a taxa de erro de cada um contra o texto que você salvou.
+
+No computador, em vez dos passos 3 e 4, rode `gcloud auth application-default login`
+com a sua conta do Google.
+
 ## 7. Monitoramento
 
 Há dois lugares para acompanhar o sistema, e eles se completam:

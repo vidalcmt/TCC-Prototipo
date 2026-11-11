@@ -77,9 +77,8 @@ def ler_pagina(sessao: Session, pagina: PaginaDigitalizada, usuario_id: int | No
         try:
             imagem_ocr = resultado_alinhamento.ampliada(ocr.ESCALA_OCR)
             escala_ocr = ocr.ESCALA_OCR if imagem_ocr is not alinhada else ocr.ESCALA
-            anotacao, leitura.latencia_ocr_ms = ocr.anotar(imagem_ocr, http)
-            leitura.servico_ocr = ocr.SERVICO
-            textos = ocr.textos_por_caixa(anotacao, pagina_layout.caixas, escala_ocr)
+            textos, leitura.latencia_ocr_ms, leitura.servico_ocr = ocr.transcrever(
+                imagem_ocr, escala_ocr, pagina_layout.caixas, http)
         except ocr.OcrIndisponivel as erro:
             avisos.append(str(erro))
         except ocr.OcrFalhou as erro:
