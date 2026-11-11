@@ -106,8 +106,8 @@ function tabela(cabecalho, linhas, proporcoes) {
 // =====================================================================
 // CAPA
 // =====================================================================
-const VERSAO = "0.19";
-const DATA = "06/11/2026";
+const VERSAO = "0.20";
+const DATA = "10/11/2026";
 
 conteudo.push(new Paragraph({ spacing: { before: 2400 }, children: [] }));
 conteudo.push(new Paragraph({
@@ -849,7 +849,7 @@ tabela(["Função", "O que faz"], [
 h3("Posição dos elementos (layout.py)");
 p("A função `montar(atividade, linhas)` calcula, em milímetros, a posição de cada elemento de cada página: as bolinhas das objetivas, numa grade de duas colunas, e uma caixa com linhas para cada discursiva ou para cada item, passando para uma nova página quando a próxima caixa não cabe. As posições não dependem do navegador nem da impressora, e a mesma função será usada para ler a folha digitalizada: o sistema sabe exatamente onde procurar cada resposta na imagem.");
 tabela(["Elemento", "Posição e finalidade"], [
-  ["Marcas de alinhamento", "Quatro quadrados pretos de 8 mm nos cantos da área de respostas. Na leitura, servem para corrigir a inclinação e a escala da imagem digitalizada"],
+  ["Marcas de alinhamento", "Quatro quadrados pretos de 8 mm nos cantos da área de respostas. Na leitura, servem para corrigir a inclinação e a escala da imagem digitalizada. São desenhadas em SVG, porque o navegador não imprime cores de fundo quando a opção \"Gráficos de fundo\" está desmarcada; até a versão 0.19 eram um bloco com fundo preto, e folhas saíram sem elas. A página de impressão também oferece imprimir só as marcas (`so_marcas=1`), para passar de novo na impressora folhas já preenchidas"],
   ["QR code", "No canto superior direito, com o conteúdo `DEVOLUTIVA|código|página`. Identifica a folha e a página sem depender de leitura de texto"],
   ["Cabeçalho", "Título, turma, número da página e o código da folha em letras grandes, para conferência visual"],
   ["Objetivas", "Uma linha por questão, com bolinhas de 5,2 mm de diâmetro identificadas pela letra. Se a objetiva não tem alternativas cadastradas, recebe as letras A a E"],
@@ -933,6 +933,17 @@ tabela(["Etapa", "Como é feita"], [
   ["Bolinhas", "Em cada bolinha, mede-se a fração de pixels escuros num disco de 72% do raio, para não contar o contorno impresso. A partir de 40%, a bolinha está marcada; entre 20% e 40% (um X, um preenchimento fraco), a leitura fica marcada como duvidosa. Mais de uma marcada vira \"mais de uma\"; nenhuma vira \"em branco\""],
   ["Escrita", "A página alinhada é enviada numa única chamada ao Google Cloud Vision, com o recurso de detecção de texto em documentos e a indicação do português. Cada palavra devolvida vem com a posição; a palavra é atribuída à caixa em que o seu centro está, com 2,5 mm de folga. O texto impresso fora das caixas é descartado. A transcrição é literal: nenhum ajuste é feito"],
 ], [3, 7]);
+h3("Alinhamento sem as marcas dos cantos (elementos.py)");
+p("Quando as marcas não são encontradas, a página é alinhada pelos elementos que a própria folha já tem em posições conhecidas: os quatro cantos do QR code e os quatro cantos de cada caixa de resposta. Cada canto é um par de pontos, onde ele está na imagem e onde deveria estar na folha, e a homografia é calculada com todos os pares, pelo método RANSAC, que descarta pares incoerentes.");
+tabela(["Etapa", "Como é feita"], [
+  ["Orientação e inclinação", "A página é posta em pé pelo QR code e girada pelo ângulo da borda de cima dele, para que as linhas das caixas fiquem horizontais"],
+  ["Previsão", "Uma primeira estimativa de onde cada caixa está: pelas bordas da imagem, quando ela tem a proporção de uma folha A4 (como nos aplicativos que recortam a folha), ou pelo QR code"],
+  ["Bordas das caixas", "Perto da posição prevista, perfis de tinta encontram as linhas que atravessam a caixa de ponta a ponta. A escrita do aluno nunca faz isso. Entre as linhas encontradas, fica o par com a distância certa entre as bordas (com 8% de tolerância para imagens esticadas) e mais perto da previsão, o que evita confundir a borda com uma linha de escrita ou com a caixa vizinha. O mesmo vale para as laterais"],
+  ["Segunda volta", "Com o primeiro alinhamento, as caixas são procuradas de novo, para achar as que a previsão inicial deixou de fora"],
+  ["Sem nenhuma caixa", "Se a imagem tem a proporção A4, usa as bordas da imagem como bordas da folha: é um alinhamento aproximado, com erro de alguns milímetros. Todas as objetivas da página vão para conferência e a folha recebe um aviso"],
+], [3, 7]);
+p("O método usado (marcas, elementos ou aproximado) e o erro medido nas caixas, em milímetros, ficam guardados com a leitura. No alinhamento pelas marcas, as caixas não entram no cálculo e o erro é uma conferência independente; no alinhamento pelos elementos, é o erro do próprio ajuste. O `scripts/medir_leitura.py` separa a taxa de acerto e o CER por método, o que permite comparar folhas com e sem as marcas.");
+p("Num primeiro teste com 18 páginas reais, de 9 folhas impressas sem as marcas e digitalizadas com um aplicativo de celular, o QR code foi lido em todas. Dezessete foram alinhadas pelos elementos, com erro médio de 0,26 mm nas caixas (máximo de 0,47 mm), e uma foi alinhada de forma aproximada, porque a folha estava curvada e as bordas das caixas não foram encontradas. Esse erro é o do próprio ajuste e, por isso, otimista; a comparação com as mesmas folhas depois de receberem as marcas é que mede a diferença entre os métodos.");
 h3("Conferência");
 p("Na página da folha, as respostas lidas aparecem preenchidas, com um aviso de que ainda não foram gravadas. As objetivas lidas recebem a etiqueta \"lida\", ou \"confira\" quando a leitura foi duvidosa, e cada discursiva mostra o recorte da caixa da imagem acima do texto transcrito, para comparar. A leitura só preenche questões que ainda não têm resposta salva. Quando o professor salva, a leitura é marcada como conferida.");
 tabela(["Rota", "O que faz"], [
@@ -1026,7 +1037,7 @@ tabela(["Arquivo", "O que faz"], [
 
 // ---------------------------------------------------------------------
 h1("6. Testes automatizados");
-p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 259 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
+p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 267 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
 tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_precos.py`", "Custo correto para o modelo em uso; preço de cache aplicado; nome com sufixo de versão; modelo desconhecido não gera custo inventado"],
   ["`tests/test_llm.py`", "Sucesso grava tokens, custo, latência, modelo e prompt; resposta sem formato válido vira falha com tokens; erro de rede vira falha com motivo; cliente sem novas tentativas automáticas"],
@@ -1042,7 +1053,7 @@ tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_resultados.py`", "Registro de objetivas certas, erradas, em branco e com mais de uma marcada, e de discursivas; alternativa inválida sem gravar nada; salvar e ir para a próxima folha; objetiva sem gabarito e aviso no painel; folha de outra atividade; correção da folha com resposta esperada, revisão e folha concluída; falha do modelo mantendo a resposta pendente; discursiva corrigida não alterada; correção em lote e parada no limite diário; painel e busca pelo código; liberação, recolhimento e visibilidade para o aluno; valor das objetivas; folhas com respostas não descartadas"],
   ["`tests/test_aluno.py`", "Resultado liberado com explicação da objetiva e feedback da discursiva, sem nada do que é do professor, e sem cache; código digitado com minúsculas e espaços; aviso antes da liberação e para folha incompleta; código inexistente e bloqueio após muitas tentativas; formulário sem indexação; QR code com link no canhoto"],
   ["`tests/test_digitalizacao.py`", "QR code lido em página reta, de cabeça para baixo e com ruído, em folhas sintéticas com o layout real; página sem QR code; PDF com várias folhas e foto sem QR code; página de outra atividade e reenvio que substitui; arquivos recusados; atividade sem folhas; indicação manual da folha com código e página inválidos; exclusão da página e do arquivo; imagem só com login e na atividade certa; atividade com digitalizações não excluída"],
-  ["`tests/test_leitura.py`", "Bolinhas lidas em folhas sintéticas com o layout real, retas, inclinadas, com perspectiva e de cabeça para baixo, incluindo mais de uma marcada e X como duvidoso; página sem marcas; palavras atribuídas às caixas, sem o texto impresso; pedido ao Google Cloud Vision com chave, recurso e idioma; erros do serviço; sem chave; explicação dos erros comuns de configuração; script de teste da chave, sem exibir a chave; leitura, conferência e medida pela tela; só bolinhas sem chave; leitura que não muda respostas salvas; falha de alinhamento exibida; distância de edição, CER e WER"],
+  ["`tests/test_leitura.py`", "Bolinhas lidas em folhas sintéticas com o layout real, retas, inclinadas, com perspectiva e de cabeça para baixo, incluindo mais de uma marcada e X como duvidoso; página sem marcas; palavras atribuídas às caixas, sem o texto impresso; pedido ao Google Cloud Vision com chave, recurso e idioma; erros do serviço; sem chave; alinhamento sem as marcas pelo QR code e pelas caixas, com a página reta e de cabeça para baixo; alinhamento aproximado sem marcas e sem caixas; erro medido nas caixas quando há marcas; leitura sem marcas registrando o método; explicação dos erros comuns de configuração; script de teste da chave, sem exibir a chave; leitura, conferência e medida pela tela; só bolinhas sem chave; leitura que não muda respostas salvas; falha de alinhamento exibida; distância de edição, CER e WER"],
   ["`tests/test_lista_questoes.py`", "Páginas de 50 e página fora do intervalo; cada filtro, inclusive situação pendente e sem correção; filtros mantidos ao trocar de página; filtro sem resultado; opções dos filtros vindas do banco"],
   ["`tests/test_importar_enem.py`", "Paginação; parada após recusas seguidas; exclusão de numeração fora da área e de repetidas; filtro de área e de imagens; montagem do enunciado; importação com gabarito e sem duplicar"],
 ], [3, 7]);
@@ -1157,6 +1168,7 @@ marcadores([
   "**Bloqueio de consultas em memória:** a contagem de códigos inexistentes recomeça quando o servidor reinicia, como o bloqueio de senhas.",
   "**Digitalizações fora da cópia diária:** a cópia automática cobre só o banco. As imagens ficam na pasta de arquivos do servidor; o professor deve guardar os PDFs originais até o fim do semestre.",
   "**Fotos com perspectiva forte:** o QR code costuma ser lido mesmo em fotos tortas, mas a leitura das respostas, na etapa seguinte, precisa das quatro marcas dos cantos visíveis na imagem.",
+  "**Folha curvada:** a homografia corrige inclinação, escala e perspectiva, mas não uma folha dobrada ou ondulada. Com as marcas ou com os elementos, as linhas das caixas podem sair levemente curvas na imagem alinhada; a folga de 2,5 mm nas caixas absorve a maior parte disso.",
   "**Taxa de acerto da leitura ainda não medida com folhas reais:** os testes usam folhas sintéticas e confirmam o alinhamento e as bolinhas, mas a escrita à mão real, a caneta usada pelos alunos e as condições de digitalização só são avaliadas com folhas reais. A medida deve ser feita com `scripts/medir_leitura.py` e relatada no artigo.",
   "**Imagens enviadas ao Google:** a página com a escrita do aluno é enviada ao Google Cloud Vision. A folha não tem nome, só o código; ainda assim, o uso deve ser informado no termo de consentimento e no artigo.",
   "**Limiares das bolinhas definidos em testes sintéticos:** os valores de 40% e 20% podem precisar de ajuste depois das primeiras folhas reais; as leituras duvidosas e a conferência reduzem o efeito de um ajuste imperfeito.",
@@ -1226,6 +1238,7 @@ tabela(["Termo", "Significado"], [
 // ---------------------------------------------------------------------
 h1("10. Histórico de versões");
 tabela(["Data", "Versão", "Referência", "Mudança"], [
+  ["10/11/2026", "0.20", "pull request da leitura sem as marcas dos cantos", "Marcas dos cantos desenhadas em SVG, para sair na impressão mesmo sem a opção de gráficos de fundo; impressão só das marcas; alinhamento pelo QR code e pelas caixas quando as marcas não aparecem, com o método e o erro guardados na leitura e separados na medida"],
   ["06/11/2026", "0.19", "pull request da configuração do Google Cloud Vision", "Passo a passo detalhado da chave do Google Cloud Vision no guia de publicação, script de teste da chave e mensagens que explicam os erros comuns de configuração; integra na main as versões 0.15 a 0.18, que tinham ficado nas branches intermediárias"],
   ["31/10/2026", "0.18", "pull request da leitura automática", "Alinhamento das páginas pelas marcas dos cantos, leitura das bolinhas com OpenCV, transcrição da escrita com o Google Cloud Vision, conferência na página da folha com recortes das caixas, leitura em lote e script de medida da taxa de acerto"],
   ["31/10/2026", "0.17", "pull request das digitalizações", "Envio de PDF ou fotos das folhas respondidas, identificação de cada página pelo QR code, conferência das páginas não identificadas e imagem ao lado das respostas da folha; atividade com respostas ou digitalizações não pode ser excluída"],
