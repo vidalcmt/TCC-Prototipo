@@ -56,8 +56,8 @@ def test_pagina_sem_marcas_nao_e_alinhada():
 
 # ---------- transcrição ----------
 
-def _palavra(texto, x_mm, y_mm, quebra="SPACE"):
-    x, y = x_mm * ESCALA, y_mm * ESCALA
+def _palavra(texto, x_mm, y_mm, quebra="SPACE", escala=ESCALA):
+    x, y = x_mm * escala, y_mm * escala
     simbolos = [{"text": c} for c in texto]
     simbolos[-1]["property"] = {"detectedBreak": {"type": quebra}}
     return {"boundingBox": {"vertices": [{"x": x - 10, "y": y - 5}, {"x": x + 10, "y": y - 5},
@@ -124,6 +124,9 @@ def ambiente(tmp_path, monkeypatch):
     lote_leitura._andamentos.clear()
 
 
+enviadas: list = []
+
+
 def _enviar_folha(fabrica_sessao, cliente_web, p, marcas, com_ocr=True, monkeypatch=None):
     with fabrica_sessao() as s:
         atividade = s.get(Atividade, p["atividade"])
@@ -134,9 +137,13 @@ def _enviar_folha(fabrica_sessao, cliente_web, p, marcas, com_ocr=True, monkeypa
     caixa = pagina.caixas[0]
     if com_ocr:
         monkeypatch.setattr(config, "google_vision_api_key", "x")
-        monkeypatch.setattr(ocr, "anotar", lambda img, http=None: (anotacao([
-            _palavra("Houve", caixa.x + 10, caixa.y + 4), _palavra("êxodo", caixa.x + 30, caixa.y + 4),
-            _palavra("rural.", caixa.x + 50, caixa.y + 4, "LINE_BREAK")]), 850.0))
+        def anotar_falso(img, http=None):
+            enviadas.append(img.shape)
+            e = ocr.ESCALA_OCR
+            return anotacao([_palavra("Houve", caixa.x + 10, caixa.y + 4, escala=e),
+                             _palavra("êxodo", caixa.x + 30, caixa.y + 4, escala=e),
+                             _palavra("rural.", caixa.x + 50, caixa.y + 4, "LINE_BREAK", escala=e)]), 850.0
+        monkeypatch.setattr(ocr, "anotar", anotar_falso)
     return pagina
 
 
@@ -151,6 +158,7 @@ def test_ler_conferir_e_medir(fabrica_sessao, cliente_web, prova, monkeypatch):
     assert f'name="q{p["o1"]}" value="B" checked' in pagina and f'name="q{p["o2"]}" value="C" checked' in pagina
     assert ">confira</span>" in pagina  # o X da questão 2
     assert ">Houve êxodo rural.</textarea>" in pagina and f"/recorte/q{p['d']}" in pagina
+    assert enviadas[-1] == (round(297 * ocr.ESCALA_OCR), round(210 * ocr.ESCALA_OCR))  # mais resolução para a escrita
     with fabrica_sessao() as s:
         assert s.query(Submissao).filter(Submissao.folha_id.is_not(None)).count() == 0  # nada gravado ainda
         leitura = s.query(LeituraPagina).one()
@@ -307,3 +315,33 @@ def test_leitura_sem_marcas_registra_o_metodo_e_avisa_quando_aproximada(fabrica_
     with fabrica_sessao() as s:
         alinhamento = json.loads(s.query(LeituraPagina).one().resultado_json)["alinhamento"]
     assert alinhamento["metodo"] == "elementos" and alinhamento["caixas"] == 1 and alinhamento["erro_mm"] < 1.0
+
+
+
+def test_ordem_pela_pauta_e_nao_pela_ordem_do_servico():
+    """O serviço devolve blocos fora de ordem; a pauta da caixa decide a ordem."""
+    caixa = _layout(0, 1)[0].caixas[0]
+    y1, y2, y3 = (caixa.y + k * 8 - 3 for k in (1, 2, 3))  # palavras escritas sobre a 1ª, a 2ª e a 3ª linha
+    texto = {"pages": [{"blocks": [
+        {"paragraphs": [{"words": [_palavra("terceira", caixa.x + 10, y3), _palavra("linha.", caixa.x + 35, y3)]}]},
+        {"paragraphs": [{"words": [_palavra("segunda", caixa.x + 10, y2)]}]},
+        {"paragraphs": [{"words": [_palavra("linha", caixa.x + 30, y1), _palavra("Primeira", caixa.x + 8, y1),
+                                   _palavra(",", caixa.x + 44, y1), _palavra("com", caixa.x + 50, y1),
+                                   _palavra("divi", caixa.x + 70, y1, "HYPHEN")]}]},
+        {"paragraphs": [{"words": [_palavra("são", caixa.x + 30, y2)]}]},
+    ]}]}
+    assert ocr.textos_por_caixa(texto, [caixa]) == {
+        f"q{caixa.questao_id}": "Primeira linha, com divi-\nsegunda são\nterceira linha."}
+
+
+def test_pagina_ampliada_para_a_escrita():
+    pagina = _layout(0, 1)[0]
+    alinhada = alinhar(digitalizar(desenhar(pagina, "ABCD-EFGH"), angulo=1.0, semente=3), pagina)
+    grande = alinhada.ampliada(ocr.ESCALA_OCR)
+    assert alinhada.imagem.shape == (round(297 * ESCALA), round(210 * ESCALA))
+    assert grande.shape == (round(297 * ocr.ESCALA_OCR), round(210 * ocr.ESCALA_OCR))
+    # a caixa fica no mesmo lugar, em milímetros, nas duas resoluções
+    c = pagina.caixas[0]
+    pequena = alinhada.imagem[round((c.y - 1) * ESCALA):round((c.y + 1) * ESCALA), round(c.x * ESCALA):round((c.x + c.largura) * ESCALA)]
+    ampliada = grande[round((c.y - 1) * 12):round((c.y + 1) * 12), round(c.x * 12):round((c.x + c.largura) * 12)]
+    assert pequena.min() < 100 and ampliada.min() < 100  # a borda de cima da caixa aparece nas duas
