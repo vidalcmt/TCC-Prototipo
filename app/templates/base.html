@@ -20,6 +20,7 @@
       <a href="/revisar"{% if caminho == "/revisar" %} aria-current="page"{% endif %}>Para revisar{% if request.state.pendentes %}<span class="contador" aria-label="{{ request.state.pendentes }} pendentes">{{ request.state.pendentes }}</span>{% endif %}</a>
       {% if usuario.eh_admin %}
       <a href="/metricas"{% if caminho.startswith("/metricas") %} aria-current="page"{% endif %}>Métricas</a>
+      <a href="/monitoramento"{% if caminho.startswith("/monitoramento") %} aria-current="page"{% endif %}>Monitoramento</a>
       <a href="/usuarios"{% if caminho.startswith("/usuarios") %} aria-current="page"{% endif %}>Usuários</a>
       {% endif %}
     </nav>

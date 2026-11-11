@@ -185,6 +185,89 @@ A chave do servidor não funciona fora dele, por causa da restrição de IP.
 Para testar no computador, crie uma segunda chave, com a restrição de API mas
 sem a de IP, coloque no `.env` local e apague essa chave quando terminar.
 
+## 7. Monitoramento
+
+Há dois lugares para acompanhar o sistema, e eles se completam:
+
+- **A página Monitoramento** (no menu, só para administradores) mostra o que
+  acontece dentro do sistema: o tempo de resposta de cada rota, as requisições
+  mais lentas, os erros, o tempo das chamadas à OpenAI e ao Google Cloud
+  Vision, e a memória e o disco no momento. Não precisa configurar nada.
+- **O Cloud Monitoring**, no Google Cloud, vê a máquina de fora: memória e
+  disco ao longo do tempo, se o site está no ar e alertas por e-mail. É o que
+  mostra um erro 502, que acontece justamente quando o sistema não responde.
+
+O Cloud Monitoring não tem custo neste uso: as verificações de disponibilidade
+têm 1 milhão de execuções grátis por mês, os alertas não são cobrados, as
+métricas do agente cabem nos 150 MiB grátis por mês e os logs, nos 50 GiB.
+
+### 7.1 Instalar o agente na máquina
+
+Sem o agente, o Google Cloud só enxerga a CPU e a rede; a memória, que foi a
+causa do erro 502, fica de fora. Na janela SSH:
+
+```
+cd ~
+curl -sSO https://dl.google.com/cloudagents/add-google-cloud-ops-agent-repo.sh
+sudo bash add-google-cloud-ops-agent-repo.sh --also-install
+rm add-google-cloud-ops-agent-repo.sh
+sudo cp /opt/devolutiva/deploy/ops-agent.yaml /etc/google-cloud-ops-agent/config.yaml
+sudo systemctl restart google-cloud-ops-agent
+sudo systemctl status google-cloud-ops-agent"*" --no-pager | grep -E "Active|ops-agent-"
+```
+
+As linhas devem mostrar `active (running)`. O arquivo `ops-agent.yaml` faz o
+agente enviar também os logs da aplicação e do Caddy.
+
+### 7.2 Ver a máquina
+
+Em **Compute Engine > Instâncias de VM**, clique em `devolutiva` e abra a aba
+**Observabilidade**. Depois de alguns minutos, aparecem os gráficos de CPU,
+**memória**, disco e rede. Se a memória vive perto de 100%, ative a swap (a
+reserva em disco) ou aumente a máquina.
+
+### 7.3 Saber se o site caiu
+
+1. Abra https://console.cloud.google.com/monitoring/uptime e clique em
+   **Criar verificação de tempo de atividade**.
+2. Protocolo **HTTPS**, tipo de recurso **URL**, nome do host
+   `34-39-228-173.sslip.io` (ou o seu domínio) e caminho `/saude`. Frequência
+   de **5 minutos**.
+3. Em validação da resposta, marque **O conteúdo corresponde** e escreva `ok`.
+4. Em alerta e notificação, deixe a criação do alerta ligada e escolha (ou crie)
+   um canal de **e-mail** com o seu endereço.
+5. Dê o nome `Devolutiva no ar` e clique em **Criar**.
+
+A partir daí, se o site parar de responder, chega um e-mail. A própria
+verificação mostra o tempo de resposta visto de várias regiões do mundo.
+
+### 7.4 Alertas de memória e disco
+
+Em https://console.cloud.google.com/monitoring/alerting, clique em **Criar
+política**:
+
+1. Métrica: **VM Instance > Memory > Memory utilization**. Filtro
+   `state = used`. Condição: acima de **90** por **5 minutos**. Canal: o mesmo
+   e-mail. Nome: `Devolutiva memória alta`.
+2. Repita com **VM Instance > Disk > Disk utilization**, acima de **85**. Nome:
+   `Devolutiva disco quase cheio`.
+
+### 7.5 Procurar nos logs
+
+Em https://console.cloud.google.com/logs, escolha a máquina e procure:
+
+| Procurar | Para ver |
+|---|---|
+| `requisicao lenta` | Requisições que levaram mais de 3 segundos, com a rota |
+| `requisicao com_erro` | Erros do servidor, com a rota |
+| `Traceback` | O detalhe de um erro do Python |
+| `connection refused` ou `502` | Momentos em que o Caddy não conseguiu falar com o sistema |
+| `Out of memory` ou `Killed process` | O sistema encerrado por falta de memória |
+
+O endereço completo das páginas não aparece nesses logs: o log de acesso do
+uvicorn foi desligado (ele gravaria o código das folhas dos alunos), e o
+sistema registra a rota no lugar.
+
 ## Dia a dia
 
 | Para | Comando, na janela SSH |
@@ -194,6 +277,7 @@ sem a de IP, coloque no `.env` local e apague essa chave quando terminar.
 | Ver os erros mais recentes | `sudo journalctl -u devolutiva -n 50` |
 | Fazer uma cópia do banco agora | `sudo systemctl start devolutiva-copia` |
 | Listar as cópias | `ls -lh /var/backups/devolutiva` |
+| Ver se o sistema está lento ou com erro | Menu **Monitoramento**, ou a seção 7 para o Cloud Monitoring |
 | Testar a chave do Google Cloud Vision | `cd /opt/devolutiva && sudo -u devolutiva .venv/bin/python -m scripts.teste_vision` |
 | Gerar senha provisória para quem esqueceu | `cd /opt/devolutiva && sudo -u devolutiva .venv/bin/python -m scripts.redefinir_senha --email voce@exemplo.com` |
 | Baixar o banco para o computador | `sudo cp /opt/devolutiva/tcc.db ~ && sudo chown $USER ~/tcc.db`, depois a engrenagem da janela SSH, **Fazer download de arquivo**, `tcc.db` |

@@ -9,7 +9,11 @@ Group=devolutiva
 WorkingDirectory=/opt/devolutiva
 # Um único processo: o banco é SQLite e o bloqueio de tentativas de login fica
 # na memória. O Caddy recebe o HTTPS e repassa para esta porta, só local.
-ExecStart=/opt/devolutiva/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips 127.0.0.1
+# Sem o log de acesso do uvicorn: ele grava o endereço completo, que pode
+# conter o código da folha de um aluno (/r/XXXX-XXXX). O tempo de cada
+# requisição é medido pelo próprio sistema, com a rota no lugar do endereço
+# (página Monitoramento); lentas e erros vão para este log.
+ExecStart=/opt/devolutiva/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips 127.0.0.1 --no-access-log
 Restart=always
 RestartSec=3
 NoNewPrivileges=true

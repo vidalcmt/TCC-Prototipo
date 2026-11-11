@@ -113,6 +113,7 @@ app/
   aluno/             página pública em que o aluno consulta o resultado pelo código
   digitalizacao/     envio das folhas digitalizadas e identificação pelo QR code
   leitura/           leitura automática: alinhamento, bolinhas (OpenCV) e escrita (Google Cloud Vision)
+  monitoramento/     tempo de resposta por rota, serviços externos e servidor
   templates/         páginas HTML
   static/            estilo, fontes e script do tema claro/escuro
 config/precos.toml   preços por modelo, com fonte e data de acesso

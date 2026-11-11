@@ -363,3 +363,14 @@ td.origem { white-space: nowrap; }
 }
 .resposta-folha img.recorte { display: block; width: 100%; height: auto; border: 1px solid var(--pauta); border-radius: 6px; background: #fff; margin: 4px 0 6px; }
 .status.lida { background: var(--caneta-azul-fundo); color: var(--caneta-azul); border-color: var(--caneta-azul); }
+
+/* Monitoramento */
+.graficos { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.grafico { margin: 0; background: var(--folha); border: 1px solid var(--pauta); border-radius: 10px; padding: 12px 14px; }
+.grafico figcaption { font-weight: 700; margin-bottom: 6px; }
+.grafico svg { width: 100%; height: auto; display: block; }
+.grafico .valor { fill: var(--caneta-azul); }
+.grafico .alvo { fill: transparent; }
+.grafico .barra:hover .valor { fill: var(--tinta); }
+.grafico .eixo { stroke: var(--pauta); stroke-width: 1; }
+.grafico .rotulo-eixo { fill: var(--lapis); font-size: 16px; }

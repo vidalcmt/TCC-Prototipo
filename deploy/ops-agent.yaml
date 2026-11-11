@@ -1,0 +1,15 @@
+# Configuração do Ops Agent do Google Cloud (guia de publicação, seção 7).
+# Copiar para /etc/google-cloud-ops-agent/config.yaml e reiniciar o agente.
+#
+# Ela soma à configuração padrão do agente, que já envia CPU, memória, disco e
+# rede da máquina para o Cloud Monitoring. Aqui só se acrescenta o diário do
+# systemd (journald), onde ficam os logs da aplicação e do Caddy: o Debian 12
+# não grava /var/log/syslog, que é o arquivo que o agente lê por padrão.
+logging:
+  receivers:
+    diario:
+      type: systemd_journald
+  service:
+    pipelines:
+      diario:
+        receivers: [diario]
