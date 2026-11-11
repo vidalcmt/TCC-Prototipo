@@ -1,5 +1,12 @@
 {% extends "base.html" %}
 {% from "_macros.html" import nota_circulada, nota_pendente %}
+{% macro revisao_ia(campo) %}{% set r = revisoes.get(campo) %}{% if r and (r.alteracoes or r.incertos or r.descartada) %}
+<div class="revisao-ia">
+  {% if r.alteracoes %}<p><strong>A revisão da IA trocou</strong> (confira com a imagem):</p>
+  <ul>{% for a in r.alteracoes %}<li><s>{{ a.lido }}</s> por <b>{{ a.corrigido }}</b><span class="discreto"> ({{ a.motivo }})</span></li>{% endfor %}</ul>{% endif %}
+  {% if r.incertos %}<p><strong>Trechos incertos:</strong> {{ r.incertos|join("; ") }}</p>{% endif %}
+  {% if r.descartada %}<p class="discreto">Revisão não aplicada: {{ r.descartada }}. O texto é o da leitura automática.</p>{% endif %}
+</div>{% endif %}{% endmacro %}
 {% block titulo %}Folha {{ folha.numero }}: {{ atividade.titulo }}{% endblock %}
 {% block conteudo %}
 <a class="voltar" href="/atividades/{{ atividade.id }}/resultados">&larr; Voltar para os resultados</a>
@@ -93,12 +100,14 @@
   <label for="{{ campo }}"><span class="letra-item">{{ item.letra }})</span> <span class="discreto">{{ item.enunciado[:140] }}{% if item.enunciado|length > 140 %}…{% endif %}</span></label>
   {% if campo in recortes %}<img class="recorte" src="/atividades/{{ atividade.id }}/folhas/{{ folha.id }}/recorte/{{ campo }}" alt="Resposta escrita na folha, item {{ item.letra }}" loading="lazy">{% endif %}
   <textarea id="{{ campo }}" name="{{ campo }}" rows="4"{% if travada %} readonly{% endif %}>{{ s.resposta_do_item(item.letra) if s else lidos.get(campo, "") }}</textarea>
+  {% if not s %}{{ revisao_ia(campo) }}{% endif %}
   {% endfor %}
   {% else %}
   {% set campo = "q" ~ q.id %}
   <label for="{{ campo }}" class="so-leitor">Resposta da questão {{ l.numero }}</label>
   {% if campo in recortes %}<img class="recorte" src="/atividades/{{ atividade.id }}/folhas/{{ folha.id }}/recorte/{{ campo }}" alt="Resposta escrita na folha, questão {{ l.numero }}" loading="lazy">{% endif %}
   <textarea id="{{ campo }}" name="{{ campo }}" rows="5"{% if travada %} readonly{% endif %}>{{ s.resposta_aluno if s else lidos.get(campo, "") }}</textarea>
+  {% if not s %}{{ revisao_ia(campo) }}{% endif %}
   {% endif %}
 </section>
 {% endfor %}

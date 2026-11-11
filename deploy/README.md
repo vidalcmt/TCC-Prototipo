@@ -241,6 +241,28 @@ sistema, e mostra a taxa de erro de cada um contra o texto que você salvou.
 No computador, em vez dos passos 3 e 4, rode `gcloud auth application-default login`
 com a sua conta do Google.
 
+### 6.6 Revisão da transcrição pela IA (opcional)
+
+Um modelo de linguagem olha a imagem de cada caixa e corrige o que o OCR leu
+errado ("perede" vira "parede"), mantendo os erros do próprio aluno
+("assasino" continua assim). As trocas aparecem embaixo de cada resposta na
+página da folha, para você conferir antes de salvar.
+
+1. No `.env` do servidor (`sudo nano /opt/devolutiva/.env`), acrescente
+   `LEITURA_REVISAO_IA=true`.
+2. Cada caixa com texto é uma chamada ao modelo. Se for ler uma turma inteira
+   no mesmo dia, aumente o limite, por exemplo `LIMITE_CHAMADAS_DIA=300`.
+3. `sudo systemctl restart devolutiva`.
+
+A revisão vale para as leituras feitas depois de ligada. Para revisar uma
+folha já lida, use "Ler de novo a folha digitalizada" na página da folha (só preenche as questões
+que ainda não têm resposta salva).
+
+**Medir se ajudou:** depois de conferir e salvar as folhas, rode
+`cd /opt/devolutiva && sudo -u devolutiva .venv/bin/python -m scripts.medir_leitura`.
+A linha "Revisão da IA" mostra a taxa de erro do OCR sozinho e com a revisão,
+e em quantas respostas a revisão piorou o texto (trocas que você desfez).
+
 ## 7. Monitoramento
 
 Há dois lugares para acompanhar o sistema, e eles se completam:

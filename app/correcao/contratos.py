@@ -439,3 +439,20 @@ def problemas_da_discursiva(
         elif not trecho_existe(c.trecho_citado, resposta_aluno):
             problemas.append(f"trecho citado no critério {c.criterio!r} não existe na resposta do aluno")
     return problemas
+
+
+# ---------------------------------------------------------------------------
+# Revisão da transcrição das folhas digitalizadas (prompt transcricao_v1)
+# ---------------------------------------------------------------------------
+
+class TrechoAlterado(BaseModel):
+    lido: str = Field(description="O trecho como o programa de OCR leu")
+    corrigido: str = Field(description="O trecho como aparece na imagem")
+    motivo: str = Field(description="Em poucas palavras, por que é um erro de leitura e não do aluno")
+
+
+class RevisaoTranscricaoV1(BaseModel):
+    texto: str = Field(description="A transcrição revisada, com os erros do aluno mantidos")
+    alteracoes: list[TrechoAlterado]
+    trechos_incertos: list[str] = Field(description="Trechos em que a imagem não permitiu decidir")
+
