@@ -248,3 +248,62 @@ def test_script_de_teste_da_chave(monkeypatch, capsys):
         raise ocr.OcrFalhou(ocr.explicar_erro(400, "API key not valid."))
     monkeypatch.setattr(ocr, "anotar", falhar)
     assert teste_vision.main() == 1 and "a chave está errada" in capsys.readouterr().out
+
+
+# ---------- sem as marcas dos cantos ----------
+
+def _como_aplicativo(img, angulo=0.6, escala_y=0.985):
+    """Imita um aplicativo de celular: folha recortada, levemente girada e esticada numa direção."""
+    h, w = img.shape
+    girada = cv2.warpAffine(img, cv2.getRotationMatrix2D((w / 2, h / 2), angulo, 1.0), (w, h), borderValue=255)
+    esticada = cv2.resize(girada, (w, round(h * escala_y)), interpolation=cv2.INTER_AREA)
+    ruido = np.random.default_rng(2).normal(0, 6, esticada.shape)
+    return np.clip(esticada.astype(float) * 0.95 + 8 + ruido, 0, 255).astype(np.uint8)
+
+
+@pytest.mark.parametrize("girar", [False, True])
+def test_alinha_sem_as_marcas_pelo_qr_e_pelas_caixas(girar):
+    from app.leitura.alinhamento import ELEMENTOS, erro_das_caixas
+    pagina = _layout(0, 4)[0]
+    escrita = {(c.questao_id, None): "Resposta escrita bem em cima da linha" for c in pagina.caixas}
+    imagem = _como_aplicativo(desenhar(pagina, "ABCD-EFGH", escrita=escrita, com_marcas=False))
+    if girar:
+        imagem = cv2.rotate(imagem, cv2.ROTATE_180)
+    alinhada = alinhar(imagem, pagina)
+    assert alinhada.metodo == ELEMENTOS and alinhada.girada == girar
+    assert len(pagina.caixas) == 2  # duas caixas de 8 linhas por página
+    assert alinhada.caixas_usadas == 2 and alinhada.erro_mm < 1.0
+    erro, conferidas = erro_das_caixas(alinhada.imagem, pagina)
+    assert conferidas == 2 and erro < 1.0
+
+
+def test_sem_marcas_e_sem_caixas_alinha_de_forma_aproximada():
+    from app.leitura.alinhamento import APROXIMADO
+    pagina = _layout()[0]  # só objetivas: não há caixas para usar
+    imagem = _como_aplicativo(desenhar(pagina, "ABCD-EFGH", MARCAS, com_marcas=False), angulo=0)
+    alinhada = alinhar(imagem, pagina)
+    assert alinhada.metodo == APROXIMADO and alinhada.erro_mm is None
+
+
+def test_com_marcas_o_erro_e_medido_nas_caixas():
+    from app.leitura.alinhamento import MARCAS as PELAS_MARCAS
+    pagina = _layout(0, 2)[0]
+    alinhada = alinhar(digitalizar(desenhar(pagina, "ABCD-EFGH"), angulo=1.0, semente=4), pagina)
+    assert alinhada.metodo == PELAS_MARCAS and alinhada.caixas_usadas == 2 and alinhada.erro_mm < 1.0
+
+
+def test_leitura_sem_marcas_registra_o_metodo_e_avisa_quando_aproximada(fabrica_sessao, cliente_web, prova,
+                                                                       monkeypatch):
+    p = prova
+    monkeypatch.setattr(config, "google_vision_api_key", "")
+    with fabrica_sessao() as s:
+        atividade = s.get(Atividade, p["atividade"])
+        pagina = L.montar(atividade, atividade.linhas_por_resposta)[0]
+    imagem = _como_aplicativo(desenhar(pagina, p["codigos"][0], {p["o1"]: "B"}, com_marcas=False))
+    cliente_web.post(f"/atividades/{p['atividade']}/digitalizacoes",
+                     files=[("arquivos", ("app.png", cv2.imencode(".png", imagem)[1].tobytes(), "image/png"))])
+    r = cliente_web.post(f"{_url(p)}/ler")
+    assert "Leitura concluída." in r.text and f'name="q{p["o1"]}" value="B" checked' in r.text
+    with fabrica_sessao() as s:
+        alinhamento = json.loads(s.query(LeituraPagina).one().resultado_json)["alinhamento"]
+    assert alinhamento["metodo"] == "elementos" and alinhamento["caixas"] == 1 and alinhamento["erro_mm"] < 1.0

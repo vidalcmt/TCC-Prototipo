@@ -26,10 +26,11 @@ def _matriz_qr(texto):
     return np.array(qr.get_matrix(), dtype=bool)
 
 
-def desenhar(pagina, codigo: str | None, marcas: dict | None = None, escrita: dict | None = None) -> np.ndarray:
+def desenhar(pagina, codigo: str | None, marcas: dict | None = None, escrita: dict | None = None,
+             com_marcas: bool = True) -> np.ndarray:
     """marcas: {(questao_id): letra ou [letras] ou ("x", letra) ou ("fraca", letra)}; escrita: {(questao_id, item): texto}."""
     img = np.full((_p(L.ALTURA), _p(L.LARGURA)), 255, np.uint8)
-    for x, y in L.MARCAS:
+    for x, y in (L.MARCAS if com_marcas else []):
         img[_p(y):_p(y + L.MARCA), _p(x):_p(x + L.MARCA)] = 0
     if codigo:
         lado = _p(L.QR_LADO)
