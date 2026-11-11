@@ -357,3 +357,22 @@ class LeituraPagina(Base):
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
 
     pagina_digitalizada: Mapped[PaginaDigitalizada] = relationship(back_populates="leitura")
+
+
+class RequisicaoHttp(Base):
+    """Uma requisição ao site, para o monitoramento do tempo de resposta.
+
+    Guarda a rota como foi declarada (por exemplo, `/r/{codigo}`) e nunca o
+    endereço real, que pode conter o código da folha de um aluno. Registros com
+    mais de 30 dias são apagados automaticamente (app/monitoramento/medidor.py).
+    """
+
+    __tablename__ = "requisicao_http"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora, index=True)
+    metodo: Mapped[str] = mapped_column(String(10))
+    rota: Mapped[str] = mapped_column(String(200))
+    status: Mapped[int] = mapped_column(Integer)
+    duracao_ms: Mapped[float] = mapped_column(Float)
+
