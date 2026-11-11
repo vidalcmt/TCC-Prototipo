@@ -106,8 +106,8 @@ function tabela(cabecalho, linhas, proporcoes) {
 // =====================================================================
 // CAPA
 // =====================================================================
-const VERSAO = "0.20";
-const DATA = "10/11/2026";
+const VERSAO = "0.21";
+const DATA = "11/11/2026";
 
 conteudo.push(new Paragraph({ spacing: { before: 2400 }, children: [] }));
 conteudo.push(new Paragraph({
@@ -190,6 +190,7 @@ tabela(
     ["Apoio", "Respostas por folha, correção, painel de resultados e liberação", "Implementado em 31/10/2026; aguardando revisão"],
     ["Apoio", "Página do aluno para consultar o resultado pelo código", "Implementado em 31/10/2026; aguardando revisão"],
     ["Apoio", "Envio das folhas digitalizadas e identificação pelo QR code", "Implementado em 31/10/2026; aguardando revisão"],
+    ["Apoio", "Página de monitoramento e guia do Cloud Monitoring", "Implementado em 11/11/2026; aguardando revisão"],
     ["Apoio", "Leitura automática das bolinhas e da escrita, com conferência", "Implementado em 31/10/2026; aguardando revisão e folhas reais para medir a taxa de acerto"],
     ["5", "Execução em lote e baseline", "Pendente"],
     ["6", "Análise e coleta com especialistas", "Pendente"],
@@ -239,13 +240,14 @@ tabela(
     ["`app/contas/`", "Senhas (`senhas.py`), sessão e permissões (`sessao.py`), regras das contas (`servico.py`) e páginas de entrar, trocar senha e usuários (`router.py`)"],
     ["`app/config.py`", "Leitura das configurações do arquivo .env"],
     ["`app/database.py`", "Conexão com o banco e abertura de sessões"],
-    ["`app/models.py`", "Definição das dezesseis tabelas do banco"],
+    ["`app/models.py`", "Definição das dezessete tabelas do banco"],
     ["`app/correcao/`", "Chamada ao modelo (`llm.py`), prompts (`prompts.py`), contratos de saída (`contratos.py`), explicação de objetivas (`objetiva.py`) e correção de discursivas (`discursiva.py`)"],
     ["`app/metricas/`", "Cálculo de custo (`precos.py`), números do artigo (`resumo.py`), página e exportações (`router.py`)"],
     ["`app/questoes/`", "Páginas de questões: lista dos dois tipos e objetivas (`router.py`), discursivas e respostas (`discursivas.py`), cliente do modelo para as rotas (`cliente.py`)"],
     ["`app/revisao/`", "Aceite ou ajuste da nota pelo professor: regra (`servico.py`) e rota (`router.py`)"],
     ["`app/atividades/`", "Atividades: montagem de conjuntos de questões, caderno de questões em A4 e rotas das folhas de resposta (`router.py`)"],
     ["`app/digitalizacao/`", "Folhas digitalizadas: conversão de PDF e fotos em imagens, leitura do QR code, armazenamento e conferência (`servico.py` e `router.py`)"],
+    ["`app/monitoramento/`", "Medida do tempo de cada requisição (`medidor.py`), cálculo dos números da página (`resumo.py`) e rotas (`router.py`)"],
     ["`app/leitura/`", "Leitura automática: alinhamento pelas marcas (`alinhamento.py`), bolinhas (`bolhas.py`), transcrição com o Google Cloud Vision (`ocr.py`), regras e conferência (`servico.py`), leitura em lote (`lote.py`) e rotas (`router.py`)"],
     ["`app/aluno/`", "Página pública do aluno: o que ele pode ver do próprio resultado (`servico.py`) e as rotas de consulta pelo código (`router.py`)"],
     ["`app/resultados/`", "Respostas de cada folha, nota da folha e liberação (`servico.py`), correção em lote das discursivas (`lote.py`) e páginas do painel e da folha (`router.py`)"],
@@ -267,7 +269,7 @@ tabela(
 
 // ---------------------------------------------------------------------
 h1("3. Modelo de dados");
-p("O banco tem dezesseis tabelas. As oito primeiras foram criadas pela migração inicial do Alembic, a tabela `usuario` por uma migração própria, que também ligou revisões e chamadas ao usuário que as fez, as tabelas `item_questao` e `resposta_item` pela migração dos itens das discursivas, as tabelas `atividade` e `atividade_questao` pela migração das atividades, a tabela `folha` pela migração das folhas de resposta, a tabela `pagina_digitalizada` pela migração das digitalizações, e a tabela `leitura_pagina` pela migração da leitura automática. Duas delas existem por razão metodológica e não devem ser simplificadas: `revisao_professor`, que guarda a nota sugerida e a nota final lado a lado e permite calcular a concordância, e `metrica_requisicao`, que registra também as falhas, porque a taxa de falha é um resultado da pesquisa.");
+p("O banco tem dezessete tabelas. As oito primeiras foram criadas pela migração inicial do Alembic, a tabela `usuario` por uma migração própria, que também ligou revisões e chamadas ao usuário que as fez, as tabelas `item_questao` e `resposta_item` pela migração dos itens das discursivas, as tabelas `atividade` e `atividade_questao` pela migração das atividades, a tabela `folha` pela migração das folhas de resposta, a tabela `pagina_digitalizada` pela migração das digitalizações, a tabela `leitura_pagina` pela migração da leitura automática, e a tabela `requisicao_http` pela migração do monitoramento. Duas delas existem por razão metodológica e não devem ser simplificadas: `revisao_professor`, que guarda a nota sugerida e a nota final lado a lado e permite calcular a concordância, e `metrica_requisicao`, que registra também as falhas, porque a taxa de falha é um resultado da pesquisa.");
 tabela(
   ["Tabela", "Finalidade"],
   [
@@ -382,6 +384,14 @@ campos("leitura_pagina", [
   ["`conferida_em`", "data e hora", "Quando o professor salvou o formulário da folha depois da leitura"],
   ["`usuario_id`", "inteiro", "Quem pediu a leitura"],
   ["`criado_em`", "data e hora", "Momento da leitura"],
+]);
+campos("requisicao_http", [
+  ["`id`", "inteiro", "Identificador"],
+  ["`criado_em`", "data e hora", "Momento da requisição; registros com mais de 30 dias são apagados automaticamente"],
+  ["`metodo`", "texto", "`GET`, `POST` e assim por diante"],
+  ["`rota`", "texto", "A rota como está declarada no código, por exemplo `/r/{codigo}`, e nunca o endereço real, que pode conter o código da folha de um aluno"],
+  ["`status`", "inteiro", "Código da resposta (200, 404, 500...)"],
+  ["`duracao_ms`", "decimal", "Tempo total da requisição, da chegada ao fim da resposta"],
 ]);
 campos("atividade_questao", [
   ["`id`", "inteiro", "Identificador"],
@@ -957,6 +967,26 @@ h3("Medida da taxa de acerto: scripts/medir_leitura.py");
 p("Compara o que foi lido com o que o professor conferiu, nas leituras já conferidas. Nas objetivas, informa a proporção de marcações lidas corretamente, no total e entre as não duvidosas. Nas discursivas, calcula a taxa de erro de caracteres (CER) e de palavras (WER): a distância de edição de Levenshtein entre o texto lido e o conferido, dividida pelo tamanho do conferido. Com `--csv`, grava uma linha por campo. Esses números entram no artigo como resultado da leitura, separados dos resultados da correção.");
 
 // ---------------------------------------------------------------------
+h2("4.28 Monitoramento: app/monitoramento/");
+p("Mostra ao administrador quanto o sistema demora para responder, onde estão os erros e como estão os serviços externos e o servidor. Complementa a página de Métricas, que trata das chamadas ao modelo como dado da pesquisa; o monitoramento trata do funcionamento do site.");
+h3("Medida de cada requisição (medidor.py)");
+p("Um middleware ASGI, a camada mais externa da aplicação, marca o tempo na chegada de cada requisição, anota o código da resposta e, ao fim, grava uma linha em `requisicao_http`. Arquivos estáticos e a rota `/saude`, consultada a cada poucos minutos pela verificação de disponibilidade, ficam de fora. A gravação roda numa linha de execução à parte, para não atrasar outras requisições, e uma falha nela nunca derruba a requisição medida. Requisições acima de 3 segundos e erros do servidor também são escritos no log da aplicação, de onde o Cloud Logging pode coletá-los.");
+p("Para não guardar dados de alunos, a rota é a declarada no código, com os parâmetros no lugar dos valores. Pelo mesmo motivo, o log de acesso do uvicorn, que gravaria o endereço completo, foi desligado no serviço do servidor.");
+h3("A página (GET /monitoramento)");
+tabela(["Parte", "O que mostra"], [
+  ["Números do período", "Requisições, tempo mediano, percentil 95, requisições lentas (acima de 3 s) e erros do servidor. Períodos de 1 hora, 24 horas, 7 dias e 30 dias"],
+  ["Ao longo do período", "Dois gráficos de barras, por intervalo de 5 minutos, 1 hora ou 1 dia: quantidade de requisições e percentil 95 do tempo. Ficam separados, e não num gráfico de dois eixos, porque medem coisas de escalas diferentes"],
+  ["Por rota", "Requisições, mediana, percentil 95, máximo e erros de cada rota, da mais lenta para a mais rápida"],
+  ["Serviços externos", "Chamadas ao modelo da OpenAI, por tipo de questão, e ao Google Cloud Vision: quantidade, tempos e falhas"],
+  ["Servidor", "Memória em uso, memória do processo, swap, disco, tamanho do banco e das digitalizações, e desde quando o sistema está no ar. É uma leitura do momento, feita no Linux por /proc/meminfo"],
+  ["Mais lentas e erros recentes", "As 15 requisições mais lentas e os 15 erros mais recentes do período"],
+  ["Exportação", "`GET /monitoramento/requisicoes.csv`: todas as requisições guardadas, para análise fora do sistema"],
+], [3, 7]);
+p("O percentil 95 é o tempo dentro do qual 95% das requisições respondem. Ele mostra a experiência de quem pega as respostas mais lentas sem ser dominado por um único caso extremo, o que acontece com a média e com o máximo.");
+h3("Cloud Monitoring");
+p("O que a página não vê fica com o Cloud Monitoring, do Google Cloud: a memória e o disco ao longo do tempo, a disponibilidade do site visto de fora (incluindo o erro 502, que acontece quando o sistema não responde) e os alertas por e-mail. O guia de publicação, seção 7, traz a instalação do Ops Agent, a configuração `deploy/ops-agent.yaml`, que inclui os logs do journald, a verificação de disponibilidade em `/saude` e os alertas de memória e disco.");
+
+// ---------------------------------------------------------------------
 h1("5. Configuração e execução");
 
 h2("5.1 Arquivo .env");
@@ -1037,7 +1067,7 @@ tabela(["Arquivo", "O que faz"], [
 
 // ---------------------------------------------------------------------
 h1("6. Testes automatizados");
-p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 267 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
+p("Os testes rodam com `pytest` e não acessam a internet nem gastam crédito: a API da OpenAI e a API do ENEM são substituídas por versões falsas que devolvem respostas controladas. Total nesta versão: 276 testes. Os testes de páginas entram com uma conta de administrador criada no banco de teste, e o custo do scrypt é reduzido só nos testes, para que rodem em poucos segundos.");
 tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_precos.py`", "Custo correto para o modelo em uso; preço de cache aplicado; nome com sufixo de versão; modelo desconhecido não gera custo inventado"],
   ["`tests/test_llm.py`", "Sucesso grava tokens, custo, latência, modelo e prompt; resposta sem formato válido vira falha com tokens; erro de rede vira falha com motivo; cliente sem novas tentativas automáticas"],
@@ -1054,6 +1084,7 @@ tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_aluno.py`", "Resultado liberado com explicação da objetiva e feedback da discursiva, sem nada do que é do professor, e sem cache; código digitado com minúsculas e espaços; aviso antes da liberação e para folha incompleta; código inexistente e bloqueio após muitas tentativas; formulário sem indexação; QR code com link no canhoto"],
   ["`tests/test_digitalizacao.py`", "QR code lido em página reta, de cabeça para baixo e com ruído, em folhas sintéticas com o layout real; página sem QR code; PDF com várias folhas e foto sem QR code; página de outra atividade e reenvio que substitui; arquivos recusados; atividade sem folhas; indicação manual da folha com código e página inválidos; exclusão da página e do arquivo; imagem só com login e na atividade certa; atividade com digitalizações não excluída"],
   ["`tests/test_leitura.py`", "Bolinhas lidas em folhas sintéticas com o layout real, retas, inclinadas, com perspectiva e de cabeça para baixo, incluindo mais de uma marcada e X como duvidoso; página sem marcas; palavras atribuídas às caixas, sem o texto impresso; pedido ao Google Cloud Vision com chave, recurso e idioma; erros do serviço; sem chave; alinhamento sem as marcas pelo QR code e pelas caixas, com a página reta e de cabeça para baixo; alinhamento aproximado sem marcas e sem caixas; erro medido nas caixas quando há marcas; leitura sem marcas registrando o método; explicação dos erros comuns de configuração; script de teste da chave, sem exibir a chave; leitura, conferência e medida pela tela; só bolinhas sem chave; leitura que não muda respostas salvas; falha de alinhamento exibida; distância de edição, CER e WER"],
+  ["`tests/test_monitoramento.py`", "Rota declarada gravada no lugar do endereço real, sem estáticos nem /saude; requisição lenta e erro do servidor no log; registros antigos apagados; cálculo do percentil; resumo do período por rota, por intervalo, das chamadas ao modelo e do servidor; página e exportação só para administradores"],
   ["`tests/test_lista_questoes.py`", "Páginas de 50 e página fora do intervalo; cada filtro, inclusive situação pendente e sem correção; filtros mantidos ao trocar de página; filtro sem resultado; opções dos filtros vindas do banco"],
   ["`tests/test_importar_enem.py`", "Paginação; parada após recusas seguidas; exclusão de numeração fora da área e de repetidas; filtro de área e de imagens; montagem do enunciado; importação com gabarito e sem duplicar"],
 ], [3, 7]);
@@ -1139,6 +1170,9 @@ tabela(["Decisão", "Motivo"], [
   ["Transcrição literal, sem correção automática do texto", "Corrigir a ortografia ou completar palavras mudaria a resposta do aluno e, portanto, a nota"],
   ["Leitura só preenche o formulário; o professor salva", "Um erro de leitura não pode virar resposta do aluno sem que alguém veja"],
   ["Leitura bruta guardada separada das respostas", "Permite medir a taxa de acerto da leitura com as respostas conferidas, como resultado da pesquisa"],
+  ["Tempo das requisições medido pelo próprio sistema, e não só pelo Google Cloud", "O Cloud Monitoring vê a máquina, mas não sabe qual página foi lenta; o sistema sabe a rota e grava sem dados de alunos"],
+  ["Rota declarada no lugar do endereço", "O endereço pode conter o código da folha, que dá acesso ao resultado de um aluno"],
+  ["Percentil 95 além da mediana", "A média esconde os casos lentos e o máximo exagera um caso isolado"],
   ["Questões travadas enquanto houver folhas", "Mudar a ordem ou as questões depois da impressão faria a leitura procurar respostas no lugar errado"],
 ], [4, 6]);
 
@@ -1172,6 +1206,7 @@ marcadores([
   "**Taxa de acerto da leitura ainda não medida com folhas reais:** os testes usam folhas sintéticas e confirmam o alinhamento e as bolinhas, mas a escrita à mão real, a caneta usada pelos alunos e as condições de digitalização só são avaliadas com folhas reais. A medida deve ser feita com `scripts/medir_leitura.py` e relatada no artigo.",
   "**Imagens enviadas ao Google:** a página com a escrita do aluno é enviada ao Google Cloud Vision. A folha não tem nome, só o código; ainda assim, o uso deve ser informado no termo de consentimento e no artigo.",
   "**Limiares das bolinhas definidos em testes sintéticos:** os valores de 40% e 20% podem precisar de ajuste depois das primeiras folhas reais; as leituras duvidosas e a conferência reduzem o efeito de um ajuste imperfeito.",
+  "**Memória e disco só no momento:** a página de monitoramento lê a memória e o disco quando é aberta; o histórico e os alertas dependem do Cloud Monitoring.",
   "**Andamento do lote em memória:** se o servidor reiniciar durante uma correção em lote, ela para. As respostas que faltaram continuam pendentes, e basta pedir a correção de novo.",
   "**Chave de sessão:** sem `SECRET_KEY` no .env, cada reinício do servidor encerra todas as sessões. No servidor publicado, a chave é obrigatória e `COOKIE_SEGURO` deve estar ligado.",
 ]);
@@ -1196,6 +1231,9 @@ tabela(["Termo", "Significado"], [
   ["Distrator", "Alternativa incorreta de uma questão objetiva, construída para parecer plausível"],
   ["Embeddings", "Representações numéricas do significado de um texto, usadas para medir semelhança"],
   ["FastAPI", "Biblioteca Python para construir aplicações web"],
+  ["Percentil", "Valor abaixo do qual fica uma porcentagem dos casos: o percentil 95 do tempo de resposta é o tempo dentro do qual 95% das requisições respondem"],
+  ["Middleware", "Camada que envolve a aplicação e passa por todas as requisições, usada aqui para medir o tempo de cada uma"],
+  ["Ops Agent", "Programa do Google Cloud instalado na máquina para enviar métricas de memória e disco e os logs ao Cloud Monitoring e ao Cloud Logging"],
   ["HTR", "Reconhecimento de texto manuscrito (do inglês Handwritten Text Recognition)"],
   ["Homografia", "Transformação que leva um plano visto em perspectiva a outro plano; aqui, endireita a folha fotografada ou digitalizada torta"],
   ["OMR", "Leitura óptica de marcas (do inglês Optical Mark Recognition): reconhecer bolinhas preenchidas numa folha"],
@@ -1238,6 +1276,7 @@ tabela(["Termo", "Significado"], [
 // ---------------------------------------------------------------------
 h1("10. Histórico de versões");
 tabela(["Data", "Versão", "Referência", "Mudança"], [
+  ["11/11/2026", "0.21", "pull request do monitoramento", "Página de monitoramento com o tempo de resposta por rota, percentis, gráficos por intervalo, serviços externos e servidor; medida de cada requisição sem dados de alunos; log de acesso do uvicorn desligado; guia do Cloud Monitoring e configuração do Ops Agent"],
   ["10/11/2026", "0.20", "pull request da leitura sem as marcas dos cantos", "Marcas dos cantos desenhadas em SVG, para sair na impressão mesmo sem a opção de gráficos de fundo; impressão só das marcas; alinhamento pelo QR code e pelas caixas quando as marcas não aparecem, com o método e o erro guardados na leitura e separados na medida"],
   ["06/11/2026", "0.19", "pull request da configuração do Google Cloud Vision", "Passo a passo detalhado da chave do Google Cloud Vision no guia de publicação, script de teste da chave e mensagens que explicam os erros comuns de configuração; integra na main as versões 0.15 a 0.18, que tinham ficado nas branches intermediárias"],
   ["31/10/2026", "0.18", "pull request da leitura automática", "Alinhamento das páginas pelas marcas dos cantos, leitura das bolinhas com OpenCV, transcrição da escrita com o Google Cloud Vision, conferência na página da folha com recortes das caixas, leitura em lote e script de medida da taxa de acerto"],
@@ -1273,6 +1312,8 @@ marcadores([
   "BRAILLE INSTITUTE. Atkinson Hyperlegible Font. Disponível em: https://www.brailleinstitute.org/freefont/. Acesso em: 23 out. 2026.",
   "OPENCV. OpenCV: Open Source Computer Vision Library. Disponível em: https://opencv.org/. Acesso em: 31 out. 2026.",
   "ARTIFEX. PyMuPDF Documentation. Disponível em: https://pymupdf.readthedocs.io/. Acesso em: 31 out. 2026.",
+  "GOOGLE CLOUD. Install the Ops Agent on an individual VM. Disponível em: https://docs.cloud.google.com/monitoring/agent/ops-agent/installation. Acesso em: 11 nov. 2026.",
+  "GOOGLE CLOUD. Google Cloud Observability pricing. Disponível em: https://cloud.google.com/monitoring/pricing. Acesso em: 11 nov. 2026.",
   "GOOGLE CLOUD. Detect text in images (Cloud Vision API). Disponível em: https://cloud.google.com/vision/docs/ocr. Acesso em: 31 out. 2026.",
   "GOOGLE CLOUD. Preços do Cloud Vision. Disponível em: https://cloud.google.com/vision/docs/pricing. Acesso em: 31 out. 2026.",
   "LEVENSHTEIN, V. I. Binary codes capable of correcting deletions, insertions, and reversals. Soviet Physics Doklady, v. 10, n. 8, p. 707-710, 1966.",
