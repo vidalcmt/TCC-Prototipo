@@ -41,6 +41,24 @@ class PaginaAlinhada:
     metodo: str = MARCAS      # "marcas", "elementos" (QR code e caixas) ou "aproximado" (bordas da imagem)
     erro_mm: float | None = None   # distância média entre as caixas esperadas e as encontradas
     caixas_usadas: int = 0
+    # Para refazer o alinhamento em outra resolução: a imagem de origem (já em pé)
+    # e a transformação que leva os pixels dela aos pixels da página alinhada.
+    origem: np.ndarray | None = None
+    matriz: np.ndarray | None = None
+
+    def ampliada(self, escala: float) -> np.ndarray:
+        """A mesma página alinhada, com `escala` pixels por milímetro.
+
+        A transcrição da escrita usa mais resolução do que a leitura das
+        bolinhas: a 8 pixels por milímetro, a letra miúda perde detalhes que a
+        foto original tinha.
+        """
+        if self.origem is None or self.matriz is None or escala == ESCALA:
+            return self.imagem
+        matriz = np.diag([escala / ESCALA, escala / ESCALA, 1.0]) @ self.matriz
+        tamanho = (round(L.LARGURA * escala), round(L.ALTURA * escala))
+        return cv2.warpPerspective(self.origem, matriz, tamanho, flags=cv2.INTER_CUBIC,
+                                   borderMode=cv2.BORDER_CONSTANT, borderValue=255)
 
 
 def centros_esperados_mm() -> np.ndarray:
@@ -104,7 +122,7 @@ def _quatro_marcas(imagem: np.ndarray) -> np.ndarray:
     return np.array(escolhidas, dtype=np.float32)
 
 
-def _alinhar_nesta_posicao(imagem: np.ndarray) -> np.ndarray:
+def _alinhar_nesta_posicao(imagem: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     origem = _quatro_marcas(imagem)
     destino = centros_esperados_mm() * ESCALA
     # Conferência simples: as marcas precisam formar um retângulo de proporção parecida com a esperada.
@@ -115,7 +133,7 @@ def _alinhar_nesta_posicao(imagem: np.ndarray) -> np.ndarray:
         raise AlinhamentoFalhou("As marcas encontradas não formam o retângulo esperado da folha.")
     matriz = cv2.getPerspectiveTransform(origem, destino)
     return cv2.warpPerspective(imagem, matriz, (LARGURA_PX, ALTURA_PX), flags=cv2.INTER_LINEAR,
-                               borderMode=cv2.BORDER_CONSTANT, borderValue=255)
+                               borderMode=cv2.BORDER_CONSTANT, borderValue=255), matriz
 
 
 def _tinta_no_qr(alinhada: np.ndarray) -> float:
@@ -152,7 +170,8 @@ def alinhar_pelos_elementos(imagem: np.ndarray, pagina_layout) -> PaginaAlinhada
     alinhada = cv2.warpPerspective(imagem, inversa, (LARGURA_PX, ALTURA_PX), flags=cv2.INTER_LINEAR,
                                    borderMode=cv2.BORDER_CONSTANT, borderValue=255)
     metodo = ELEMENTOS if usadas else APROXIMADO
-    return PaginaAlinhada(imagem=alinhada, girada=girada, metodo=metodo, erro_mm=erro, caixas_usadas=usadas)
+    return PaginaAlinhada(imagem=alinhada, girada=girada, metodo=metodo, erro_mm=erro, caixas_usadas=usadas,
+                          origem=imagem, matriz=inversa)
 
 
 def _endireitar(imagem: np.ndarray) -> np.ndarray:
@@ -199,15 +218,17 @@ def alinhar_pelas_marcas(imagem: np.ndarray) -> PaginaAlinhada:
     """
     girada = _de_cabeca_para_baixo(imagem)
     primeira = cv2.rotate(imagem, cv2.ROTATE_180) if girada else imagem
-    alinhada = _alinhar_nesta_posicao(primeira)
+    alinhada, matriz = _alinhar_nesta_posicao(primeira)
+    origem = primeira
     if _tinta_no_qr(alinhada) < 0.25:
+        invertida = cv2.rotate(primeira, cv2.ROTATE_180)
         try:
-            outra = _alinhar_nesta_posicao(cv2.rotate(primeira, cv2.ROTATE_180))
+            outra = _alinhar_nesta_posicao(invertida)
         except AlinhamentoFalhou:
             outra = None
-        if outra is not None and _tinta_no_qr(outra) > _tinta_no_qr(alinhada):
-            alinhada, girada = outra, not girada
-    return PaginaAlinhada(imagem=alinhada, girada=girada)
+        if outra is not None and _tinta_no_qr(outra[0]) > _tinta_no_qr(alinhada):
+            (alinhada, matriz), origem, girada = outra, invertida, not girada
+    return PaginaAlinhada(imagem=alinhada, girada=girada, origem=origem, matriz=matriz)
 
 
 def recorte(alinhada: np.ndarray, x: float, y: float, largura: float, altura: float, margem: float = 2.0) -> np.ndarray:
