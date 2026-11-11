@@ -13,6 +13,10 @@ conferiu e salvou. Só entram as páginas cuja leitura já foi conferida.
 - Discursivas: taxa de erro de caracteres (CER) e de palavras (WER), a
   distância de edição entre o texto lido e o conferido dividida pelo tamanho
   do conferido. 0 é transcrição perfeita.
+- Alinhamento: quantas páginas foram alinhadas por cada método (marcas dos
+  cantos, QR code e caixas, ou aproximado pelas bordas), o erro médio medido
+  nas caixas, em milímetros, e os resultados acima separados por método. É a
+  comparação entre folhas com e sem as marcas dos cantos.
 
 O CSV tem uma linha por campo e não contém nenhum dado de aluno além do
 código da folha.
@@ -65,6 +69,12 @@ class Medida:
     soma_cer: float = 0.0
     soma_wer: float = 0.0
     linhas: list[dict] = field(default_factory=list)
+    # por método de alinhamento: páginas, erros em mm, objetivas, acertos, textos, soma do CER
+    metodos: dict = field(default_factory=dict)
+
+    def _metodo(self, nome: str) -> dict:
+        return self.metodos.setdefault(nome, {"paginas": 0, "erros": [], "objetivas": 0, "acertos": 0,
+                                              "textos": 0, "soma_cer": 0.0})
 
     def resumo(self) -> str:
         partes = []
@@ -77,6 +87,15 @@ class Medida:
         if self.textos:
             partes.append(f"Discursivas: {self.textos} campos; CER médio {self.soma_cer / self.textos:.1%}, "
                           f"WER médio {self.soma_wer / self.textos:.1%}.")
+        for nome, m in sorted(self.metodos.items()):
+            linha = f"Alinhamento {nome}: {m['paginas']} páginas"
+            if m["erros"]:
+                linha += f", erro médio nas caixas {sum(m['erros']) / len(m['erros']):.2f} mm"
+            if m["objetivas"]:
+                linha += f", objetivas {m['acertos'] / m['objetivas']:.1%}"
+            if m["textos"]:
+                linha += f", CER {m['soma_cer'] / m['textos']:.1%}"
+            partes.append(linha + ".")
         return "\n".join(partes) or "Nenhuma leitura conferida ainda."
 
 
@@ -96,6 +115,11 @@ def medir(sessao: Session) -> Medida:
             continue
         respostas = {s.questao_id: s for s in folha.respostas}
         resultado = json.loads(leitura.resultado_json)
+        alinhamento = resultado.get("alinhamento") or {"metodo": "marcas"}  # leituras anteriores à medida
+        metodo = medida._metodo(alinhamento["metodo"])
+        metodo["paginas"] += 1
+        if alinhamento.get("erro_mm") is not None:
+            metodo["erros"].append(alinhamento["erro_mm"])
         for qid, lido in resultado.get("objetivas", {}).items():
             submissao = respostas.get(int(qid))
             if submissao is None:
@@ -104,11 +128,13 @@ def medir(sessao: Session) -> Medida:
             certo = lido["marcada"] == final
             medida.objetivas += 1
             medida.acertos += certo
+            metodo["objetivas"] += 1
+            metodo["acertos"] += certo
             medida.duvidosas += bool(lido["duvida"])
             if not lido["duvida"]:
                 medida.sem_duvida += 1
                 medida.acertos_sem_duvida += certo
-            medida.linhas.append({"folha": folha.codigo, "campo": f"q{qid}", "tipo": "objetiva",
+            medida.linhas.append({"folha": folha.codigo, "alinhamento": alinhamento["metodo"], "campo": f"q{qid}", "tipo": "objetiva",
                                   "lido": lido["marcada"], "conferido": final, "duvida": lido["duvida"],
                                   "acerto": certo, "cer": "", "wer": ""})
         for campo, texto in resultado.get("textos", {}).items():
@@ -121,7 +147,9 @@ def medir(sessao: Session) -> Medida:
             medida.textos += 1
             medida.soma_cer += cer
             medida.soma_wer += wer
-            medida.linhas.append({"folha": folha.codigo, "campo": campo, "tipo": "discursiva", "lido": texto,
+            metodo["textos"] += 1
+            metodo["soma_cer"] += cer
+            medida.linhas.append({"folha": folha.codigo, "alinhamento": alinhamento["metodo"], "campo": campo, "tipo": "discursiva", "lido": texto,
                                   "conferido": final, "duvida": "", "acerto": "", "cer": round(cer, 4),
                                   "wer": round(wer, 4)})
     return medida
@@ -138,7 +166,7 @@ def main() -> None:
     print(medida.resumo())
     if args.csv:
         with open(args.csv, "w", newline="", encoding="utf-8") as arquivo:
-            escritor = csv.DictWriter(arquivo, fieldnames=["folha", "campo", "tipo", "lido", "conferido", "duvida",
+            escritor = csv.DictWriter(arquivo, fieldnames=["folha", "alinhamento", "campo", "tipo", "lido", "conferido", "duvida",
                                                            "acerto", "cer", "wer"])
             escritor.writeheader()
             escritor.writerows(medida.linhas)
