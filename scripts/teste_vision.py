@@ -1,7 +1,8 @@
-"""Confere se a chave do Google Cloud Vision está funcionando.
+"""Confere se a leitura da escrita está funcionando.
 
-Uso (com GOOGLE_VISION_API_KEY no .env):
-    python -m scripts.teste_vision
+Uso:
+    python -m scripts.teste_vision                # Google Cloud Vision (GOOGLE_VISION_API_KEY)
+    python -m scripts.teste_vision --documentai   # Google Document AI (DOCUMENTAI_PROCESSADOR)
 
 No servidor:
     cd /opt/devolutiva && sudo -u devolutiva .venv/bin/python -m scripts.teste_vision
@@ -27,7 +28,10 @@ def imagem_de_teste() -> np.ndarray:
     return imagem
 
 
-def main() -> int:
+def main(argumentos: list[str] | None = None) -> int:
+    argumentos = sys.argv[1:] if argumentos is None else argumentos
+    if "--documentai" in argumentos:
+        return testar_documentai()
     chave = config.google_vision_api_key
     if not chave:
         print("GOOGLE_VISION_API_KEY não está no .env. Veja deploy/README.md, seção 6.")
@@ -42,6 +46,23 @@ def main() -> int:
     print(f"Funcionou em {latencia:.0f} ms.")
     print(f"Escrito na imagem: {FRASE}")
     print(f"Lido pelo Vision:  {lido or '(nada)'}")
+    return 0
+
+
+def testar_documentai() -> int:
+    from app.leitura import documentai
+    if not documentai.disponivel():
+        print("DOCUMENTAI_PROCESSADOR não está no .env. Veja deploy/README.md, seção 6.5.")
+        return 1
+    print("Processador configurado. Enviando uma imagem de teste ao Document AI...")
+    try:
+        lista, latencia = documentai.palavras_da_pagina(imagem_de_teste())
+    except (ocr.OcrFalhou, ocr.OcrIndisponivel) as erro:
+        print(f"Falhou. {erro}")
+        return 1
+    print(f"Funcionou em {latencia:.0f} ms.")
+    print(f"Escrito na imagem: {FRASE}")
+    print(f"Lido pelo Document AI: {' '.join(p[0] for p in lista) or '(nada)'}")
     return 0
 
 
