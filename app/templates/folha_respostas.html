@@ -17,35 +17,22 @@
     <div><span class="rotulo-ad">Depois da revisão</span><p>{{ trechos(r.depois, "ins") }}</p></div>
   </div>
   {% endif %}
-  {% if r.alteracoes and not admin %}<p class="rotulo-ad">Cada troca, com o motivo dado pela IA</p>
+  {% if r.alteracoes %}<p class="rotulo-ad">Cada troca, com o motivo dado pela IA</p>
   <ul>{% for a in r.alteracoes %}<li><s>{{ a.lido }}</s> por <b>{{ a.corrigido }}</b><span class="discreto"> ({{ a.motivo }})</span></li>{% endfor %}</ul>{% endif %}
   {% if r.incertos %}<p><strong>Trechos incertos:</strong> {{ r.incertos|join("; ") }}</p>{% endif %}
   <p class="discreto">Confira com a imagem: a IA corrige erros de leitura, e um erro do aluno deve ficar como ele escreveu.</p>
 </details>
 {% else %}<p class="discreto revisao-ia-vazia">A revisão da IA não trocou nada nesta resposta.</p>{% endif %}
 {% endif %}{% endmacro %}
-{% macro avaliar_leitura(campo, s) %}{% if admin and campo in lidos_por_campo %}{% set l = lidos_por_campo[campo] %}{% set a = avaliacoes.get(campo) %}{% set vereditos = trocas_avaliadas.get(campo, []) %}
+{% macro avaliar_leitura(campo, s) %}{% if admin and campo in lidos_por_campo %}{% set l = lidos_por_campo[campo] %}{% set a = avaliacoes.get(campo) %}
 <fieldset class="avaliacao-leitura" data-url="/atividades/{{ atividade.id }}/folhas/{{ folha.id }}/avaliacao-leitura" data-campo="{{ campo }}">
   <legend>Avaliação da leitura <span class="discreto">(só administrador{% if l.com_revisao %}, leitura com a revisão da IA{% endif %})</span></legend>
   {% if s %}<p class="texto-lido"><span class="discreto">Texto lido:</span> {{ l.texto or "(vazio)" }}</p>{{ revisao_ia(campo) }}{% endif %}
-  {% if l.alteracoes %}
-  <p class="rotulo-ad">Cada troca da IA, comparada com a imagem</p>
-  <ul class="trocas-avaliadas">
-    {% for t in l.alteracoes %}{% set i = loop.index0 %}{% set v = vereditos[i].veredito if vereditos|length > i else none %}
-    <li><span><s>{{ t.lido }}</s> por <b>{{ t.corrigido }}</b><span class="discreto"> ({{ t.motivo }})</span></span>
-      <span class="vereditos" role="radiogroup" aria-label="Troca {{ loop.index }}">
-        {% for chave, (rotulo, criterio) in VEREDITOS_TROCA.items() %}
-        <label class="veredito veredito-{{ chave }}" title="{{ criterio }}"><input type="radio" name="troca-{{ campo }}-{{ i }}" value="{{ chave }}" data-troca="{{ i }}"{% if v == chave %} checked{% endif %}> {{ rotulo }}</label>
-        {% endfor %}
-      </span></li>
-    {% endfor %}
-  </ul>
-  {% endif %}
-  <p class="rotulo-ad">O texto lido, no todo</p>
   <div class="notas-leitura" role="radiogroup" aria-label="Nota da leitura">
     {% for chave, (rotulo, criterio) in NOTAS_LEITURA.items() %}
-    <label class="nota-leitura nota-{{ chave }}" title="{{ criterio }}"><input type="radio" name="aval-{{ campo }}" value="{{ chave }}" data-nota{% if a and a.nota == chave %} checked{% endif %}> {{ rotulo }}</label>
+    <label class="nota-leitura nota-{{ chave }}" title="{{ criterio }}"><input type="radio" name="aval-{{ campo }}" value="{{ chave }}"{% if a and a.nota == chave %} checked{% endif %}> {{ rotulo }}</label>
     {% endfor %}
+    <label class="erro-aluno"><input type="checkbox" name="erro-{{ campo }}"{% if a and a.corrigiu_erro_aluno %} checked{% endif %}> A IA corrigiu um erro do aluno</label>
     <span class="discreto estado-avaliacao" aria-live="polite">{% if a %}Avaliada{% endif %}</span>
   </div>
 </fieldset>
@@ -194,19 +181,21 @@
 // Avaliação da leitura: grava ao clicar, sem recarregar a página nem mexer no formulário das respostas.
 document.querySelectorAll(".avaliacao-leitura").forEach(caixa => {
   const estado = caixa.querySelector(".estado-avaliacao");
-  async function gravar(entrada) {
+  async function gravar() {
+    const nota = caixa.querySelector("input[type=radio]:checked");
+    if (!nota) { estado.textContent = "Escolha uma nota para gravar."; return; }
     const dados = new FormData();
     dados.append("campo", caixa.dataset.campo);
-    if (entrada.dataset.troca !== undefined) { dados.append("troca", entrada.dataset.troca); dados.append("veredito", entrada.value); }
-    else dados.append("nota", entrada.value);
+    dados.append("nota", nota.value);
+    if (caixa.querySelector("input[type=checkbox]").checked) dados.append("corrigiu_erro_aluno", "1");
     estado.textContent = "Gravando...";
     try {
       const resposta = await fetch(caixa.dataset.url, { method: "POST", body: dados });
       const corpo = await resposta.json();
-      estado.textContent = corpo.ok ? "Gravado" + (corpo.rotulo ? ": " + corpo.rotulo : "") : (corpo.erro || "Não foi possível gravar.");
+      estado.textContent = corpo.ok ? "Avaliada: " + corpo.rotulo : (corpo.erro || "Não foi possível gravar.");
     } catch (e) { estado.textContent = "Não foi possível gravar. Tente de novo."; }
   }
-  caixa.querySelectorAll("input[type=radio]").forEach(i => i.addEventListener("change", () => gravar(i)));
+  caixa.querySelectorAll("input").forEach(i => i.addEventListener("change", gravar));
 });
 </script>
 {% endif %}

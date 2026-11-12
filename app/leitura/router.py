@@ -12,7 +12,7 @@ from app.contas.sessao import exigir_admin
 from app.database import obter_fabrica_sessao, obter_sessao
 from app.digitalizacao.servico import IDENTIFICADA
 from app.leitura import lote
-from app.leitura.avaliacao import NOTAS, AvaliacaoInvalida, avaliar, trocas_da_avaliacao
+from app.leitura.avaliacao import NOTAS, AvaliacaoInvalida, avaliar
 from app.leitura.servico import FALHA, ler_pagina, paginas_identificadas, paginas_para_ler, recorte_da_caixa
 from app.models import Atividade, Folha
 from app.questoes.cliente import obter_cliente_llm
@@ -67,20 +67,15 @@ def ler_todas_de_novo(request: Request, atividade_id: int, sessao: Session = Dep
 
 @router.post("/{atividade_id}/folhas/{folha_id:int}/avaliacao-leitura", dependencies=[Depends(exigir_admin)])
 async def avaliar_leitura(request: Request, atividade_id: int, folha_id: int, sessao: Session = Depends(obter_sessao)):
-    """Grava a nota do texto ou o veredito de uma troca, chamada pela página da folha sem recarregá-la."""
+    """Grava a avaliação de um campo, chamada pela página da folha sem recarregá-la."""
     folha = _folha(sessao, _atividade(sessao, atividade_id), folha_id)
     dados = await request.form()
-    troca = str(dados.get("troca", ""))
     try:
-        avaliacao = avaliar(sessao, folha, str(dados.get("campo", "")), request.state.usuario.id,
-                            nota=str(dados["nota"]) if dados.get("nota") else None,
-                            troca=int(troca) if troca.isdigit() else None,
-                            veredito=str(dados.get("veredito", "")) or None)
+        avaliacao = avaliar(sessao, folha, str(dados.get("campo", "")), str(dados.get("nota", "")),
+                            dados.get("corrigiu_erro_aluno") in ("1", "on", "true"), request.state.usuario.id)
     except AvaliacaoInvalida as erro:
         return JSONResponse({"ok": False, "erro": str(erro)}, status_code=400)
-    return JSONResponse({"ok": True, "nota": avaliacao.nota,
-                         "rotulo": NOTAS[avaliacao.nota][0] if avaliacao.nota else None,
-                         "vereditos": [t["veredito"] for t in trocas_da_avaliacao(avaliacao)],
+    return JSONResponse({"ok": True, "nota": avaliacao.nota, "rotulo": NOTAS[avaliacao.nota][0],
                          "corrigiu_erro_aluno": avaliacao.corrigiu_erro_aluno})
 
 

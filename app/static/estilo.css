@@ -381,14 +381,7 @@ td.origem { white-space: nowrap; }
 .resposta-folha .nota-correta:has(input:checked) { border-color: #2e8c57; }
 .resposta-folha .nota-pequenos_erros:has(input:checked) { border-color: #c98500; }
 .resposta-folha .nota-muitos_erros:has(input:checked) { border-color: #c0392b; }
-.resposta-folha .trocas-avaliadas { list-style: none; padding: 0; margin: 2px 0 6px; display: grid; gap: 6px; }
-.resposta-folha .trocas-avaliadas li { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--pauta); padding-bottom: 5px; }
-.resposta-folha .vereditos { display: inline-flex; flex-wrap: wrap; gap: 6px; }
-.resposta-folha .veredito { display: inline-flex; gap: 4px; align-items: center; border: 1px solid var(--pauta); border-radius: 999px; padding: 1px 9px; cursor: pointer; font-size: 0.82rem; }
-.resposta-folha .veredito:has(input:checked) { font-weight: 600; border-width: 2px; }
-.resposta-folha .veredito-certa:has(input:checked) { border-color: #2e8c57; }
-.resposta-folha .veredito-errada:has(input:checked) { border-color: #c0392b; }
-.resposta-folha .veredito-erro_aluno:has(input:checked) { border-color: #8e44ad; }
+.resposta-folha .erro-aluno { display: inline-flex; gap: 6px; align-items: center; }
 .resposta-folha .estado-avaliacao { margin-left: auto; }
 .resposta-folha .revisao-ia-vazia { font-size: 0.85rem; margin: 2px 0 8px; }
 .resposta-folha img.recorte { display: block; width: 100%; height: auto; border: 1px solid var(--pauta); border-radius: 6px; background: #fff; margin: 4px 0 6px; }
