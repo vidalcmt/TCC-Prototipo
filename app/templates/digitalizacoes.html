@@ -38,6 +38,14 @@
 <form method="post" action="/atividades/{{ atividade.id }}/digitalizacoes/ler">
   <button type="submit"{% if not a_ler %} disabled{% endif %}>Ler {{ a_ler }} {{ "página ainda não lida" if a_ler == 1 else "páginas ainda não lidas" }}</button>
 </form>
+{% if request.state.usuario.eh_admin and identificadas %}
+<form method="post" action="/atividades/{{ atividade.id }}/digitalizacoes/ler-de-novo" class="ler-de-novo">
+  <p class="discreto">Só administradores. Lê de novo as {{ identificadas }} páginas identificadas, por exemplo depois de ligar a revisão da IA, para avaliar a leitura em cada folha. As respostas salvas não mudam.{% if revisao_ligada %} Com a revisão da IA ligada, cada resposta escrita é uma chamada ao modelo.{% endif %}</p>
+  <label><input type="checkbox" name="confirmo" required> Entendo que a leitura anterior de cada página será substituída</label>
+  <button type="submit" class="secundario">Ler de novo todas as páginas</button>
+  <a href="/leitura/avaliacoes">Ver as avaliações da leitura</a>
+</form>
+{% endif %}
 {% endif %}
 
 <h2 id="pendentes">Páginas sem folha</h2>

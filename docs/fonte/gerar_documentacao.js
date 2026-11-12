@@ -106,7 +106,7 @@ function tabela(cabecalho, linhas, proporcoes) {
 // =====================================================================
 // CAPA
 // =====================================================================
-const VERSAO = "0.25";
+const VERSAO = "0.26";
 const DATA = "11/11/2026";
 
 conteudo.push(new Paragraph({ spacing: { before: 2400 }, children: [] }));
@@ -269,7 +269,7 @@ tabela(
 
 // ---------------------------------------------------------------------
 h1("3. Modelo de dados");
-p("O banco tem dezessete tabelas. As oito primeiras foram criadas pela migração inicial do Alembic, a tabela `usuario` por uma migração própria, que também ligou revisões e chamadas ao usuário que as fez, as tabelas `item_questao` e `resposta_item` pela migração dos itens das discursivas, as tabelas `atividade` e `atividade_questao` pela migração das atividades, a tabela `folha` pela migração das folhas de resposta, a tabela `pagina_digitalizada` pela migração das digitalizações, a tabela `leitura_pagina` pela migração da leitura automática (com a coluna `conferida_sem_texto` acrescentada depois por uma migração própria), e a tabela `requisicao_http` pela migração do monitoramento. Duas delas existem por razão metodológica e não devem ser simplificadas: `revisao_professor`, que guarda a nota sugerida e a nota final lado a lado e permite calcular a concordância, e `metrica_requisicao`, que registra também as falhas, porque a taxa de falha é um resultado da pesquisa.");
+p("O banco tem dezoito tabelas. As oito primeiras foram criadas pela migração inicial do Alembic, a tabela `usuario` por uma migração própria, que também ligou revisões e chamadas ao usuário que as fez, as tabelas `item_questao` e `resposta_item` pela migração dos itens das discursivas, as tabelas `atividade` e `atividade_questao` pela migração das atividades, a tabela `folha` pela migração das folhas de resposta, a tabela `pagina_digitalizada` pela migração das digitalizações, a tabela `leitura_pagina` pela migração da leitura automática (com a coluna `conferida_sem_texto` acrescentada depois por uma migração própria), a tabela `requisicao_http` pela migração do monitoramento e a tabela `avaliacao_leitura` pela migração da avaliação da leitura. Duas delas existem por razão metodológica e não devem ser simplificadas: `revisao_professor`, que guarda a nota sugerida e a nota final lado a lado e permite calcular a concordância, e `metrica_requisicao`, que registra também as falhas, porque a taxa de falha é um resultado da pesquisa.");
 tabela(
   ["Tabela", "Finalidade"],
   [
@@ -385,6 +385,22 @@ campos("leitura_pagina", [
   ["`conferida_sem_texto`", "booleano", "Verdadeiro quando a escrita foi digitada com os campos vazios, a partir da imagem, sem o texto lido à vista. Essas folhas formam a referência sem influência da medida (seção 7.5)"],
   ["`usuario_id`", "inteiro", "Quem pediu a leitura"],
   ["`criado_em`", "data e hora", "Momento da leitura"],
+]);
+campos("avaliacao_leitura", [
+  ["`id`", "inteiro", "Identificador"],
+  ["`leitura_pagina_id`", "inteiro", "Leitura avaliada. Fica vazio quando a página é lida de novo; a avaliação continua valendo para os textos copiados nela"],
+  ["`folha_id`", "inteiro", "Folha da resposta"],
+  ["`campo`", "texto", "Campo da escrita, como `q12` ou `q12_a`; uma avaliação por leitura e campo"],
+  ["`nota`", "texto", "`correta`, `pequenos_erros` ou `muitos_erros`, pelos critérios da seção 4.27; vazio enquanto só as trocas foram avaliadas"],
+  ["`corrigiu_erro_aluno`", "booleano", "Alguma troca da revisão foi marcada como erro do aluno corrigido"],
+  ["`trocas_json`", "texto", "Cada troca da revisão (o que foi lido e o que entrou) com o veredito do administrador: `certa`, `errada` ou `erro_aluno`"],
+  ["`texto_lido`", "texto", "Cópia do texto avaliado, já com a revisão da IA quando ela foi aplicada"],
+  ["`texto_ocr`", "texto", "Cópia do texto do OCR antes da revisão"],
+  ["`servico_ocr`", "texto", "Serviço que leu a escrita"],
+  ["`com_revisao`", "booleano", "A revisão da IA foi aplicada nesse campo"],
+  ["`trocas`", "inteiro", "Quantas trocas a revisão fez"],
+  ["`usuario_id`", "inteiro", "Quem avaliou"],
+  ["`criado_em`, `atualizado_em`", "data e hora", "Primeira avaliação e última mudança de nota"],
 ]);
 campos("requisicao_http", [
   ["`id`", "inteiro", "Identificador"],
@@ -974,8 +990,27 @@ p("Na página da folha, as respostas lidas aparecem preenchidas, com um aviso de
 tabela(["Rota", "O que faz"], [
   ["`POST /atividades/{id}/digitalizacoes/ler`", "Lê em lote as páginas identificadas ainda não lidas, fora da requisição, com andamento na página"],
   ["`POST /atividades/{id}/folhas/{folha}/ler`", "Lê de novo, na hora, as páginas de uma folha"],
+  ["`POST /atividades/{id}/digitalizacoes/ler-de-novo`", "Só administradores. Lê de novo, em lote, todas as páginas identificadas da atividade, por exemplo depois de ligar a revisão da IA. Pede uma confirmação na página"],
+  ["`POST /atividades/{id}/folhas/{folha}/avaliacao-leitura`", "Só administradores. Grava a avaliação de um campo; a página da folha chama essa rota ao clicar numa nota, sem recarregar"],
+  ["`GET /leitura/avaliacoes`", "Só administradores. Resumo das avaliações por condição de leitura e exportação em CSV (`/leitura/avaliacoes.csv`)"],
   ["`GET /atividades/{id}/folhas/{folha}/recorte/{campo}`", "Recorte da caixa de resposta de um campo, da página alinhada"],
 ], [4, 6]);
+h3("Avaliação da leitura pelo administrador (avaliacao.py)");
+p("A revisão da IA acerta a maior parte das trocas, mas algumas ficam erradas. Para medir a assertividade da leitura com a revisão, embaixo de cada resposta escrita, só para administradores, uma caixa \"Avaliação da leitura\" permite julgar, olhando a imagem, cada troca da IA e o texto lido inteiro.");
+tabela(["Veredito de cada troca", "Quando usar"], [
+  ["Certa", "A troca deixou o texto como está na imagem"],
+  ["Errada", "A troca deixou o texto diferente da imagem: a IA leu errado ou adivinhou"],
+  ["Era erro do aluno", "A imagem mostra um erro do próprio aluno, que a IA não devia ter corrigido"],
+], [3, 7]);
+tabela(["Nota do texto lido", "Quando usar"], [
+  ["Correta", "O texto lido é o que está na imagem; nada a ajustar"],
+  ["Pequenos erros", "Até três palavras a ajustar, e o sentido da resposta não muda"],
+  ["Muitos erros", "Mais de três palavras a ajustar, ou o sentido da resposta mudou"],
+], [3, 7]);
+p("A proporção de trocas certas é a assertividade da revisão; a de trocas que eram erro do aluno mede o risco principal dela. A nota do texto inteiro é a assertividade da leitura como um todo, OCR mais revisão, e inclui os erros que a revisão não viu. Cada clique é gravado na hora, sem recarregar a página e sem mexer no formulário das respostas. Quando a folha já tem respostas salvas, a caixa mostra também o texto lido e o antes e depois da revisão, porque o formulário passa a mostrar a resposta salva.");
+p("Os textos e as trocas são copiados para a avaliação, porque uma nova leitura da página substitui a anterior. Assim, é possível avaliar a mesma folha lida sem e com a revisão, e o resumo separa as condições (por exemplo, \"Document AI sem revisão\" e \"Document AI com revisão da IA\"). Se a mesma folha for lida de novo na mesma condição e avaliada outra vez, conta só a avaliação mais recente. O resumo também aparece no `scripts/medir_leitura.py`.");
+h3("Ler tudo de novo");
+p("Para avaliar as folhas já lidas com uma configuração nova, como a revisão da IA, o administrador pode ler de novo todas as páginas identificadas da atividade, na página das digitalizações. As respostas salvas não mudam. Quando a folha já tinha sido conferida, a nova leitura herda a conferência (e a marca de conferida sem o texto lido), porque a referência são as respostas salvas, que continuam as mesmas.");
 h3("Teste da chave: scripts/teste_vision.py");
 p("Confere a configuração do Google Cloud Vision sem depender de uma folha: desenha uma frase numa imagem, envia ao serviço e mostra o que foi lido e o tempo da chamada. A chave nunca é exibida, só o seu tamanho e os quatro últimos caracteres. Quando o serviço recusa o pedido, a mensagem explica a causa provável, para os erros mais comuns de configuração: chave inválida, API não ativada, chave sem permissão para o Vision, restrição de endereço IP e faturamento inativo. As mesmas explicações aparecem na página da folha quando uma leitura falha. O passo a passo da configuração está no guia de publicação, seção 6.");
 h3("Conferência sem o texto lido");
@@ -1109,6 +1144,7 @@ tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_leitura.py`", "Bolinhas lidas em folhas sintéticas com o layout real, retas, inclinadas, com perspectiva e de cabeça para baixo, incluindo mais de uma marcada e X como duvidoso; página sem marcas; palavras atribuídas às caixas, sem o texto impresso; pedido ao Google Cloud Vision com chave, recurso e idioma; erros do serviço; sem chave; ordem das palavras pela pauta da caixa, e não pela ordem do serviço; página ampliada para a escrita; alinhamento sem as marcas pelo QR code e pelas caixas, com a página reta e de cabeça para baixo; alinhamento aproximado sem marcas e sem caixas; erro medido nas caixas quando há marcas; leitura sem marcas registrando o método; explicação dos erros comuns de configuração; script de teste da chave, sem exibir a chave; leitura, conferência e medida pela tela; só bolinhas sem chave; leitura que não muda respostas salvas; falha de alinhamento exibida; distância de edição, CER e WER"],
   ["`tests/test_monitoramento.py`", "Rota declarada gravada no lugar do endereço real, sem estáticos nem /saude; requisição lenta e erro do servidor no log; registros antigos apagados; cálculo do percentil; resumo do período por rota, por intervalo, das chamadas ao modelo e do servidor; página e exportação só para administradores"],
   ["`tests/test_documentai.py`", "Palavras do Document AI convertidas em milímetros e montadas pela pauta, com palavra partida reunida; palavra repetida no mesmo lugar mantida uma vez, pela confiança, e palavras vizinhas iguais preservadas; pedido com endereço do processador, token e idioma; erros de permissão, processador e escopo explicados; processador mal escrito; serviço escolhido pela configuração; leitura pela tela com o Document AI e comparação entre os dois serviços, com a revisão da IA como condição (descartada quando mudaria demais o texto) e filtro das folhas conferidas sem o texto lido"],
+  ["`tests/test_avaliacao_leitura.py`", "Veredito de cada troca e nota do texto, gravados separadamente e na mesma avaliação, com mudança de ideia; erro do aluno marcado a partir do veredito; textos, trocas e condição copiados; notas, vereditos, trocas e campos inválidos; texto lido e antes e depois visíveis com a resposta já salva; só administradores avaliam e veem o resumo; ler tudo de novo mantém a conferência, guarda a avaliação antiga e conta uma por folha, campo e condição; resumo separado com e sem revisão; página e CSV do resumo; página sem avaliações"],
   ["`tests/test_revisor.py`", "Antes e depois palavra por palavra, inclusive palavra que virou duas; caixa recolhida com o resumo e os textos inteiros; revisão sem trocas numa linha; conferência sem o texto lido, com a escrita vazia, as objetivas preenchidas e a leitura marcada, medida à parte; conferência comum fora dessa medida; erro de leitura corrigido e erro do aluno mantido, com as trocas listadas; imagem da caixa reduzida e enviada junto do texto lido; revisão que muda demais descartada e registrada como falha; falha do modelo e caixa esvaziada mantendo o texto do OCR; caixa vazia sem chamada; leitura pela tela com as trocas e os trechos incertos na página, sem o enunciado no pedido ao modelo; medida com e sem a revisão; revisão desligada sem chamada"],
   ["`tests/test_lista_questoes.py`", "Páginas de 50 e página fora do intervalo; cada filtro, inclusive situação pendente e sem correção; filtros mantidos ao trocar de página; filtro sem resultado; opções dos filtros vindas do banco"],
   ["`tests/test_importar_enem.py`", "Paginação; parada após recusas seguidas; exclusão de numeração fora da área e de repetidas; filtro de área e de imagens; montagem do enunciado; importação com gabarito e sem duplicar"],
@@ -1150,6 +1186,8 @@ tabela(["Condição", "O que é"], [
   ["Document AI com revisão", "O texto do Document AI revisado pelo modelo de linguagem, que vê a imagem da caixa e não vê a questão"],
 ], [3, 7]);
 p("As três saem de uma única execução de `python -m scripts.comparar_ocr --revisao --sem-texto --csv comparacao.csv`, que também traz a revisão sobre o Vision.");
+h3("Avaliação humana da leitura");
+p("Além da taxa de erro, cada troca da revisão recebe um veredito do administrador (certa, errada ou erro do aluno) e cada resposta lida recebe uma nota (correta, pequenos erros ou muitos erros), pelos critérios da seção 4.27. O primeiro dá a assertividade da revisão; o segundo, a da leitura inteira. Para comparar as condições, as folhas são avaliadas primeiro com a leitura sem revisão e depois lidas de novo com a revisão e avaliadas outra vez. A nota é mais rápida do que digitar a referência e cobre todas as respostas; a taxa de erro, mais precisa, fica com a amostra conferida sem o texto lido. Como quem avalia vê a imagem e o texto lido ao mesmo tempo, a nota pode ser mais branda do que a taxa de erro, o que deve ser declarado.");
 h3("Teste controlado dos erros do aluno");
 p("O risco da revisão é corrigir um erro do próprio aluno. Voluntários com boa escolaridade erram pouco a ortografia, e o risco quase não apareceria. Por isso, de 10 a 15 respostas são escritas de propósito com erros comuns, como \"assasino\", acento faltando e concordância errada, com a lista dos erros anotada antes da leitura. Para cada erro anotado, conta-se se a revisão o manteve ou o corrigiu. No artigo, o teste é descrito como material preparado para esse fim.");
 h3("Tamanho da amostra");
@@ -1242,6 +1280,7 @@ marcadores([
   "**Critérios sem rubrica:** quando o professor não informa rubrica, o modelo define os critérios a cada correção, e eles podem variar entre correções da mesma questão. Para comparar condições, o corpus deve usar questões com rubrica.",
   "**Geração na própria requisição da página:** o navegador espera a resposta do modelo, o que leva alguns segundos. É adequado para um usuário por vez; a execução em lote da etapa 5 roda por linha de comando.",
   "**Revisão da transcrição pela IA:** o modelo pode trocar um erro do aluno por uma palavra correta, ou adivinhar uma palavra ilegível. As salvaguardas da seção 4.27 reduzem o problema, mas não o eliminam, e o professor que confere pode ser puxado a aceitar a troca. Por isso, o artigo deve relatar a taxa de erro com e sem a revisão e o número de trocas desfeitas pelo professor, e a referência da medida deve ser transcrita letra por letra a partir da imagem.",
+  "**Avaliação da leitura por quem vê o texto lido:** o administrador avalia olhando a imagem e o texto ao mesmo tempo, o que pode deixar passar erros pequenos. A nota complementa a taxa de erro da amostra conferida sem o texto lido, e não a substitui.",
   "**Respostas de voluntários:** as folhas foram respondidas por adultos num ambiente simulado. A letra tende a ser mais legível e a ortografia mais correta do que numa turma escolar, o que pode deixar as taxas de erro da leitura melhores do que seriam com alunos. A correção não mede efeito de aprendizagem.",
   "**Referência corrigida sobre o texto lido:** a conferência comum parte do texto lido e tende a manter parte dos seus erros, o que favorece o serviço que preencheu o formulário. Só as folhas conferidas sem o texto lido servem de referência para comparar as condições de leitura (seção 7.5).",
   "**Explicações anteriores:** a página mostra só a explicação mais recente. As anteriores continuam no banco e entram na análise.",
@@ -1330,6 +1369,7 @@ tabela(["Termo", "Significado"], [
 // ---------------------------------------------------------------------
 h1("10. Histórico de versões");
 tabela(["Data", "Versão", "Referência", "Mudança"], [
+  ["12/11/2026", "0.26", "pull request da avaliação da leitura", "Avaliação da leitura pelo administrador: veredito de cada troca da revisão (certa, errada, erro do aluno) e nota do texto lido (correta, pequenos erros, muitos erros), com resumo por condição e CSV; leitura de todas as páginas de novo, mantendo a conferência; seção 7.5 com a avaliação humana"],
   ["12/11/2026", "0.25", "pull request do antes e depois", "Revisão da IA numa caixa recolhível, com o texto inteiro antes e depois e as palavras mudadas destacadas; conferência sem o texto lido, para a referência sem influência; palavras repetidas do Document AI descartadas; comparação com a revisão da IA como condição; protocolo de avaliação (seção 7.5) e novas limitações"],
   ["11/11/2026", "0.24", "pull request da revisão da transcrição", "Revisão opcional da transcrição por um modelo que vê a imagem da caixa, mantendo os erros do aluno; trocas e trechos incertos exibidos na conferência; texto do OCR guardado ao lado do revisado; medida com e sem a revisão"],
   ["11/11/2026", "0.23", "pull request do Document AI", "Linhas da pauta unidas num texto corrido; Google Document AI como alternativa ao Vision, escolhida no .env; script de comparação entre os dois serviços nas mesmas folhas; guia de configuração do Document AI"],

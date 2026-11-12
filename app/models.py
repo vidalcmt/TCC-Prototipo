@@ -362,6 +362,40 @@ class LeituraPagina(Base):
     pagina_digitalizada: Mapped[PaginaDigitalizada] = relationship(back_populates="leitura")
 
 
+class AvaliacaoLeitura(Base):
+    """Avaliação do administrador sobre a leitura automática de um campo da escrita.
+
+    Mede a assertividade da leitura com a revisão da IA olhando a imagem: o
+    administrador dá uma nota ao texto lido (correto, pequenos erros, muitos
+    erros) e marca cada troca feita pela revisão como certa, errada ou como um
+    erro do próprio aluno que não devia ter sido corrigido. Os textos avaliados
+    ficam copiados aqui, porque uma nova leitura da página substitui a anterior.
+    """
+
+    __tablename__ = "avaliacao_leitura"
+    __table_args__ = (UniqueConstraint("leitura_pagina_id", "campo", name="uq_avaliacao_leitura_campo"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Fica vazio quando a página é lida de novo: a avaliação continua valendo para o texto copiado abaixo.
+    leitura_pagina_id: Mapped[int | None] = mapped_column(
+        ForeignKey("leitura_pagina.id", name="fk_avaliacao_leitura_leitura", ondelete="SET NULL"))
+    folha_id: Mapped[int] = mapped_column(ForeignKey("folha.id", name="fk_avaliacao_leitura_folha"))
+    campo: Mapped[str] = mapped_column(String(40))
+    nota: Mapped[str | None] = mapped_column(String(20))       # correta, pequenos_erros ou muitos_erros
+    # Alguma troca da IA foi marcada como erro do aluno corrigido
+    corrigiu_erro_aluno: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Cada troca da revisão com o veredito: [{"lido", "corrigido", "veredito": certa | errada | erro_aluno | null}]
+    trocas_json: Mapped[str] = mapped_column(Text, default="[]")
+    texto_lido: Mapped[str] = mapped_column(Text, default="")  # o texto avaliado, já com a revisão quando houve
+    texto_ocr: Mapped[str | None] = mapped_column(Text)        # o texto do OCR antes da revisão
+    servico_ocr: Mapped[str | None] = mapped_column(String(50))
+    com_revisao: Mapped[bool] = mapped_column(Boolean, default=False)
+    trocas: Mapped[int] = mapped_column(Integer, default=0)    # trocas feitas pela revisão
+    usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuario.id", name="fk_avaliacao_leitura_usuario"))
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+    atualizado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+
+
 class RequisicaoHttp(Base):
     """Uma requisição ao site, para o monitoramento do tempo de resposta.
 

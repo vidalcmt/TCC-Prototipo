@@ -263,6 +263,14 @@ que ainda não têm resposta salva).
 A linha "Revisão da IA" mostra a taxa de erro do OCR sozinho e com a revisão,
 e em quantas respostas a revisão piorou o texto (trocas que você desfez).
 
+**Avaliar a leitura de cada resposta:** com o login de administrador, embaixo
+de cada resposta escrita aparece a caixa "Avaliação da leitura". Para cada
+troca da IA, marque Certa, Errada ou Era erro do aluno; para o texto inteiro,
+Correta, Pequenos erros ou Muitos erros. Grava na hora. Para avaliar as folhas que já foram
+lidas antes da revisão, vá em Digitalizações e use "Ler de novo todas as
+páginas" (as respostas salvas não mudam). O resumo fica em Métricas,
+Avaliação da leitura, com exportação em CSV.
+
 **Referência sem influência (para o artigo):** em algumas folhas ainda não
 salvas, clique em "Conferir sem o texto lido", no aviso do alto da página. As
 respostas escritas aparecem vazias: digite cada uma olhando só a imagem,

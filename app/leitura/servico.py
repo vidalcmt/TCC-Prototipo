@@ -23,7 +23,7 @@ from app.folhas import layout as L
 from app.leitura import ocr, revisor
 from app.leitura.alinhamento import APROXIMADO, AlinhamentoFalhou, alinhar, recorte
 from app.leitura.bolhas import ler_bolhas
-from app.models import Atividade, Folha, LeituraPagina, PaginaDigitalizada, agora
+from app.models import AvaliacaoLeitura, Atividade, Folha, LeituraPagina, PaginaDigitalizada, agora
 
 LIDA, FALHA = "lida", "falha"
 
@@ -36,9 +36,15 @@ def ler_pagina(sessao: Session, pagina: PaginaDigitalizada, usuario_id: int | No
                http: httpx.Client | None = None, cliente: OpenAI | None = None) -> LeituraPagina:
     """Lê (ou lê de novo) uma página identificada. Uma leitura anterior é substituída."""
     atividade = sessao.get(Atividade, pagina.atividade_id)
+    conferida_em, conferida_sem_texto = None, False
     if pagina.leitura is not None:
-        _apagar_alinhada(pagina.leitura)
-        sessao.delete(pagina.leitura)
+        anterior = pagina.leitura
+        # A conferência se refere às respostas salvas, que uma nova leitura não muda: ela passa adiante.
+        conferida_em, conferida_sem_texto = anterior.conferida_em, anterior.conferida_sem_texto
+        for avaliacao in sessao.scalars(select(AvaliacaoLeitura).where(AvaliacaoLeitura.leitura_pagina_id == anterior.id)):
+            avaliacao.leitura_pagina_id = None
+        _apagar_alinhada(anterior)
+        sessao.delete(anterior)
         sessao.flush()
     leitura = LeituraPagina(pagina_digitalizada=pagina, situacao=FALHA, usuario_id=usuario_id)
     sessao.add(leitura)
@@ -99,8 +105,19 @@ def ler_pagina(sessao: Session, pagina: PaginaDigitalizada, usuario_id: int | No
                                          "revisoes": revisoes, "alinhamento": alinhamento}, ensure_ascii=False)
     leitura.situacao = LIDA
     leitura.motivo = " ".join(avisos) or None
+    if conferida_em is not None and _respostas_salvas(pagina.folha, pagina_layout):
+        leitura.conferida_em, leitura.conferida_sem_texto = conferida_em, conferida_sem_texto
     sessao.commit()
     return leitura
+
+
+def _respostas_salvas(folha: Folha | None, pagina_layout) -> bool:
+    """A folha já tem resposta salva para alguma questão desta página."""
+    if folha is None:
+        return False
+    salvas = {s.questao_id for s in folha.respostas}
+    questoes = {c.questao_id for c in pagina_layout.caixas} | {b.questao_id for b in pagina_layout.bolhas}
+    return bool(salvas & questoes)
 
 
 def _revisar(sessao, imagem_ocr, escala, caixas, textos: dict, cliente, usuario_id) -> tuple[dict, dict]:
@@ -155,6 +172,14 @@ def antes_e_depois(antes: str, depois: str) -> tuple[list[tuple[str, bool]], lis
 def _apagar_alinhada(leitura: LeituraPagina) -> None:
     if leitura.arquivo_alinhado:
         (Path(config.pasta_arquivos) / leitura.arquivo_alinhado).unlink(missing_ok=True)
+
+
+def paginas_identificadas(sessao: Session, atividade: Atividade) -> list[PaginaDigitalizada]:
+    """Todas as páginas ligadas a uma folha, lidas ou não: para ler tudo de novo."""
+    return list(sessao.scalars(
+        select(PaginaDigitalizada).where(PaginaDigitalizada.atividade_id == atividade.id,
+                                         PaginaDigitalizada.situacao == IDENTIFICADA)
+        .order_by(PaginaDigitalizada.id)))
 
 
 def paginas_para_ler(sessao: Session, atividade: Atividade) -> list[PaginaDigitalizada]:

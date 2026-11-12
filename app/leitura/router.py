@@ -4,14 +4,16 @@ from urllib.parse import quote
 
 import cv2
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from openai import OpenAI
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.contas.sessao import exigir_admin
 from app.database import obter_fabrica_sessao, obter_sessao
 from app.digitalizacao.servico import IDENTIFICADA
 from app.leitura import lote
-from app.leitura.servico import FALHA, ler_pagina, paginas_para_ler, recorte_da_caixa
+from app.leitura.avaliacao import NOTAS, AvaliacaoInvalida, avaliar, trocas_da_avaliacao
+from app.leitura.servico import FALHA, ler_pagina, paginas_identificadas, paginas_para_ler, recorte_da_caixa
 from app.models import Atividade, Folha
 from app.questoes.cliente import obter_cliente_llm
 
@@ -44,6 +46,42 @@ def ler_todas(request: Request, atividade_id: int, sessao: Session = Depends(obt
     if lote.iniciar(fabrica, atividade.id, request.state.usuario.id, cliente) is None:
         return RedirectResponse(f"{destino}?aviso={quote('Já há uma leitura em andamento.')}#leitura", status_code=303)
     return RedirectResponse(f"{destino}#leitura", status_code=303)
+
+
+@router.post("/{atividade_id}/digitalizacoes/ler-de-novo", dependencies=[Depends(exigir_admin)])
+def ler_todas_de_novo(request: Request, atividade_id: int, sessao: Session = Depends(obter_sessao),
+                      fabrica: sessionmaker = Depends(obter_fabrica_sessao),
+                      cliente: OpenAI | None = Depends(obter_cliente_llm)):
+    """Lê de novo todas as páginas identificadas, por exemplo depois de ligar a revisão da IA.
+
+    As respostas salvas não mudam. A leitura anterior de cada página é substituída.
+    """
+    atividade = _atividade(sessao, atividade_id)
+    destino = f"/atividades/{atividade.id}/digitalizacoes"
+    if not paginas_identificadas(sessao, atividade):
+        return RedirectResponse(f"{destino}?aviso={quote('Não há páginas identificadas.')}#leitura", status_code=303)
+    if lote.iniciar(fabrica, atividade.id, request.state.usuario.id, cliente, todas=True) is None:
+        return RedirectResponse(f"{destino}?aviso={quote('Já há uma leitura em andamento.')}#leitura", status_code=303)
+    return RedirectResponse(f"{destino}#leitura", status_code=303)
+
+
+@router.post("/{atividade_id}/folhas/{folha_id:int}/avaliacao-leitura", dependencies=[Depends(exigir_admin)])
+async def avaliar_leitura(request: Request, atividade_id: int, folha_id: int, sessao: Session = Depends(obter_sessao)):
+    """Grava a nota do texto ou o veredito de uma troca, chamada pela página da folha sem recarregá-la."""
+    folha = _folha(sessao, _atividade(sessao, atividade_id), folha_id)
+    dados = await request.form()
+    troca = str(dados.get("troca", ""))
+    try:
+        avaliacao = avaliar(sessao, folha, str(dados.get("campo", "")), request.state.usuario.id,
+                            nota=str(dados["nota"]) if dados.get("nota") else None,
+                            troca=int(troca) if troca.isdigit() else None,
+                            veredito=str(dados.get("veredito", "")) or None)
+    except AvaliacaoInvalida as erro:
+        return JSONResponse({"ok": False, "erro": str(erro)}, status_code=400)
+    return JSONResponse({"ok": True, "nota": avaliacao.nota,
+                         "rotulo": NOTAS[avaliacao.nota][0] if avaliacao.nota else None,
+                         "vereditos": [t["veredito"] for t in trocas_da_avaliacao(avaliacao)],
+                         "corrigiu_erro_aluno": avaliacao.corrigiu_erro_aluno})
 
 
 @router.post("/{atividade_id}/folhas/{folha_id:int}/ler")
