@@ -106,7 +106,7 @@ function tabela(cabecalho, linhas, proporcoes) {
 // =====================================================================
 // CAPA
 // =====================================================================
-const VERSAO = "0.27";
+const VERSAO = "0.28";
 const DATA = "11/11/2026";
 
 conteudo.push(new Paragraph({ spacing: { before: 2400 }, children: [] }));
@@ -269,7 +269,7 @@ tabela(
 
 // ---------------------------------------------------------------------
 h1("3. Modelo de dados");
-p("O banco tem dezoito tabelas. As oito primeiras foram criadas pela migração inicial do Alembic, a tabela `usuario` por uma migração própria, que também ligou revisões e chamadas ao usuário que as fez, as tabelas `item_questao` e `resposta_item` pela migração dos itens das discursivas, as tabelas `atividade` e `atividade_questao` pela migração das atividades, a tabela `folha` pela migração das folhas de resposta, a tabela `pagina_digitalizada` pela migração das digitalizações, a tabela `leitura_pagina` pela migração da leitura automática (com a coluna `conferida_sem_texto` acrescentada depois por uma migração própria), a tabela `requisicao_http` pela migração do monitoramento e a tabela `avaliacao_leitura` pela migração da avaliação da leitura. Duas delas existem por razão metodológica e não devem ser simplificadas: `revisao_professor`, que guarda a nota sugerida e a nota final lado a lado e permite calcular a concordância, e `metrica_requisicao`, que registra também as falhas, porque a taxa de falha é um resultado da pesquisa.");
+p("O banco tem dezoito tabelas. As oito primeiras foram criadas pela migração inicial do Alembic, a tabela `usuario` por uma migração própria, que também ligou revisões e chamadas ao usuário que as fez, as tabelas `item_questao` e `resposta_item` pela migração dos itens das discursivas, as tabelas `atividade` e `atividade_questao` pela migração das atividades, a tabela `folha` pela migração das folhas de resposta, a tabela `pagina_digitalizada` pela migração das digitalizações, a tabela `leitura_pagina` pela migração da leitura automática (com a coluna `conferida_sem_texto` acrescentada depois por uma migração própria), a tabela `requisicao_http` pela migração do monitoramento e a tabela `avaliacao_leitura` pela migração da avaliação da leitura (com uma migração seguinte que retira, onde existir, a coluna do veredito por troca, recurso que chegou a ser publicado e foi retirado). Duas delas existem por razão metodológica e não devem ser simplificadas: `revisao_professor`, que guarda a nota sugerida e a nota final lado a lado e permite calcular a concordância, e `metrica_requisicao`, que registra também as falhas, porque a taxa de falha é um resultado da pesquisa.");
 tabela(
   ["Tabela", "Finalidade"],
   [
@@ -1373,6 +1373,7 @@ tabela(["Termo", "Significado"], [
 // ---------------------------------------------------------------------
 h1("10. Histórico de versões");
 tabela(["Data", "Versão", "Referência", "Mudança"], [
+  ["12/11/2026", "0.28", "pull request da correção da avaliação", "Migração que retira a coluna do veredito por troca dos bancos que chegaram a recebê-la (as avaliações falhavam ao gravar); aviso, na caixa de avaliação, de folha lida antes de a revisão da IA ser ligada"],
   ["12/11/2026", "0.27", "pull request do seletor de folhas e das questões na atividade", "Menu com todas as folhas da atividade, com busca e a situação da leitura e da correção de cada uma; questões objetivas e discursivas criadas de dentro da atividade"],
   ["12/11/2026", "0.26", "pull request da avaliação da leitura", "Avaliação da leitura pelo administrador em cada resposta (correta, pequenos erros, muitos erros, e erro do aluno corrigido pela IA), com resumo por condição e CSV; leitura de todas as páginas de novo, mantendo a conferência; seção 7.5 com a avaliação humana"],
   ["12/11/2026", "0.25", "pull request do antes e depois", "Revisão da IA numa caixa recolhível, com o texto inteiro antes e depois e as palavras mudadas destacadas; conferência sem o texto lido, para a referência sem influência; palavras repetidas do Document AI descartadas; comparação com a revisão da IA como condição; protocolo de avaliação (seção 7.5) e novas limitações"],
