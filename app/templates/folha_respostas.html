@@ -26,7 +26,8 @@
 {% endif %}{% endmacro %}
 {% macro avaliar_leitura(campo, s) %}{% if admin and campo in lidos_por_campo %}{% set l = lidos_por_campo[campo] %}{% set a = avaliacoes.get(campo) %}
 <fieldset class="avaliacao-leitura" data-url="/atividades/{{ atividade.id }}/folhas/{{ folha.id }}/avaliacao-leitura" data-campo="{{ campo }}">
-  <legend>Avaliação da leitura <span class="discreto">(só administrador{% if l.com_revisao %}, leitura com a revisão da IA{% endif %})</span></legend>
+  <legend>Avaliação da leitura <span class="discreto">(só administrador · {% if l.com_revisao %}leitura com a revisão da IA{% elif campo in revisoes %}revisão da IA não aplicada{% else %}leitura sem a revisão da IA{% endif %})</span></legend>
+  {% if revisao_ligada and campo not in revisoes %}<p class="aviso-revisao">Esta folha foi lida antes de a revisão da IA ser ligada: o texto abaixo é o do OCR sozinho. Para revisar, use "Ler de novo a folha digitalizada", no fim da página, ou "Ler de novo todas as páginas", em Digitalizações. As respostas salvas não mudam.</p>{% endif %}
   {% if s %}<p class="texto-lido"><span class="discreto">Texto lido:</span> {{ l.texto or "(vazio)" }}</p>{{ revisao_ia(campo) }}{% endif %}
   <div class="notas-leitura" role="radiogroup" aria-label="Nota da leitura">
     {% for chave, (rotulo, criterio) in NOTAS_LEITURA.items() %}

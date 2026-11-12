@@ -8,6 +8,7 @@ from openai import OpenAI
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.config import config
 from app.contas.sessao import verificar_limite_diario
 from app.database import obter_fabrica_sessao, obter_sessao
 from app.folhas.layout import letras
@@ -148,7 +149,7 @@ def pagina_da_folha(request: Request, atividade_id: int, folha_id: int, aviso: s
         "recortes": recortes, "revisoes": revisoes_da_folha(folha),
         "sem_texto": sem_texto and leitura_pendente,
         "tem_texto_lido": any(lidos.get(c) for c in recortes),
-        "admin": admin, "NOTAS_LEITURA": NOTAS_LEITURA,
+        "admin": admin, "NOTAS_LEITURA": NOTAS_LEITURA, "revisao_ligada": config.leitura_revisao_ia,
         "lidos_por_campo": campos_lidos(folha) if admin else {},
         "avaliacoes": avaliacoes_da_folha(sessao, folha) if admin else {},
         "atividade": atividade, "folha": folha, "resultado": resultado_da_folha(sessao, folha),
