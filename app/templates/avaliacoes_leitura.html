@@ -2,40 +2,26 @@
 {% block titulo %}Avaliação da leitura{% endblock %}
 {% block conteudo %}
 <h1>Avaliação da leitura</h1>
-<p class="discreto">Avaliações feitas por administradores na página de cada folha, olhando a imagem. Quando uma folha é lida de novo na mesma condição e avaliada outra vez, conta só a avaliação mais recente.</p>
+<p class="discreto">Notas dadas por administradores à leitura automática de cada resposta escrita, na página de cada folha. Critérios: <strong>Correta</strong>, o texto lido é o que está na imagem; <strong>Pequenos erros</strong>, até três palavras a ajustar e o sentido não muda; <strong>Muitos erros</strong>, mais de três palavras a ajustar ou o sentido mudou. Quando uma folha é lida de novo na mesma condição e avaliada outra vez, conta só a avaliação mais recente.</p>
 
-{% macro pct(x) %}{{ ("%.1f"|format(x * 100))|replace(".", ",") }}%{% endmacro %}
-{% if total.total or total.trocas_avaliadas %}
-<h2>Trocas da revisão da IA</h2>
-<p class="discreto">Cada troca feita pela revisão: <strong>Certa</strong>, o texto ficou como na imagem; <strong>Errada</strong>, a troca deixou o texto diferente da imagem; <strong>Era erro do aluno</strong>, a imagem mostra um erro do próprio aluno, que a IA não devia ter corrigido. A taxa de acerto das trocas é a assertividade da revisão.</p>
+{% macro pct(g, chave) %}{{ ("%.1f"|format(g.fracao(chave) * 100))|replace(".", ",") }}%{% endmacro %}
+{% if total.total %}
 <div class="rolagem">
 <table>
-  <tr><th>Condição de leitura</th><th>Trocas feitas</th><th>Trocas avaliadas</th>{% for chave, (rotulo, _) in VEREDITOS.items() %}<th>{{ rotulo }}</th>{% endfor %}<th>Respostas com erro do aluno corrigido</th></tr>
-  {% for g in grupos + [total] %}{% if g.trocas or g.trocas_avaliadas %}
+  <tr><th>Condição de leitura</th><th>Respostas</th>{% for chave, (rotulo, _) in NOTAS.items() %}<th>{{ rotulo }}</th>{% endfor %}<th>IA corrigiu erro do aluno</th><th>Trocas da IA</th></tr>
+  {% for g in grupos + [total] %}
   <tr{% if loop.last %} class="total"{% endif %}>
-    <td>{{ g.nome }}</td><td>{{ g.trocas }}</td><td>{{ g.trocas_avaliadas }}</td>
-    {% for chave in VEREDITOS %}<td>{{ g.vereditos[chave] }} <span class="discreto">({{ pct(g.fracao_trocas(chave)) }})</span></td>{% endfor %}
+    <td>{{ g.nome }}</td>
+    <td>{{ g.total }}</td>
+    {% for chave in NOTAS %}<td>{{ g.notas[chave] }} <span class="discreto">({{ pct(g, chave) }})</span></td>{% endfor %}
     <td>{{ g.corrigiu_erro_aluno }}</td>
-  </tr>{% endif %}
-  {% endfor %}
-</table>
-</div>
-
-<h2>Texto lido, no todo</h2>
-<p class="discreto"><strong>Correta</strong>, o texto lido é o que está na imagem; <strong>Pequenos erros</strong>, até três palavras a ajustar e o sentido não muda; <strong>Muitos erros</strong>, mais de três palavras a ajustar ou o sentido mudou. É a assertividade da leitura inteira, OCR mais revisão.</p>
-<div class="rolagem">
-<table>
-  <tr><th>Condição de leitura</th><th>Respostas avaliadas</th>{% for chave, (rotulo, _) in NOTAS.items() %}<th>{{ rotulo }}</th>{% endfor %}</tr>
-  {% for g in grupos + [total] %}{% if g.total %}
-  <tr{% if loop.last %} class="total"{% endif %}>
-    <td>{{ g.nome }}</td><td>{{ g.total }}</td>
-    {% for chave in NOTAS %}<td>{{ g.notas[chave] }} <span class="discreto">({{ pct(g.fracao(chave)) }})</span></td>{% endfor %}
-  </tr>{% endif %}
+    <td>{{ g.trocas }}</td>
+  </tr>
   {% endfor %}
 </table>
 </div>
 <p><a class="botao contorno" href="/leitura/avaliacoes.csv">Exportar as avaliações (CSV)</a></p>
-<p class="discreto">O CSV tem uma linha por resposta avaliada, com o código da folha, o texto do OCR, o texto avaliado, a nota e o veredito de cada troca. Não tem nome de aluno.</p>
+<p class="discreto">O CSV tem uma linha por avaliação, com o código da folha, o texto do OCR, o texto avaliado e a nota. Não tem nome de aluno.</p>
 {% else %}
 <div class="aviso aviso-info">Nenhuma leitura avaliada ainda. Abra uma folha lida: embaixo de cada resposta escrita aparece a caixa "Avaliação da leitura".</div>
 {% endif %}
