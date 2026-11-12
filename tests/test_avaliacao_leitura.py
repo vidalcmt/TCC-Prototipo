@@ -38,12 +38,10 @@ def _ler_com_revisao(fabrica_sessao, cliente_web, p, monkeypatch, texto="Houve �
     return cliente
 
 
-def _avaliar(cliente_web, p, nota=None, troca=None, veredito=None):
-    dados = {"campo": f"q{p['d']}"}
-    if nota:
-        dados["nota"] = nota
-    if troca is not None:
-        dados.update(troca=str(troca), veredito=veredito)
+def _avaliar(cliente_web, p, nota, erro=False):
+    dados = {"campo": f"q{p['d']}", "nota": nota}
+    if erro:
+        dados["corrigiu_erro_aluno"] = "1"
     return cliente_web.post(f"{_url(p)}/avaliacao-leitura", data=dados)
 
 
@@ -52,30 +50,20 @@ def test_avaliar_a_leitura_de_uma_resposta(fabrica_sessao, cliente_web, prova, m
     _ler_com_revisao(fabrica_sessao, cliente_web, p, monkeypatch)
     pagina = cliente_web.get(_url(p)).text
     assert "Avaliação da leitura" in pagina and "leitura com a revisão da IA" in pagina
-    assert f'name="aval-q{p["d"]}" value="correta"' in pagina
-    # cada troca da IA tem o seu veredito
-    assert f'name="troca-q{p["d"]}-0" value="certa" data-troca="0"' in pagina and "Era erro do aluno" in pagina
+    assert f'name="aval-q{p["d"]}" value="correta"' in pagina and "A IA corrigiu um erro do aluno" in pagina
 
-    r = _avaliar(cliente_web, p, troca=0, veredito="errada")  # dá para marcar a troca antes da nota
-    assert r.json() == {"ok": True, "nota": None, "rotulo": None, "vereditos": ["errada"], "corrigiu_erro_aluno": False}
     r = _avaliar(cliente_web, p, "pequenos_erros")
-    assert r.json()["vereditos"] == ["errada"] and r.json()["rotulo"] == "Pequenos erros"  # o veredito continua
-    r = _avaliar(cliente_web, p, troca=0, veredito="erro_aluno")  # mudar de ideia atualiza a mesma avaliação
-    assert r.json()["corrigiu_erro_aluno"] is True and r.json()["nota"] == "pequenos_erros"
+    assert r.json() == {"ok": True, "nota": "pequenos_erros", "rotulo": "Pequenos erros", "corrigiu_erro_aluno": False}
+    r = _avaliar(cliente_web, p, "correta", erro=True)  # mudar de ideia atualiza a mesma avaliação
+    assert r.json()["nota"] == "correta"
     with fabrica_sessao() as s:
         a = s.query(AvaliacaoLeitura).one()
-        assert (a.nota, a.corrigiu_erro_aluno, a.com_revisao, a.trocas) == ("pequenos_erros", True, True, 1)
-        assert '"veredito": "erro_aluno"' in a.trocas_json and '"lido": "exodo"' in a.trocas_json
+        assert (a.nota, a.corrigiu_erro_aluno, a.com_revisao, a.trocas) == ("correta", True, True, 1)
         assert a.texto_lido == "Houve êxodo rural." and a.texto_ocr == "Houve exodo rural."
         assert a.servico_ocr == "google-cloud-vision"
-    pagina = cliente_web.get(_url(p)).text
-    assert f'name="aval-q{p["d"]}" value="pequenos_erros" data-nota checked' in pagina
-    assert f'name="troca-q{p["d"]}-0" value="erro_aluno" data-troca="0" checked' in pagina
+    assert f'name="aval-q{p["d"]}" value="correta" checked' in cliente_web.get(_url(p)).text
 
     assert _avaliar(cliente_web, p, "otima").status_code == 400
-    assert _avaliar(cliente_web, p, troca=0, veredito="talvez").status_code == 400
-    assert _avaliar(cliente_web, p, troca=5, veredito="certa").status_code == 400
-    assert _avaliar(cliente_web, p).status_code == 400
     assert cliente_web.post(f"{_url(p)}/avaliacao-leitura", data={"campo": "q999", "nota": "correta"}).status_code == 400
 
 
@@ -87,7 +75,6 @@ def test_avaliacao_mostra_o_texto_lido_mesmo_com_resposta_salva(fabrica_sessao, 
     pagina = cliente_web.get(_url(p)).text
     assert ">Houve êxodo rural!</textarea>" in pagina  # a resposta salva no formulário
     assert '<span class="discreto">Texto lido:</span> Houve êxodo rural.' in pagina  # e o que foi lido, para avaliar
-    assert "Cada troca, com o motivo dado pela IA" not in pagina  # para o administrador, a lista é a dos vereditos
     assert "<p>Houve <del>exodo</del> rural.</p>" in pagina
 
 
@@ -123,20 +110,16 @@ def test_ler_tudo_de_novo_mantem_a_conferencia_e_separa_as_avaliacoes(fabrica_se
     # a nova leitura recebe a sua própria avaliação; o resumo conta uma por folha, campo e condição
     assert 'value="muitos_erros" checked' not in cliente_web.get(_url(p)).text
     _avaliar(cliente_web, p, "correta")
-    _avaliar(cliente_web, p, troca=0, veredito="certa")
     with fabrica_sessao() as s:
         assert s.query(AvaliacaoLeitura).count() == 2
         total, grupos = resumo(s)
     assert total.total == 1 and total.notas["correta"] == 1
-    assert (total.trocas, total.trocas_avaliadas, total.fracao_trocas("certa")) == (1, 1, 1.0)
     assert [g.nome for g in grupos] == ["Cloud Vision com revisão da IA"]
 
     pagina = cliente_web.get("/leitura/avaliacoes").text
     assert "Cloud Vision com revisão da IA" in pagina and "100,0%" in pagina
-    assert "Trocas da revisão da IA" in pagina
     csv = cliente_web.get("/leitura/avaliacoes.csv").text
-    assert csv.splitlines()[0].startswith("atividade,folha,campo,nota") and "trocas_certas" in csv.splitlines()[0]
-    assert len(csv.splitlines()) == 3
+    assert csv.splitlines()[0].startswith("atividade,folha,campo,nota") and len(csv.splitlines()) == 3
 
 
 def test_resumo_separa_leitura_com_e_sem_revisao(fabrica_sessao, cliente_web, prova, monkeypatch):
