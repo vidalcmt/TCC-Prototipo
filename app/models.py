@@ -365,11 +365,11 @@ class LeituraPagina(Base):
 class AvaliacaoLeitura(Base):
     """Avaliação do administrador sobre a leitura automática de um campo da escrita.
 
-    É a medida humana da qualidade da leitura com a revisão da IA: em vez de
-    digitar a referência, o administrador olha a imagem e diz se o texto lido
-    está correto, tem pequenos erros ou tem muitos erros, e se a IA corrigiu um
-    erro do próprio aluno. Os textos avaliados ficam copiados aqui, porque uma
-    nova leitura da página substitui a anterior.
+    Mede a assertividade da leitura com a revisão da IA olhando a imagem: o
+    administrador dá uma nota ao texto lido (correto, pequenos erros, muitos
+    erros) e marca cada troca feita pela revisão como certa, errada ou como um
+    erro do próprio aluno que não devia ter sido corrigido. Os textos avaliados
+    ficam copiados aqui, porque uma nova leitura da página substitui a anterior.
     """
 
     __tablename__ = "avaliacao_leitura"
@@ -381,8 +381,11 @@ class AvaliacaoLeitura(Base):
         ForeignKey("leitura_pagina.id", name="fk_avaliacao_leitura_leitura", ondelete="SET NULL"))
     folha_id: Mapped[int] = mapped_column(ForeignKey("folha.id", name="fk_avaliacao_leitura_folha"))
     campo: Mapped[str] = mapped_column(String(40))
-    nota: Mapped[str] = mapped_column(String(20))              # correta, pequenos_erros ou muitos_erros
+    nota: Mapped[str | None] = mapped_column(String(20))       # correta, pequenos_erros ou muitos_erros
+    # Alguma troca da IA foi marcada como erro do aluno corrigido
     corrigiu_erro_aluno: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Cada troca da revisão com o veredito: [{"lido", "corrigido", "veredito": certa | errada | erro_aluno | null}]
+    trocas_json: Mapped[str] = mapped_column(Text, default="[]")
     texto_lido: Mapped[str] = mapped_column(Text, default="")  # o texto avaliado, já com a revisão quando houve
     texto_ocr: Mapped[str | None] = mapped_column(Text)        # o texto do OCR antes da revisão
     servico_ocr: Mapped[str | None] = mapped_column(String(50))

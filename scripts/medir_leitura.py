@@ -172,18 +172,21 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--csv", help="grava uma linha por campo neste arquivo")
     args = parser.parse_args()
-    from app.leitura.avaliacao import NOTAS, resumo as resumo_avaliacoes
+    from app.leitura.avaliacao import NOTAS, VEREDITOS, resumo as resumo_avaliacoes
 
     with SessionLocal() as sessao:
         medida = medir(sessao)
         sem_texto = medir(sessao, sem_texto=True)
         total, grupos = resumo_avaliacoes(sessao)
     print(medida.resumo())
-    if total.total:
+    if total.total or total.trocas_avaliadas:
         print("\nAvaliação da leitura pelo administrador:")
         for g in grupos + [total]:
             notas = ", ".join(f"{rotulo} {g.notas[chave]} ({g.fracao(chave):.0%})" for chave, (rotulo, _) in NOTAS.items())
-            print(f"{g.nome}: {g.total} respostas; {notas}; IA corrigiu erro do aluno {g.corrigiu_erro_aluno}.")
+            trocas = ", ".join(f"{rotulo} {g.vereditos[chave]} ({g.fracao_trocas(chave):.0%})"
+                               for chave, (rotulo, _) in VEREDITOS.items())
+            print(f"{g.nome}: {g.total} respostas com nota ({notas}); {g.trocas_avaliadas} de {g.trocas} trocas "
+                  f"avaliadas ({trocas}).")
     if sem_texto.textos:
         print("\nSó as folhas conferidas sem o texto lido (referência sem a influência da leitura):")
         print(sem_texto.resumo())

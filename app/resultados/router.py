@@ -13,7 +13,8 @@ from app.database import obter_fabrica_sessao, obter_sessao
 from app.folhas.layout import letras
 from app.folhas.servico import normalizar_codigo
 from app.leitura.avaliacao import NOTAS as NOTAS_LEITURA
-from app.leitura.avaliacao import avaliacoes_da_folha, campos_lidos
+from app.leitura.avaliacao import VEREDITOS as VEREDITOS_TROCA
+from app.leitura.avaliacao import avaliacoes_da_folha, campos_lidos, trocas_da_avaliacao
 from app.leitura.servico import campos_com_recorte, marcar_conferidas, revisoes_da_folha, valores_lidos
 from app.models import Atividade, Folha
 from app.questoes.cliente import obter_cliente_llm
@@ -141,6 +142,7 @@ def pagina_da_folha(request: Request, atividade_id: int, folha_id: int, aviso: s
     lidos, duvidas, avisos_leitura, leitura_pendente = valores_lidos(folha)
     recortes = campos_com_recorte(folha)
     admin = request.state.usuario.eh_admin
+    avaliacoes = avaliacoes_da_folha(sessao, folha) if admin else {}
     return templates.TemplateResponse(request, "folha_respostas.html", {
         "lidos": lidos, "duvidas": duvidas, "avisos_leitura": avisos_leitura, "leitura_pendente": leitura_pendente,
         "recortes": recortes, "revisoes": revisoes_da_folha(folha),
@@ -148,7 +150,8 @@ def pagina_da_folha(request: Request, atividade_id: int, folha_id: int, aviso: s
         "tem_texto_lido": any(lidos.get(c) for c in recortes),
         "admin": admin, "NOTAS_LEITURA": NOTAS_LEITURA,
         "lidos_por_campo": campos_lidos(folha) if admin else {},
-        "avaliacoes": avaliacoes_da_folha(sessao, folha) if admin else {},
+        "avaliacoes": avaliacoes, "VEREDITOS_TROCA": VEREDITOS_TROCA,
+        "trocas_avaliadas": {campo: trocas_da_avaliacao(a) for campo, a in avaliacoes.items()},
         "atividade": atividade, "folha": folha, "resultado": resultado_da_folha(sessao, folha),
         "anterior": folhas[posicao - 1] if posicao > 0 else None,
         "proxima": folhas[posicao + 1] if posicao + 1 < len(folhas) else None,
