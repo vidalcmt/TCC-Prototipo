@@ -24,6 +24,19 @@
 </details>
 {% else %}<p class="discreto revisao-ia-vazia">A revisão da IA não trocou nada nesta resposta.</p>{% endif %}
 {% endif %}{% endmacro %}
+{% macro avaliar_leitura(campo, s) %}{% if admin and campo in lidos_por_campo %}{% set l = lidos_por_campo[campo] %}{% set a = avaliacoes.get(campo) %}
+<fieldset class="avaliacao-leitura" data-url="/atividades/{{ atividade.id }}/folhas/{{ folha.id }}/avaliacao-leitura" data-campo="{{ campo }}">
+  <legend>Avaliação da leitura <span class="discreto">(só administrador{% if l.com_revisao %}, leitura com a revisão da IA{% endif %})</span></legend>
+  {% if s %}<p class="texto-lido"><span class="discreto">Texto lido:</span> {{ l.texto or "(vazio)" }}</p>{{ revisao_ia(campo) }}{% endif %}
+  <div class="notas-leitura" role="radiogroup" aria-label="Nota da leitura">
+    {% for chave, (rotulo, criterio) in NOTAS_LEITURA.items() %}
+    <label class="nota-leitura nota-{{ chave }}" title="{{ criterio }}"><input type="radio" name="aval-{{ campo }}" value="{{ chave }}"{% if a and a.nota == chave %} checked{% endif %}> {{ rotulo }}</label>
+    {% endfor %}
+    <label class="erro-aluno"><input type="checkbox" name="erro-{{ campo }}"{% if a and a.corrigiu_erro_aluno %} checked{% endif %}> A IA corrigiu um erro do aluno</label>
+    <span class="discreto estado-avaliacao" aria-live="polite">{% if a %}Avaliada{% endif %}</span>
+  </div>
+</fieldset>
+{% endif %}{% endmacro %}
 {% block titulo %}Folha {{ folha.numero }}: {{ atividade.titulo }}{% endblock %}
 {% block conteudo %}
 <a class="voltar" href="/atividades/{{ atividade.id }}/resultados">&larr; Voltar para os resultados</a>
@@ -125,6 +138,7 @@
   {% if campo in recortes %}<img class="recorte" src="/atividades/{{ atividade.id }}/folhas/{{ folha.id }}/recorte/{{ campo }}" alt="Resposta escrita na folha, item {{ item.letra }}" loading="lazy">{% endif %}
   <textarea id="{{ campo }}" name="{{ campo }}" rows="4"{% if travada %} readonly{% endif %}>{{ s.resposta_do_item(item.letra) if s else ("" if sem_texto else lidos.get(campo, "")) }}</textarea>
   {% if not s and not sem_texto %}{{ revisao_ia(campo) }}{% endif %}
+  {% if not sem_texto %}{{ avaliar_leitura(campo, s) }}{% endif %}
   {% endfor %}
   {% else %}
   {% set campo = "q" ~ q.id %}
@@ -132,6 +146,7 @@
   {% if campo in recortes %}<img class="recorte" src="/atividades/{{ atividade.id }}/folhas/{{ folha.id }}/recorte/{{ campo }}" alt="Resposta escrita na folha, questão {{ l.numero }}" loading="lazy">{% endif %}
   <textarea id="{{ campo }}" name="{{ campo }}" rows="5"{% if travada %} readonly{% endif %}>{{ s.resposta_aluno if s else ("" if sem_texto else lidos.get(campo, "")) }}</textarea>
   {% if not s and not sem_texto %}{{ revisao_ia(campo) }}{% endif %}
+  {% if not sem_texto %}{{ avaliar_leitura(campo, s) }}{% endif %}
   {% endif %}
 </section>
 {% endfor %}
@@ -160,5 +175,28 @@
   <button type="submit">Corrigir {{ a_corrigir }} {{ "discursiva" if a_corrigir == 1 else "discursivas" }} desta folha</button>
   <span class="discreto aguarde" hidden>Corrigindo, pode levar alguns segundos por resposta...</span>
 </form>
+{% endif %}
+{% if admin and lidos_por_campo %}
+<script>
+// Avaliação da leitura: grava ao clicar, sem recarregar a página nem mexer no formulário das respostas.
+document.querySelectorAll(".avaliacao-leitura").forEach(caixa => {
+  const estado = caixa.querySelector(".estado-avaliacao");
+  async function gravar() {
+    const nota = caixa.querySelector("input[type=radio]:checked");
+    if (!nota) { estado.textContent = "Escolha uma nota para gravar."; return; }
+    const dados = new FormData();
+    dados.append("campo", caixa.dataset.campo);
+    dados.append("nota", nota.value);
+    if (caixa.querySelector("input[type=checkbox]").checked) dados.append("corrigiu_erro_aluno", "1");
+    estado.textContent = "Gravando...";
+    try {
+      const resposta = await fetch(caixa.dataset.url, { method: "POST", body: dados });
+      const corpo = await resposta.json();
+      estado.textContent = corpo.ok ? "Avaliada: " + corpo.rotulo : (corpo.erro || "Não foi possível gravar.");
+    } catch (e) { estado.textContent = "Não foi possível gravar. Tente de novo."; }
+  }
+  caixa.querySelectorAll("input").forEach(i => i.addEventListener("change", gravar));
+});
+</script>
 {% endif %}
 {% endblock %}

@@ -172,10 +172,18 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--csv", help="grava uma linha por campo neste arquivo")
     args = parser.parse_args()
+    from app.leitura.avaliacao import NOTAS, resumo as resumo_avaliacoes
+
     with SessionLocal() as sessao:
         medida = medir(sessao)
         sem_texto = medir(sessao, sem_texto=True)
+        total, grupos = resumo_avaliacoes(sessao)
     print(medida.resumo())
+    if total.total:
+        print("\nAvaliação da leitura pelo administrador:")
+        for g in grupos + [total]:
+            notas = ", ".join(f"{rotulo} {g.notas[chave]} ({g.fracao(chave):.0%})" for chave, (rotulo, _) in NOTAS.items())
+            print(f"{g.nome}: {g.total} respostas; {notas}; IA corrigiu erro do aluno {g.corrigiu_erro_aluno}.")
     if sem_texto.textos:
         print("\nSó as folhas conferidas sem o texto lido (referência sem a influência da leitura):")
         print(sem_texto.resumo())

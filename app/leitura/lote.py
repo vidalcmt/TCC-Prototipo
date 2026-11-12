@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import sessionmaker
 
-from app.leitura.servico import FALHA, ler_pagina, paginas_para_ler
+from app.leitura.servico import FALHA, ler_pagina, paginas_identificadas, paginas_para_ler
 from app.models import Atividade, PaginaDigitalizada
 
 
@@ -30,13 +30,17 @@ def andamento(atividade_id: int) -> Andamento | None:
     return _andamentos.get(atividade_id)
 
 
-def iniciar(fabrica: sessionmaker, atividade_id: int, usuario_id: int, cliente=None) -> Andamento | None:
+def iniciar(fabrica: sessionmaker, atividade_id: int, usuario_id: int, cliente=None,
+            todas: bool = False) -> Andamento | None:
+    """Lê as páginas ainda não lidas, ou, com todas=True, todas as páginas identificadas de novo."""
     with _trava:
         atual = _andamentos.get(atividade_id)
         if atual is not None and atual.em_andamento:
             return None
         with fabrica() as sessao:
-            ids = [p.id for p in paginas_para_ler(sessao, sessao.get(Atividade, atividade_id))]
+            atividade = sessao.get(Atividade, atividade_id)
+            paginas = paginas_identificadas(sessao, atividade) if todas else paginas_para_ler(sessao, atividade)
+            ids = [p.id for p in paginas]
         estado = Andamento(total=len(ids))
         _andamentos[atividade_id] = estado
         threading.Thread(target=_executar, args=(fabrica, estado, ids, usuario_id, cliente), daemon=True).start()

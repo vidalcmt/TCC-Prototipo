@@ -362,6 +362,37 @@ class LeituraPagina(Base):
     pagina_digitalizada: Mapped[PaginaDigitalizada] = relationship(back_populates="leitura")
 
 
+class AvaliacaoLeitura(Base):
+    """Avaliação do administrador sobre a leitura automática de um campo da escrita.
+
+    É a medida humana da qualidade da leitura com a revisão da IA: em vez de
+    digitar a referência, o administrador olha a imagem e diz se o texto lido
+    está correto, tem pequenos erros ou tem muitos erros, e se a IA corrigiu um
+    erro do próprio aluno. Os textos avaliados ficam copiados aqui, porque uma
+    nova leitura da página substitui a anterior.
+    """
+
+    __tablename__ = "avaliacao_leitura"
+    __table_args__ = (UniqueConstraint("leitura_pagina_id", "campo", name="uq_avaliacao_leitura_campo"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Fica vazio quando a página é lida de novo: a avaliação continua valendo para o texto copiado abaixo.
+    leitura_pagina_id: Mapped[int | None] = mapped_column(
+        ForeignKey("leitura_pagina.id", name="fk_avaliacao_leitura_leitura", ondelete="SET NULL"))
+    folha_id: Mapped[int] = mapped_column(ForeignKey("folha.id", name="fk_avaliacao_leitura_folha"))
+    campo: Mapped[str] = mapped_column(String(40))
+    nota: Mapped[str] = mapped_column(String(20))              # correta, pequenos_erros ou muitos_erros
+    corrigiu_erro_aluno: Mapped[bool] = mapped_column(Boolean, default=False)
+    texto_lido: Mapped[str] = mapped_column(Text, default="")  # o texto avaliado, já com a revisão quando houve
+    texto_ocr: Mapped[str | None] = mapped_column(Text)        # o texto do OCR antes da revisão
+    servico_ocr: Mapped[str | None] = mapped_column(String(50))
+    com_revisao: Mapped[bool] = mapped_column(Boolean, default=False)
+    trocas: Mapped[int] = mapped_column(Integer, default=0)    # trocas feitas pela revisão
+    usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuario.id", name="fk_avaliacao_leitura_usuario"))
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+    atualizado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+
+
 class RequisicaoHttp(Base):
     """Uma requisição ao site, para o monitoramento do tempo de resposta.
 

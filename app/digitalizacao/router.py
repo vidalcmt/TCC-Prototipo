@@ -7,6 +7,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.config import config
 from app.database import obter_sessao
 from app.digitalizacao.servico import (
     IDENTIFICADA, OUTRA_ATIVIDADE, ROTULOS, SEM_QR, DigitalizacaoInvalida, atribuir, caminho, excluir,
@@ -15,7 +16,7 @@ from app.digitalizacao.servico import (
 from app.folhas import layout as L
 from app.leitura import lote as lote_leitura
 from app.leitura import ocr
-from app.leitura.servico import paginas_para_ler
+from app.leitura.servico import paginas_identificadas, paginas_para_ler
 from app.models import Atividade, PaginaDigitalizada
 from app.templates_config import templates
 
@@ -61,6 +62,7 @@ def pagina(request: Request, atividade_id: int, aviso: str | None = None, sessao
     andamento = lote_leitura.andamento(atividade.id)
     return templates.TemplateResponse(request, "digitalizacoes.html", {
         "a_ler": len(paginas_para_ler(sessao, atividade)), "andamento": andamento,
+        "identificadas": len(paginas_identificadas(sessao, atividade)), "revisao_ligada": config.leitura_revisao_ia,
         "ocr_disponivel": ocr.disponivel(), "ocr_servico": ocr.nome_do_servico(), "leitura_por_folha": leitura_por_folha,
         "atividade": atividade, "aviso": aviso, "rotulos": ROTULOS,
         "pendentes": [p for p in paginas if p.situacao in (SEM_QR, OUTRA_ATIVIDADE)],
