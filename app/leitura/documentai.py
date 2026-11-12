@@ -126,9 +126,28 @@ def _texto_do_trecho(documento: dict, layout: dict) -> str:
     return "".join(partes).strip()
 
 
+SOBREPOSICAO_MAXIMA = 0.5  # fração da área da menor palavra
+
+
+def _sobreposicao(a: tuple, b: tuple) -> float:
+    """Quanto dois retângulos (x0, y0, x1, y1) se cobrem, como fração da área do menor."""
+    largura = min(a[2], b[2]) - max(a[0], b[0])
+    altura = min(a[3], b[3]) - max(a[1], b[1])
+    if largura <= 0 or altura <= 0:
+        return 0.0
+    menor = min((a[2] - a[0]) * (a[3] - a[1]), (b[2] - b[0]) * (b[3] - b[1]))
+    return largura * altura / menor if menor > 0 else 0.0
+
+
 def palavras(documento: dict) -> list[tuple[str, str, float, float]]:
-    """Palavras com a quebra detectada depois delas e o centro, em milímetros da folha."""
-    saida = []
+    """Palavras com a quebra detectada depois delas e o centro, em milímetros da folha.
+
+    Em letra à mão, o Document AI às vezes devolve a mesma palavra duas vezes,
+    em dois tokens quase no mesmo lugar, e o texto saía com "o o meio meio".
+    Duas palavras escritas pelo aluno não ocupam o mesmo espaço no papel: quando
+    um token cobre mais da metade de outro, fica só o de maior confiança.
+    """
+    candidatos = []
     for pagina in documento.get("pages", []):
         for token in pagina.get("tokens", []):
             layout = token.get("layout") or {}
@@ -136,11 +155,18 @@ def palavras(documento: dict) -> list[tuple[str, str, float, float]]:
             vertices = (layout.get("boundingPoly") or {}).get("normalizedVertices", [])
             if not texto or not vertices:
                 continue
-            x = sum(v.get("x", 0) for v in vertices) / len(vertices) * L.LARGURA
-            y = sum(v.get("y", 0) for v in vertices) / len(vertices) * L.ALTURA
+            xs, ys = [v.get("x", 0) for v in vertices], [v.get("y", 0) for v in vertices]
+            caixa = (min(xs), min(ys), max(xs), max(ys))
+            confianca = float(layout.get("confidence", 0) or 0)
             quebra = (token.get("detectedBreak") or {}).get("type", "")
-            saida.append((texto, quebra, x, y))
-    return saida
+            candidatos.append((texto, quebra, sum(xs) / len(xs) * L.LARGURA, sum(ys) / len(ys) * L.ALTURA,
+                               caixa, confianca))
+    mantidos = []
+    for candidato in sorted(candidatos, key=lambda c: -c[5]):
+        if all(_sobreposicao(candidato[4], m[4]) <= SOBREPOSICAO_MAXIMA for m in mantidos):
+            mantidos.append(candidato)
+    ordem = {id(c): i for i, c in enumerate(candidatos)}
+    return [(t, q, x, y) for t, q, x, y, _, _ in sorted(mantidos, key=lambda c: ordem[id(c)])]
 
 
 def palavras_da_pagina(imagem: np.ndarray, http: httpx.Client | None = None) -> tuple[list, float]:

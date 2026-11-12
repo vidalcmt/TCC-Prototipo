@@ -106,7 +106,7 @@ function tabela(cabecalho, linhas, proporcoes) {
 // =====================================================================
 // CAPA
 // =====================================================================
-const VERSAO = "0.24";
+const VERSAO = "0.25";
 const DATA = "11/11/2026";
 
 conteudo.push(new Paragraph({ spacing: { before: 2400 }, children: [] }));
@@ -269,7 +269,7 @@ tabela(
 
 // ---------------------------------------------------------------------
 h1("3. Modelo de dados");
-p("O banco tem dezessete tabelas. As oito primeiras foram criadas pela migração inicial do Alembic, a tabela `usuario` por uma migração própria, que também ligou revisões e chamadas ao usuário que as fez, as tabelas `item_questao` e `resposta_item` pela migração dos itens das discursivas, as tabelas `atividade` e `atividade_questao` pela migração das atividades, a tabela `folha` pela migração das folhas de resposta, a tabela `pagina_digitalizada` pela migração das digitalizações, a tabela `leitura_pagina` pela migração da leitura automática, e a tabela `requisicao_http` pela migração do monitoramento. Duas delas existem por razão metodológica e não devem ser simplificadas: `revisao_professor`, que guarda a nota sugerida e a nota final lado a lado e permite calcular a concordância, e `metrica_requisicao`, que registra também as falhas, porque a taxa de falha é um resultado da pesquisa.");
+p("O banco tem dezessete tabelas. As oito primeiras foram criadas pela migração inicial do Alembic, a tabela `usuario` por uma migração própria, que também ligou revisões e chamadas ao usuário que as fez, as tabelas `item_questao` e `resposta_item` pela migração dos itens das discursivas, as tabelas `atividade` e `atividade_questao` pela migração das atividades, a tabela `folha` pela migração das folhas de resposta, a tabela `pagina_digitalizada` pela migração das digitalizações, a tabela `leitura_pagina` pela migração da leitura automática (com a coluna `conferida_sem_texto` acrescentada depois por uma migração própria), e a tabela `requisicao_http` pela migração do monitoramento. Duas delas existem por razão metodológica e não devem ser simplificadas: `revisao_professor`, que guarda a nota sugerida e a nota final lado a lado e permite calcular a concordância, e `metrica_requisicao`, que registra também as falhas, porque a taxa de falha é um resultado da pesquisa.");
 tabela(
   ["Tabela", "Finalidade"],
   [
@@ -382,6 +382,7 @@ campos("leitura_pagina", [
   ["`servico_ocr`", "texto", "`google-cloud-vision` quando a escrita foi enviada ao serviço; vazio quando não foi"],
   ["`latencia_ocr_ms`", "decimal", "Tempo da chamada ao serviço de transcrição"],
   ["`conferida_em`", "data e hora", "Quando o professor salvou o formulário da folha depois da leitura"],
+  ["`conferida_sem_texto`", "booleano", "Verdadeiro quando a escrita foi digitada com os campos vazios, a partir da imagem, sem o texto lido à vista. Essas folhas formam a referência sem influência da medida (seção 7.5)"],
   ["`usuario_id`", "inteiro", "Quem pediu a leitura"],
   ["`criado_em`", "data e hora", "Momento da leitura"],
 ]);
@@ -944,6 +945,7 @@ tabela(["Etapa", "Como é feita"], [
   ["Escrita", "A página é alinhada de novo, com 12 pixels por milímetro (cerca de 300 dpi), e enviada numa única chamada ao Google Cloud Vision, com o recurso de detecção de texto em documentos e a indicação do português. Cada palavra devolvida vem com a posição; a palavra é atribuída à caixa em que o seu centro está, com 2,5 mm de folga, e o texto impresso fora das caixas é descartado. A transcrição é literal: nenhum ajuste é feito"],
   ["Ordem das palavras", "A ordem em que o serviço devolve as palavras não é usada. Com letra à mão, o agrupamento em blocos e parágrafos costuma sair errado, e um trecho de uma linha de baixo vinha antes da primeira. Cada palavra vai para a linha da pauta da caixa em que está o seu centro (as linhas ficam a cada 8 mm, em posição conhecida) e, dentro da linha, as palavras seguem da esquerda para a direita. A pontuação é colada à palavra anterior. As linhas da pauta são unidas num texto corrido, porque a quebra de linha na folha é só o fim do espaço, e não um novo parágrafo; uma palavra partida com hífen no fim da linha é reunida"],
   ["Serviço de leitura", "A escrita pode ser lida pelo Google Cloud Vision ou pelo Google Document AI (processador Enterprise Document OCR), escolhido em `LEITURA_SERVICO`. Os dois entregam palavras com posição, e a montagem pela pauta é a mesma. O Document AI usa a conta de serviço da máquina em vez de chave de API (`app/leitura/documentai.py`)"],
+  ["Palavras repetidas do Document AI", "Em letra à mão, o Document AI às vezes devolve a mesma palavra duas vezes, em dois tokens quase no mesmo lugar, e o texto saía com \"o o meio meio\". Como duas palavras escritas não ocupam o mesmo espaço no papel, quando um token cobre mais da metade de outro fica só o de maior confiança"],
   ["Revisão da IA (opcional)", "Com `LEITURA_REVISAO_IA=true`, o texto de cada caixa passa por um modelo de linguagem que vê a imagem da caixa e corrige os erros de leitura do OCR, mantendo os erros do aluno. Ver a seção abaixo"],
 ], [3, 7]);
 h3("Revisão da transcrição pela IA (revisor.py)");
@@ -953,7 +955,7 @@ marcadores([
   "**Sem contexto da questão:** o modelo recebe só a imagem e o texto lido, nunca o enunciado, a resposta esperada ou a rubrica, para não puxar a transcrição em direção à resposta certa.",
   "**Regra explícita no prompt:** o prompt `prompts/transcricao/v1.md` descreve os dois tipos de erro, com exemplos, e manda decidir pela imagem. O conhecimento da língua serve só para escolher entre leituras que a imagem permite.",
   "**Limite de mudança:** uma revisão que muda mais de 40% dos caracteres do texto lido é descartada, e fica o texto do OCR. A chamada é registrada como falha nas métricas, com o motivo. Uma revisão que esvazia a caixa também é descartada, porque uma resposta em branco vale zero sem passar pela correção.",
-  "**Conferência do professor:** na página da folha, cada troca aparece abaixo do texto (o que foi lido, riscado, e o que entrou no lugar), junto dos trechos incertos. O campo com trecho incerto recebe a etiqueta \"confira\". Nada é gravado antes de o professor salvar.",
+  "**Conferência do professor:** abaixo de cada resposta, uma linha resume a revisão (quantas trocas e quantos trechos incertos, com a etiqueta \"confira\" quando há incerteza). Ao abrir, aparecem o texto inteiro antes e depois da revisão, lado a lado, com as palavras mudadas destacadas, e a lista das trocas com o motivo dado pelo modelo. A caixa fica fechada por padrão, para a página não crescer demais. Nada é gravado antes de o professor salvar.",
 ]);
 p("O texto do OCR sozinho fica guardado com a leitura, ao lado do revisado. Assim, o `scripts/medir_leitura.py` compara as duas taxas de erro contra o mesmo texto conferido e conta em quantos campos a revisão melhorou ou piorou a transcrição. Piorar indica que o professor desfez uma troca, quase sempre um erro do aluno que o modelo corrigiu. Cada caixa com texto é uma chamada ao modelo, com a imagem reduzida a no máximo 1600 pixels no lado maior; a chamada entra nas métricas, com o tipo `transcricao`, e conta no limite diário de chamadas.");
 h3("Alinhamento sem as marcas dos cantos (elementos.py)");
@@ -976,8 +978,11 @@ tabela(["Rota", "O que faz"], [
 ], [4, 6]);
 h3("Teste da chave: scripts/teste_vision.py");
 p("Confere a configuração do Google Cloud Vision sem depender de uma folha: desenha uma frase numa imagem, envia ao serviço e mostra o que foi lido e o tempo da chamada. A chave nunca é exibida, só o seu tamanho e os quatro últimos caracteres. Quando o serviço recusa o pedido, a mensagem explica a causa provável, para os erros mais comuns de configuração: chave inválida, API não ativada, chave sem permissão para o Vision, restrição de endereço IP e faturamento inativo. As mesmas explicações aparecem na página da folha quando uma leitura falha. O passo a passo da configuração está no guia de publicação, seção 6.");
+h3("Conferência sem o texto lido");
+p("Corrigir sobre o texto lido é mais rápido, mas deixa a referência parecida com ele: uma letra trocada que passa despercebida fica nos dois textos e deixa de contar como erro. Na primeira comparação entre os serviços, o texto salvo trazia sobras da leitura, como \"2 celula\" e uma letra do alfabeto cirílico que só existia na saída do Document AI. Para medir a leitura sem essa influência, o aviso da folha lida oferece \"Conferir sem o texto lido\": as respostas escritas aparecem vazias, sem a revisão da IA, e o professor digita cada uma olhando só a imagem. As objetivas continuam preenchidas. Ao salvar, a leitura é marcada com `conferida_sem_texto`, e o modo continua na folha seguinte quando se usa \"Salvar e ir para a próxima\".");
+p("Essas folhas são medidas também à parte pelo `scripts/medir_leitura.py` e podem ser as únicas usadas pelo `scripts/comparar_ocr.py`, com `--sem-texto`.");
 h3("Comparação entre os serviços: scripts/comparar_ocr.py");
-p("Lê de novo as páginas já conferidas com os dois serviços e compara o texto de cada caixa com a resposta salva pelo professor, que serve de referência. Como a letra, a imagem e o alinhamento são os mesmos, a diferença entre as taxas de erro (CER e WER) é efeito só do serviço. Não altera nenhuma leitura nem resposta, e grava uma linha por campo e serviço com `--csv`.");
+p("Lê de novo as páginas já conferidas com os dois serviços e compara o texto de cada caixa com a resposta salva pelo professor, que serve de referência. Como a letra, a imagem e o alinhamento são os mesmos, a diferença entre as taxas de erro (CER e WER) é efeito só do serviço. Não altera nenhuma leitura nem resposta, e grava uma linha por campo e serviço com `--csv`. Com `--revisao`, o texto de cada serviço passa também pela revisão da IA e entra como mais uma condição (`vision+revisao`, `documentai+revisao`), contra a mesma referência; cada caixa é uma chamada ao modelo. Com `--sem-texto`, entram só as folhas conferidas sem o texto lido. As duas opções juntas dão a tabela das condições da seção 7.5.");
 h3("Medida da taxa de acerto: scripts/medir_leitura.py");
 p("Compara o que foi lido com o que o professor conferiu, nas leituras já conferidas. Nas objetivas, informa a proporção de marcações lidas corretamente, no total e entre as não duvidosas. Nas discursivas, calcula a taxa de erro de caracteres (CER) e de palavras (WER): a distância de edição de Levenshtein entre o texto lido e o conferido, dividida pelo tamanho do conferido. Quando a revisão da IA foi aplicada, informa também o CER do OCR sozinho e o do texto revisado, e em quantos campos a revisão melhorou ou piorou. Com `--csv`, grava uma linha por campo, com o texto do OCR e o seu CER nas colunas `lido_ocr` e `cer_ocr`. Esses números entram no artigo como resultado da leitura, separados dos resultados da correção.");
 
@@ -1103,8 +1108,8 @@ tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_digitalizacao.py`", "QR code lido em página reta, de cabeça para baixo e com ruído, em folhas sintéticas com o layout real; página sem QR code; PDF com várias folhas e foto sem QR code; página de outra atividade e reenvio que substitui; arquivos recusados; atividade sem folhas; indicação manual da folha com código e página inválidos; exclusão da página e do arquivo; imagem só com login e na atividade certa; atividade com digitalizações não excluída"],
   ["`tests/test_leitura.py`", "Bolinhas lidas em folhas sintéticas com o layout real, retas, inclinadas, com perspectiva e de cabeça para baixo, incluindo mais de uma marcada e X como duvidoso; página sem marcas; palavras atribuídas às caixas, sem o texto impresso; pedido ao Google Cloud Vision com chave, recurso e idioma; erros do serviço; sem chave; ordem das palavras pela pauta da caixa, e não pela ordem do serviço; página ampliada para a escrita; alinhamento sem as marcas pelo QR code e pelas caixas, com a página reta e de cabeça para baixo; alinhamento aproximado sem marcas e sem caixas; erro medido nas caixas quando há marcas; leitura sem marcas registrando o método; explicação dos erros comuns de configuração; script de teste da chave, sem exibir a chave; leitura, conferência e medida pela tela; só bolinhas sem chave; leitura que não muda respostas salvas; falha de alinhamento exibida; distância de edição, CER e WER"],
   ["`tests/test_monitoramento.py`", "Rota declarada gravada no lugar do endereço real, sem estáticos nem /saude; requisição lenta e erro do servidor no log; registros antigos apagados; cálculo do percentil; resumo do período por rota, por intervalo, das chamadas ao modelo e do servidor; página e exportação só para administradores"],
-  ["`tests/test_documentai.py`", "Palavras do Document AI convertidas em milímetros e montadas pela pauta, com palavra partida reunida; pedido com endereço do processador, token e idioma; erros de permissão, processador e escopo explicados; processador mal escrito; serviço escolhido pela configuração; leitura pela tela com o Document AI e comparação entre os dois serviços"],
-  ["`tests/test_revisor.py`", "Erro de leitura corrigido e erro do aluno mantido, com as trocas listadas; imagem da caixa reduzida e enviada junto do texto lido; revisão que muda demais descartada e registrada como falha; falha do modelo e caixa esvaziada mantendo o texto do OCR; caixa vazia sem chamada; leitura pela tela com as trocas e os trechos incertos na página, sem o enunciado no pedido ao modelo; medida com e sem a revisão; revisão desligada sem chamada"],
+  ["`tests/test_documentai.py`", "Palavras do Document AI convertidas em milímetros e montadas pela pauta, com palavra partida reunida; palavra repetida no mesmo lugar mantida uma vez, pela confiança, e palavras vizinhas iguais preservadas; pedido com endereço do processador, token e idioma; erros de permissão, processador e escopo explicados; processador mal escrito; serviço escolhido pela configuração; leitura pela tela com o Document AI e comparação entre os dois serviços, com a revisão da IA como condição (descartada quando mudaria demais o texto) e filtro das folhas conferidas sem o texto lido"],
+  ["`tests/test_revisor.py`", "Antes e depois palavra por palavra, inclusive palavra que virou duas; caixa recolhida com o resumo e os textos inteiros; revisão sem trocas numa linha; conferência sem o texto lido, com a escrita vazia, as objetivas preenchidas e a leitura marcada, medida à parte; conferência comum fora dessa medida; erro de leitura corrigido e erro do aluno mantido, com as trocas listadas; imagem da caixa reduzida e enviada junto do texto lido; revisão que muda demais descartada e registrada como falha; falha do modelo e caixa esvaziada mantendo o texto do OCR; caixa vazia sem chamada; leitura pela tela com as trocas e os trechos incertos na página, sem o enunciado no pedido ao modelo; medida com e sem a revisão; revisão desligada sem chamada"],
   ["`tests/test_lista_questoes.py`", "Páginas de 50 e página fora do intervalo; cada filtro, inclusive situação pendente e sem correção; filtros mantidos ao trocar de página; filtro sem resultado; opções dos filtros vindas do banco"],
   ["`tests/test_importar_enem.py`", "Paginação; parada após recusas seguidas; exclusão de numeração fora da área e de repetidas; filtro de área e de imagens; montagem do enunciado; importação com gabarito e sem duplicar"],
 ], [3, 7]);
@@ -1131,6 +1136,32 @@ p("Ao mudar um valor em `config/precos.toml`, a data de acesso no mesmo arquivo 
 
 h2("7.4 Corpus congelado");
 p("O corpus de validação é congelado em 25/10/2026 e não muda depois disso. Cada resposta recebe um código anônimo e uma origem; nenhum nome de pessoa entra no repositório.");
+
+h2("7.5 Protocolo de avaliação da leitura e da correção");
+p("Esta seção registra como os dados de avaliação são coletados, para que o artigo descreva o método e as limitações com o que de fato foi feito.");
+h3("Origem das respostas");
+p("As folhas foram respondidas à mão por voluntários adultos, num ambiente simulado, e não por alunos numa aula. A leitura (bolinhas, OCR e revisão da IA) é medida sobre letra real, escrita em folhas impressas e digitalizadas como seriam numa escola. A correção mostra se o modelo avalia bem as respostas que recebeu, sem efeito de aprendizagem a medir. No texto, as respostas são chamadas de respostas de voluntários ou respostas simuladas, nunca de respostas de alunos. Na metodologia, entram o número de participantes, o perfil geral, sem nomes, e a instrução que receberam, como responder como um aluno responderia, sem consulta.");
+h3("Referência sem influência");
+p("Uma amostra de 20 a 30 respostas é conferida sem o texto lido (seção 4.27). Só essa amostra serve de referência para comparar as condições de leitura, porque nenhum dos serviços influenciou o texto salvo.");
+h3("Condições de leitura comparadas");
+tabela(["Condição", "O que é"], [
+  ["Cloud Vision", "OCR do Google Cloud Vision, montado pela pauta das caixas"],
+  ["Document AI", "OCR do Google Document AI (Enterprise Document OCR), com a mesma montagem"],
+  ["Document AI com revisão", "O texto do Document AI revisado pelo modelo de linguagem, que vê a imagem da caixa e não vê a questão"],
+], [3, 7]);
+p("As três saem de uma única execução de `python -m scripts.comparar_ocr --revisao --sem-texto --csv comparacao.csv`, que também traz a revisão sobre o Vision.");
+h3("Teste controlado dos erros do aluno");
+p("O risco da revisão é corrigir um erro do próprio aluno. Voluntários com boa escolaridade erram pouco a ortografia, e o risco quase não apareceria. Por isso, de 10 a 15 respostas são escritas de propósito com erros comuns, como \"assasino\", acento faltando e concordância errada, com a lista dos erros anotada antes da leitura. Para cada erro anotado, conta-se se a revisão o manteve ou o corrigiu. No artigo, o teste é descrito como material preparado para esse fim.");
+h3("Tamanho da amostra");
+p("Na primeira comparação, com 30 respostas de 6 folhas, o CER variou com desvio padrão de cerca de 12 pontos percentuais entre respostas. Com esse desvio, a margem de erro da média, com 95% de confiança, é a seguinte:");
+tabela(["Respostas discursivas", "Margem de erro do CER médio"], [
+  ["30", "± 4,4 pontos"], ["60", "± 3,1 pontos"], ["100", "± 2,4 pontos"], ["200", "± 1,7 pontos"],
+], [4, 6]);
+p("A meta para a leitura é de pelo menos 100 respostas, de pelo menos 20 pessoas diferentes, porque a letra varia mais entre pessoas do que entre questões. Para a correção, de 50 a 100 respostas discursivas corrigidas e revisadas bastam para um estudo de caso, e podem ser as mesmas da leitura. As objetivas entram todas, porque a leitura das bolinhas não tem custo de conferência.");
+h3("Resultado preliminar");
+p("Na primeira comparação, com 30 respostas de 6 folhas, o CER médio foi de 22,9% no Cloud Vision e de 16,7% no Document AI, que errou menos em 21 das 30 respostas. O tempo médio por página foi de 4,1 s e 4,8 s. A referência foi conferida sobre o texto lido, e ao menos uma resposta foi aproveitada do Document AI, o que favorece esse serviço. Os números são preliminares e serão substituídos pelos da referência sem influência.");
+h3("Consentimento");
+p("A participação é voluntária e nenhum dado identifica quem escreveu: as folhas têm só um código. A necessidade de um termo de consentimento, ou de submissão a comitê de ética, deve ser confirmada com o orientador e registrada no artigo.");
 
 // ---------------------------------------------------------------------
 h1("8. Decisões técnicas e limitações");
@@ -1211,6 +1242,8 @@ marcadores([
   "**Critérios sem rubrica:** quando o professor não informa rubrica, o modelo define os critérios a cada correção, e eles podem variar entre correções da mesma questão. Para comparar condições, o corpus deve usar questões com rubrica.",
   "**Geração na própria requisição da página:** o navegador espera a resposta do modelo, o que leva alguns segundos. É adequado para um usuário por vez; a execução em lote da etapa 5 roda por linha de comando.",
   "**Revisão da transcrição pela IA:** o modelo pode trocar um erro do aluno por uma palavra correta, ou adivinhar uma palavra ilegível. As salvaguardas da seção 4.27 reduzem o problema, mas não o eliminam, e o professor que confere pode ser puxado a aceitar a troca. Por isso, o artigo deve relatar a taxa de erro com e sem a revisão e o número de trocas desfeitas pelo professor, e a referência da medida deve ser transcrita letra por letra a partir da imagem.",
+  "**Respostas de voluntários:** as folhas foram respondidas por adultos num ambiente simulado. A letra tende a ser mais legível e a ortografia mais correta do que numa turma escolar, o que pode deixar as taxas de erro da leitura melhores do que seriam com alunos. A correção não mede efeito de aprendizagem.",
+  "**Referência corrigida sobre o texto lido:** a conferência comum parte do texto lido e tende a manter parte dos seus erros, o que favorece o serviço que preencheu o formulário. Só as folhas conferidas sem o texto lido servem de referência para comparar as condições de leitura (seção 7.5).",
   "**Explicações anteriores:** a página mostra só a explicação mais recente. As anteriores continuam no banco e entram na análise.",
   "**Latência e rede:** a latência inclui o tempo de rede do computador onde o sistema roda. Medições comparadas entre si devem vir da mesma máquina e conexão.",
   "**Busca no enunciado:** o SQLite só ignora a diferença entre maiúsculas e minúsculas em letras sem acento. Buscar \"REVOLUÇÃO\" não encontra \"revolução\"; buscar em minúsculas, ou por parte da palavra sem acento (\"revolu\"), encontra.",
@@ -1297,6 +1330,7 @@ tabela(["Termo", "Significado"], [
 // ---------------------------------------------------------------------
 h1("10. Histórico de versões");
 tabela(["Data", "Versão", "Referência", "Mudança"], [
+  ["12/11/2026", "0.25", "pull request do antes e depois", "Revisão da IA numa caixa recolhível, com o texto inteiro antes e depois e as palavras mudadas destacadas; conferência sem o texto lido, para a referência sem influência; palavras repetidas do Document AI descartadas; comparação com a revisão da IA como condição; protocolo de avaliação (seção 7.5) e novas limitações"],
   ["11/11/2026", "0.24", "pull request da revisão da transcrição", "Revisão opcional da transcrição por um modelo que vê a imagem da caixa, mantendo os erros do aluno; trocas e trechos incertos exibidos na conferência; texto do OCR guardado ao lado do revisado; medida com e sem a revisão"],
   ["11/11/2026", "0.23", "pull request do Document AI", "Linhas da pauta unidas num texto corrido; Google Document AI como alternativa ao Vision, escolhida no .env; script de comparação entre os dois serviços nas mesmas folhas; guia de configuração do Document AI"],
   ["11/11/2026", "0.22", "pull request da ordem de leitura", "Palavras da escrita ordenadas pelas linhas da pauta de cada caixa, e não pela ordem devolvida pelo serviço; página enviada ao Google Cloud Vision com 12 pixels por milímetro em vez de 8"],

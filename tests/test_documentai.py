@@ -58,6 +58,23 @@ def test_palavras_do_documento_em_milimetros_e_na_ordem_da_pauta():
     assert ocr.textos_das_palavras(lista, [c]) == {f"q{c.questao_id}": "A primeira Segunda linha."}
 
 
+def test_palavra_repetida_no_mesmo_lugar_fica_uma_vez():
+    c = _caixa()
+    documento = _documento([("o", c.x + 5, c.y + 5, ""), ("o", c.x + 5.4, c.y + 5, ""),
+                            ("meio", c.x + 20, c.y + 5, ""), ("rneio", c.x + 20.5, c.y + 5.2, ""),
+                            ("é", c.x + 35, c.y + 5, "")])
+    tokens = documento["pages"][0]["tokens"]
+    for token, confianca in zip(tokens, (0.9, 0.8, 0.7, 0.95, 0.9)):
+        token["layout"]["confidence"] = confianca
+    assert ocr.textos_das_palavras(documentai.palavras(documento), [c]) == {f"q{c.questao_id}": "o rneio é"}
+
+
+def test_palavras_vizinhas_nao_sao_descartadas():
+    c = _caixa()
+    documento = _documento([("de", c.x + 5, c.y + 5, ""), ("de", c.x + 15, c.y + 5, ""), ("um", c.x + 25, c.y + 5, "")])
+    assert ocr.textos_das_palavras(documentai.palavras(documento), [c]) == {f"q{c.questao_id}": "de de um"}
+
+
 def test_pedido_ao_document_ai():
     pedidos = []
 
@@ -138,3 +155,16 @@ def test_leitura_pela_tela_com_document_ai_e_comparacao(fabrica_sessao, cliente_
     assert somas["vision"]["campos"] == 1 and somas["vision"]["cer"] > 0.5  # só leu "Houve"
     assert "documentai: 1 campos, CER médio 0.0%" in resumo(somas)
     assert {l["servico"] for l in linhas} == {"vision", "documentai"}
+
+    # com a revisão da IA, cada serviço ganha uma segunda condição, contra a mesma referência
+    from app.correcao.contratos import RevisaoTranscricaoV1
+    from tests.falsos import ClienteFalso, resposta_falsa
+    cliente = ClienteFalso(resposta_falsa(RevisaoTranscricaoV1(texto="Houve êxodo rural.", alteracoes=[],
+                                                              trechos_incertos=[])))
+    with fabrica_sessao() as s:
+        somas, linhas = comparar(s, revisao=True, cliente=cliente)
+        assert comparar(s, sem_texto=True)[1] == []  # nenhuma página conferida sem o texto lido
+    assert set(somas) == {"vision", "documentai", "vision+revisao", "documentai+revisao"}
+    assert somas["documentai+revisao"]["cer"] == 0 and len(cliente.chamadas) == 2
+    # no Vision, que só leu "Houve", a revisão mudaria demais o texto: é descartada e fica o OCR
+    assert somas["vision+revisao"]["cer"] == somas["vision"]["cer"]

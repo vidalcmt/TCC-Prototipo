@@ -353,6 +353,9 @@ class LeituraPagina(Base):
     servico_ocr: Mapped[str | None] = mapped_column(String(50))  # vazio quando a escrita não foi enviada
     latencia_ocr_ms: Mapped[float | None] = mapped_column(Float)
     conferida_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Conferida com os campos da escrita vazios, digitando a partir da imagem: a referência sem a influência
+    # do texto lido, usada para medir a leitura (scripts/medir_leitura.py).
+    conferida_sem_texto: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuario.id", name="fk_leitura_pagina_usuario"))
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
 
