@@ -106,7 +106,7 @@ function tabela(cabecalho, linhas, proporcoes) {
 // =====================================================================
 // CAPA
 // =====================================================================
-const VERSAO = "0.26";
+const VERSAO = "0.27";
 const DATA = "11/11/2026";
 
 conteudo.push(new Paragraph({ spacing: { before: 2400 }, children: [] }));
@@ -856,6 +856,9 @@ p("A folha usa uma folha de estilo própria (`app/static/impressao.css`), sempre
 p("Desde a versão 0.14, a atividade é impressa em duas partes: o caderno de questões, igual para todos e sem identificação, e uma folha de respostas por aluno, descrita na seção 4.23. Enquanto houver folhas geradas, as questões da atividade ficam travadas: adicionar, remover ou mudar a ordem é recusado com um aviso, porque a folha já impressa deixaria de corresponder às questões.");
 
 // ---------------------------------------------------------------------
+h3("Criar questões de dentro da atividade (inclusao.py)");
+p("Quando a questão que o professor quer ainda não está cadastrada, ele a cria na própria atividade: os botões \"Criar questão objetiva nesta atividade\" e \"Criar questão discursiva nesta atividade\" abrem os formulários de cadastro com a atividade de destino (`?atividade=ID`). A questão criada entra no fim da atividade, e a página volta para a lista de questões dela. Se as folhas já foram geradas, a questão é cadastrada mas não entra, porque as questões estão travadas, e um aviso explica isso. O cadastro avulso, pelo menu Questões, continua igual.");
+
 h2("4.22 Utilitários de manutenção: scripts/");
 tabela(["Script", "O que faz"], [
   ["`redefinir_senha.py`", "Com `--listar`, mostra as contas cadastradas; com `--email`, gera uma senha provisória nova para a conta, que precisa ser trocada no primeiro acesso. Serve para quando o próprio administrador esquece a senha, já que a senha não pode ser lida no banco"],
@@ -898,6 +901,12 @@ tabela(["Rota", "O que faz"], [
   ["`POST /atividades/{id}/resultados/liberar` e `/recolher`", "Libera os resultados para os alunos ou recolhe a liberação"],
   ["`POST /atividades/{id}/resultados/valor`", "Altera os pontos de cada objetiva (maior que 0 e até 100)"],
 ], [4, 6]);
+h3("Seletor de folhas");
+p("No alto da página da folha, além de ir para a anterior e a próxima, um menu lista todas as folhas da atividade, com a situação de cada uma, para ir da primeira para a décima de uma vez. O campo de busca filtra pelo número ou pelo código, e Enter abre a primeira encontrada. Cada folha mostra duas etiquetas:");
+tabela(["Etiqueta", "Valores"], [
+  ["Leitura", "Sem digitalização; Não lida; Lida, a conferir; Lida e conferida; Falha na leitura"],
+  ["Correção", "A situação da folha (Sem respostas, Respostas incompletas, Concluída e assim por diante) ou quantas discursivas faltam corrigir ou revisar"],
+], [3, 7]);
 h3("Nota de cada questão");
 tabela(["Situação", "Pontos"], [
   ["Objetiva certa", "O valor das objetivas da atividade"],
@@ -1144,6 +1153,7 @@ tabela(["Arquivo", "O que verifica"], [
   ["`tests/test_leitura.py`", "Bolinhas lidas em folhas sintéticas com o layout real, retas, inclinadas, com perspectiva e de cabeça para baixo, incluindo mais de uma marcada e X como duvidoso; página sem marcas; palavras atribuídas às caixas, sem o texto impresso; pedido ao Google Cloud Vision com chave, recurso e idioma; erros do serviço; sem chave; ordem das palavras pela pauta da caixa, e não pela ordem do serviço; página ampliada para a escrita; alinhamento sem as marcas pelo QR code e pelas caixas, com a página reta e de cabeça para baixo; alinhamento aproximado sem marcas e sem caixas; erro medido nas caixas quando há marcas; leitura sem marcas registrando o método; explicação dos erros comuns de configuração; script de teste da chave, sem exibir a chave; leitura, conferência e medida pela tela; só bolinhas sem chave; leitura que não muda respostas salvas; falha de alinhamento exibida; distância de edição, CER e WER"],
   ["`tests/test_monitoramento.py`", "Rota declarada gravada no lugar do endereço real, sem estáticos nem /saude; requisição lenta e erro do servidor no log; registros antigos apagados; cálculo do percentil; resumo do período por rota, por intervalo, das chamadas ao modelo e do servidor; página e exportação só para administradores"],
   ["`tests/test_documentai.py`", "Palavras do Document AI convertidas em milímetros e montadas pela pauta, com palavra partida reunida; palavra repetida no mesmo lugar mantida uma vez, pela confiança, e palavras vizinhas iguais preservadas; pedido com endereço do processador, token e idioma; erros de permissão, processador e escopo explicados; processador mal escrito; serviço escolhido pela configuração; leitura pela tela com o Document AI e comparação entre os dois serviços, com a revisão da IA como condição (descartada quando mudaria demais o texto) e filtro das folhas conferidas sem o texto lido"],
+  ["`tests/test_navegacao_e_questoes.py`", "Seletor com todas as folhas, a atual marcada e as situações de leitura e correção, que mudam depois de salvar; objetiva e discursiva criadas de dentro da atividade e incluídas no fim; erro de cadastro mantendo a atividade de destino; atividade travada cadastra sem incluir; cadastro avulso sem mudança"],
   ["`tests/test_avaliacao_leitura.py`", "Veredito de cada troca e nota do texto, gravados separadamente e na mesma avaliação, com mudança de ideia; erro do aluno marcado a partir do veredito; textos, trocas e condição copiados; notas, vereditos, trocas e campos inválidos; texto lido e antes e depois visíveis com a resposta já salva; só administradores avaliam e veem o resumo; ler tudo de novo mantém a conferência, guarda a avaliação antiga e conta uma por folha, campo e condição; resumo separado com e sem revisão; página e CSV do resumo; página sem avaliações"],
   ["`tests/test_revisor.py`", "Antes e depois palavra por palavra, inclusive palavra que virou duas; caixa recolhida com o resumo e os textos inteiros; revisão sem trocas numa linha; conferência sem o texto lido, com a escrita vazia, as objetivas preenchidas e a leitura marcada, medida à parte; conferência comum fora dessa medida; erro de leitura corrigido e erro do aluno mantido, com as trocas listadas; imagem da caixa reduzida e enviada junto do texto lido; revisão que muda demais descartada e registrada como falha; falha do modelo e caixa esvaziada mantendo o texto do OCR; caixa vazia sem chamada; leitura pela tela com as trocas e os trechos incertos na página, sem o enunciado no pedido ao modelo; medida com e sem a revisão; revisão desligada sem chamada"],
   ["`tests/test_lista_questoes.py`", "Páginas de 50 e página fora do intervalo; cada filtro, inclusive situação pendente e sem correção; filtros mantidos ao trocar de página; filtro sem resultado; opções dos filtros vindas do banco"],
@@ -1369,6 +1379,7 @@ tabela(["Termo", "Significado"], [
 // ---------------------------------------------------------------------
 h1("10. Histórico de versões");
 tabela(["Data", "Versão", "Referência", "Mudança"], [
+  ["12/11/2026", "0.27", "pull request do seletor de folhas e das questões na atividade", "Menu com todas as folhas da atividade, com busca e a situação da leitura e da correção de cada uma; questões objetivas e discursivas criadas de dentro da atividade"],
   ["12/11/2026", "0.26", "pull request da avaliação da leitura", "Avaliação da leitura pelo administrador: veredito de cada troca da revisão (certa, errada, erro do aluno) e nota do texto lido (correta, pequenos erros, muitos erros), com resumo por condição e CSV; leitura de todas as páginas de novo, mantendo a conferência; seção 7.5 com a avaliação humana"],
   ["12/11/2026", "0.25", "pull request do antes e depois", "Revisão da IA numa caixa recolhível, com o texto inteiro antes e depois e as palavras mudadas destacadas; conferência sem o texto lido, para a referência sem influência; palavras repetidas do Document AI descartadas; comparação com a revisão da IA como condição; protocolo de avaliação (seção 7.5) e novas limitações"],
   ["11/11/2026", "0.24", "pull request da revisão da transcrição", "Revisão opcional da transcrição por um modelo que vê a imagem da caixa, mantendo os erros do aluno; trocas e trechos incertos exibidos na conferência; texto do OCR guardado ao lado do revisado; medida com e sem a revisão"],

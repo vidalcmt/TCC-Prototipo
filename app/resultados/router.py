@@ -15,7 +15,9 @@ from app.folhas.servico import normalizar_codigo
 from app.leitura.avaliacao import NOTAS as NOTAS_LEITURA
 from app.leitura.avaliacao import VEREDITOS as VEREDITOS_TROCA
 from app.leitura.avaliacao import avaliacoes_da_folha, campos_lidos, trocas_da_avaliacao
-from app.leitura.servico import campos_com_recorte, marcar_conferidas, revisoes_da_folha, valores_lidos
+from app.leitura.servico import (
+    ROTULOS_LEITURA, campos_com_recorte, marcar_conferidas, revisoes_da_folha, situacao_da_leitura, valores_lidos,
+)
 from app.models import Atividade, Folha
 from app.questoes.cliente import obter_cliente_llm
 from app.resultados import lote
@@ -156,7 +158,19 @@ def pagina_da_folha(request: Request, atividade_id: int, folha_id: int, aviso: s
         "anterior": folhas[posicao - 1] if posicao > 0 else None,
         "proxima": folhas[posicao + 1] if posicao + 1 < len(folhas) else None,
         "letras": letras, "MULTIPLA": MARCACAO_MULTIPLA, "aviso": aviso,
+        "todas_as_folhas": _estado_das_folhas(sessao, folhas), "ROTULOS_LEITURA": ROTULOS_LEITURA,
     })
+
+
+def _estado_das_folhas(sessao: Session, folhas: list[Folha]) -> list[dict]:
+    """Para o seletor de folhas: a leitura e a correção de cada uma."""
+    estados = []
+    for f in folhas:
+        resultado = resultado_da_folha(sessao, f)
+        estados.append({"folha": f, "leitura": situacao_da_leitura(f), "correcao": resultado.situacao,
+                        "concluida": resultado.completa,
+                        "a_corrigir": resultado.contar("a_corrigir"), "a_revisar": resultado.contar("a_revisar")})
+    return estados
 
 
 @router.post("/{atividade_id}/folhas/{folha_id:int}/respostas")

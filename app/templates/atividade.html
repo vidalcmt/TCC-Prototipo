@@ -118,6 +118,11 @@
 
 {% if not travada %}
 <h2 id="adicionar">Adicionar questões</h2>
+<div class="acoes criar-na-atividade">
+  <a class="botao" href="/questoes/nova?atividade={{ atividade.id }}">Criar questão objetiva nesta atividade</a>
+  <a class="botao" href="/questoes/nova-discursiva?atividade={{ atividade.id }}">Criar questão discursiva nesta atividade</a>
+  <span class="discreto">Ou procure abaixo uma questão já cadastrada.</span>
+</div>
 <form class="filtros" method="get" action="/atividades/{{ atividade.id }}#adicionar" role="search">
   <div class="campo largo">
     <label for="busca">Buscar no enunciado</label>
