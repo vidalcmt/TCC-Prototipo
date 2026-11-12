@@ -174,6 +174,23 @@ def _apagar_alinhada(leitura: LeituraPagina) -> None:
         (Path(config.pasta_arquivos) / leitura.arquivo_alinhado).unlink(missing_ok=True)
 
 
+def situacao_da_leitura(folha: Folha) -> str:
+    """Resumo da leitura da folha: sem digitalização, não lida, lida, conferida ou com falha."""
+    paginas = [p for p in folha.digitalizacoes if p.situacao == IDENTIFICADA]
+    if not paginas:
+        return "sem_digitalizacao"
+    leituras = [p.leitura for p in paginas if p.leitura is not None]
+    if any(l.situacao == FALHA for l in leituras):
+        return "falha"
+    if len(leituras) < len(paginas):
+        return "nao_lida"
+    return "conferida" if all(l.conferida_em is not None for l in leituras) else "lida"
+
+
+ROTULOS_LEITURA = {"sem_digitalizacao": "Sem digitalização", "nao_lida": "Não lida", "lida": "Lida, a conferir",
+                   "conferida": "Lida e conferida", "falha": "Falha na leitura"}
+
+
 def paginas_identificadas(sessao: Session, atividade: Atividade) -> list[PaginaDigitalizada]:
     """Todas as páginas ligadas a uma folha, lidas ou não: para ler tudo de novo."""
     return list(sessao.scalars(

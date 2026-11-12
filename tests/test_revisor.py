@@ -152,7 +152,7 @@ def test_revisao_sem_trocas_aparece_numa_linha(fabrica_sessao, cliente_web, prov
     app.dependency_overrides[obter_cliente_llm] = lambda: ClienteFalso(resposta_falsa(_saida("Houve êxodo rural.")))
     _enviar_folha(fabrica_sessao, cliente_web, p, {}, monkeypatch=monkeypatch)
     pagina = cliente_web.post(f"{_url(p)}/ler").text
-    assert "A revisão da IA não trocou nada nesta resposta." in pagina and "<details" not in pagina
+    assert "A revisão da IA não trocou nada nesta resposta." in pagina and "<details class=\"revisao-ia\"" not in pagina
 
 
 def test_conferencia_sem_o_texto_lido(fabrica_sessao, cliente_web, prova, monkeypatch):

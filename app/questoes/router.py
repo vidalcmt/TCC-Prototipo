@@ -10,6 +10,7 @@ from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session
 
 from app.correcao.contratos import CONTRATO_POR_PROMPT, ROTULOS_TIPO_DE_ERRO
+from app.atividades.inclusao import atividade_de_destino, destino_depois_de_criar
 from app.correcao.objetiva import gerar_explicacao
 from app.database import obter_sessao
 from app.models import Alternativa, Correcao, MetricaRequisicao, Questao, RevisaoProfessor
@@ -100,9 +101,12 @@ def listar(request: Request, pagina: int = 1, sessao: Session = Depends(obter_se
 
 
 @router.get("/nova", response_class=HTMLResponse)
-def formulario(request: Request):
+def formulario(request: Request, atividade: int | None = None, sessao: Session = Depends(obter_sessao)):
+    destino = atividade_de_destino(sessao, atividade)
     return templates.TemplateResponse(
-        request, "questao_nova.html", {"letras": LETRAS, "dados": {}, "erros": []}
+        request, "questao_nova.html",
+        {"letras": LETRAS, "dados": {"atividade_id": str(destino.id) if destino else ""}, "erros": [],
+         "atividade_destino": destino},
     )
 
 
@@ -119,10 +123,11 @@ async def cadastrar(request: Request, sessao: Session = Depends(obter_sessao)):
         erros.append(f"Preencha as alternativas: {', '.join(faltando)}.")
     if dados.get("correta") not in LETRAS:
         erros.append("Indique qual alternativa é a correta.")
+    destino = atividade_de_destino(sessao, dados.get("atividade_id"))
     if erros:
         return templates.TemplateResponse(
             request, "questao_nova.html",
-            {"letras": LETRAS, "dados": dados, "erros": erros}, status_code=400,
+            {"letras": LETRAS, "dados": dados, "erros": erros, "atividade_destino": destino}, status_code=400,
         )
 
     ano = dados.get("ano")
@@ -139,7 +144,7 @@ async def cadastrar(request: Request, sessao: Session = Depends(obter_sessao)):
     )
     sessao.add(questao)
     sessao.commit()
-    return RedirectResponse(f"/questoes/{questao.id}", status_code=303)
+    return RedirectResponse(destino_depois_de_criar(sessao, questao, destino), status_code=303)
 
 
 @router.get("/{questao_id}", response_class=HTMLResponse)

@@ -5,7 +5,11 @@
 {% if erros %}
 <div class="aviso-erro">{% for e in erros %}<div>{{ e }}</div>{% endfor %}</div>
 {% endif %}
+{% if atividade_destino %}
+<div class="aviso aviso-info">Esta questão será incluída no fim da atividade <strong>{{ atividade_destino.titulo }}</strong>. <a href="/atividades/{{ atividade_destino.id }}#questoes">Voltar para a atividade</a></div>
+{% endif %}
 <form class="formulario" method="post" action="/questoes">
+  {% if atividade_destino %}<input type="hidden" name="atividade_id" value="{{ atividade_destino.id }}">{% endif %}
   <label for="enunciado">Enunciado</label>
   <textarea id="enunciado" name="enunciado" rows="8">{{ dados.get("enunciado", "") }}</textarea>
 

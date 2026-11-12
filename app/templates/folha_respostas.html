@@ -58,9 +58,30 @@
     <h1>Folha {{ folha.numero }} <span class="discreto">· {{ folha.codigo }}</span></h1>
     <p class="resumo">{{ atividade.titulo }} · {{ resultado.situacao }}{% if resultado.respondida %} · {{ resultado.pontos|num }} de {{ resultado.maximo|num }} pontos{% if not resultado.completa %} até agora{% endif %}{% endif %}</p>
   </div>
-  <div class="acoes">
-    {% if anterior %}<a class="botao contorno" href="/atividades/{{ atividade.id }}/folhas/{{ anterior.id }}">&larr; Folha {{ anterior.numero }}</a>{% endif %}
-    {% if proxima %}<a class="botao contorno" href="/atividades/{{ atividade.id }}/folhas/{{ proxima.id }}">Folha {{ proxima.numero }} &rarr;</a>{% endif %}
+  <div class="acoes navegacao-folhas">
+    {% if anterior %}<a class="botao contorno" href="/atividades/{{ atividade.id }}/folhas/{{ anterior.id }}" aria-label="Folha anterior">&larr; {{ anterior.numero }}</a>{% endif %}
+    <details class="seletor-folhas" id="seletor-folhas">
+      <summary class="botao contorno">Folha {{ folha.numero }} de {{ todas_as_folhas|length }} &#9662;</summary>
+      <div class="painel-folhas">
+        <label for="filtro-folhas" class="so-leitor">Procurar folha</label>
+        <input type="search" id="filtro-folhas" placeholder="Número ou código" autocomplete="off">
+        <ul>
+          {% for e in todas_as_folhas %}{% set f = e.folha %}
+          <li data-busca="{{ f.numero }} {{ f.codigo|lower }}">
+            <a href="/atividades/{{ atividade.id }}/folhas/{{ f.id }}"{% if f.id == folha.id %} aria-current="page"{% endif %}>
+              <span class="num-folha">Folha {{ f.numero }}</span>
+              <span class="discreto">{{ f.codigo }}</span>
+              <span class="estados">
+                <span class="estado leitura-{{ e.leitura }}">{{ ROTULOS_LEITURA[e.leitura] }}</span>
+                <span class="estado correcao-{{ 'concluida' if e.concluida else ('pendente' if e.a_corrigir or e.a_revisar else 'outra') }}">{% if e.a_corrigir %}{{ e.a_corrigir }} a corrigir{% elif e.a_revisar %}{{ e.a_revisar }} a revisar{% else %}{{ e.correcao }}{% endif %}</span>
+              </span>
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </details>
+    {% if proxima %}<a class="botao contorno" href="/atividades/{{ atividade.id }}/folhas/{{ proxima.id }}" aria-label="Próxima folha">{{ proxima.numero }} &rarr;</a>{% endif %}
   </div>
 </div>
 
@@ -210,4 +231,28 @@ document.querySelectorAll(".avaliacao-leitura").forEach(caixa => {
 });
 </script>
 {% endif %}
+<script>
+// Seletor de folhas: filtra pelo número ou código, fecha ao clicar fora ou com Esc.
+(function () {
+  const seletor = document.getElementById("seletor-folhas");
+  if (!seletor) return;
+  const filtro = document.getElementById("filtro-folhas");
+  const itens = seletor.querySelectorAll("li");
+  seletor.addEventListener("toggle", () => {
+    if (!seletor.open) return;
+    filtro.value = ""; itens.forEach(li => li.hidden = false); filtro.focus();
+    const atual = seletor.querySelector('[aria-current="page"]');
+    if (atual) atual.scrollIntoView({ block: "center" });
+  });
+  filtro.addEventListener("input", () => {
+    const termo = filtro.value.trim().toLowerCase();
+    itens.forEach(li => li.hidden = termo && !li.dataset.busca.split(" ").some(p => p.startsWith(termo)));
+  });
+  filtro.addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); const primeiro = [...itens].find(li => !li.hidden); if (primeiro) primeiro.querySelector("a").click(); }
+  });
+  document.addEventListener("click", e => { if (seletor.open && !seletor.contains(e.target)) seletor.open = false; });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && seletor.open) { seletor.open = false; seletor.querySelector("summary").focus(); } });
+})();
+</script>
 {% endblock %}

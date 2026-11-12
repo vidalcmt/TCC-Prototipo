@@ -6,6 +6,7 @@ from openai import OpenAI
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.atividades.inclusao import atividade_de_destino, destino_depois_de_criar
 from app.correcao.contratos import CONTRATO_POR_PROMPT
 from app.correcao.discursiva import CondicaoIndisponivel, compor_resposta, gerar_correcao
 from app.database import obter_sessao
@@ -39,14 +40,16 @@ def _numero(texto: str | None) -> float | None:
 # Cadastro da questão (RF04)
 # ---------------------------------------------------------------------------
 
-def _contexto_do_formulario(dados: dict, erros: list[str]) -> dict:
-    return {"dados": dados, "erros": erros, "linhas": range(1, LINHAS_RUBRICA + 1), "letras": LETRAS_ITENS}
+def _contexto_do_formulario(dados: dict, erros: list[str], destino=None) -> dict:
+    return {"dados": dados, "erros": erros, "linhas": range(1, LINHAS_RUBRICA + 1), "letras": LETRAS_ITENS,
+            "atividade_destino": destino}
 
 
 @router.get("/questoes/nova-discursiva", response_class=HTMLResponse)
-def formulario(request: Request):
-    return templates.TemplateResponse(request, "discursiva_nova.html",
-                                      _contexto_do_formulario({"nota_maxima": "10"}, []))
+def formulario(request: Request, atividade: int | None = None, sessao: Session = Depends(obter_sessao)):
+    destino = atividade_de_destino(sessao, atividade)
+    dados = {"nota_maxima": "10", "atividade_id": str(destino.id) if destino else ""}
+    return templates.TemplateResponse(request, "discursiva_nova.html", _contexto_do_formulario(dados, [], destino))
 
 
 @router.post("/questoes/discursivas", response_class=HTMLResponse)
@@ -86,9 +89,10 @@ async def cadastrar(request: Request, sessao: Session = Depends(obter_sessao)):
         else:
             criterios.append(CriterioRubrica(descricao=descricao, peso=peso, item=itens.get(letra)))
 
+    destino = atividade_de_destino(sessao, dados.get("atividade_id"))
     if erros:
         return templates.TemplateResponse(request, "discursiva_nova.html",
-                                          _contexto_do_formulario(dados, erros), status_code=400)
+                                          _contexto_do_formulario(dados, erros, destino), status_code=400)
 
     ano = dados.get("ano", "")
     questao = Questao(
@@ -105,7 +109,7 @@ async def cadastrar(request: Request, sessao: Session = Depends(obter_sessao)):
         questao.resposta_esperada = RespostaEsperada(texto=dados["resposta_esperada"])
     sessao.add(questao)
     sessao.commit()
-    return RedirectResponse(f"/questoes/{questao.id}", status_code=303)
+    return RedirectResponse(destino_depois_de_criar(sessao, questao, destino), status_code=303)
 
 
 def pagina_da_questao(request: Request, questao: Questao, sessao: Session) -> HTMLResponse:
