@@ -140,3 +140,17 @@ def test_resumo_separa_leitura_com_e_sem_revisao(fabrica_sessao, cliente_web, pr
 
 def test_pagina_sem_avaliacoes(cliente_web):
     assert "Nenhuma leitura avaliada ainda" in cliente_web.get("/leitura/avaliacoes").text
+
+
+def test_aviso_quando_a_leitura_foi_feita_antes_da_revisao(fabrica_sessao, cliente_web, prova, monkeypatch):
+    p = prova
+    monkeypatch.setattr(config, "leitura_revisao_ia", False)
+    _enviar_folha(fabrica_sessao, cliente_web, p, {}, monkeypatch=monkeypatch)
+    cliente_web.post(f"{_url(p)}/ler")
+    pagina = cliente_web.get(_url(p)).text
+    assert "leitura sem a revisão da IA" in pagina and "foi lida antes de a revisão da IA ser ligada" not in pagina
+    monkeypatch.setattr(config, "leitura_revisao_ia", True)  # ligada depois da leitura
+    assert "foi lida antes de a revisão da IA ser ligada" in cliente_web.get(_url(p)).text
+    _ler_com_revisao(fabrica_sessao, cliente_web, p, monkeypatch)  # lida de novo, agora com a revisão
+    pagina = cliente_web.get(_url(p)).text
+    assert "leitura com a revisão da IA" in pagina and "foi lida antes de a revisão da IA ser ligada" not in pagina

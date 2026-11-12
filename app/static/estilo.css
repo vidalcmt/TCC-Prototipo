@@ -398,6 +398,7 @@ td.origem { white-space: nowrap; }
 .resposta-folha .nota-correta:has(input:checked) { border-color: var(--certo); }
 .resposta-folha .nota-pequenos_erros:has(input:checked) { border-color: var(--atencao-borda); }
 .resposta-folha .nota-muitos_erros:has(input:checked) { border-color: var(--caneta-vermelha); }
+.resposta-folha .aviso-revisao { margin: 2px 0 8px; padding: 6px 10px; border-radius: 6px; background: var(--atencao-fundo); font-size: 0.88rem; }
 .resposta-folha .erro-aluno { display: inline-flex; gap: 6px; align-items: center; }
 .resposta-folha .estado-avaliacao { margin-left: auto; }
 .resposta-folha .revisao-ia-vazia { font-size: 0.85rem; margin: 2px 0 8px; }
