@@ -1,12 +1,29 @@
 {% extends "base.html" %}
 {% from "_macros.html" import nota_circulada, nota_pendente %}
-{% macro revisao_ia(campo) %}{% set r = revisoes.get(campo) %}{% if r and (r.alteracoes or r.incertos or r.descartada) %}
-<div class="revisao-ia">
-  {% if r.alteracoes %}<p><strong>A revisão da IA trocou</strong> (confira com a imagem):</p>
+{% macro trechos(lista, marca) %}{% for texto, mudou in lista %}{% if mudou %}<{{ marca }}>{{ texto }}</{{ marca }}>{% else %}{{ texto }}{% endif %}{% if not loop.last %} {% endif %}{% endfor %}{% endmacro %}
+{% macro revisao_ia(campo) %}{% set r = revisoes.get(campo) %}{% if r %}
+{% if r.alteracoes or r.incertos or r.descartada %}
+<details class="revisao-ia" id="revisao-{{ campo }}">
+  <summary>
+    {% if r.descartada %}Revisão da IA não aplicada
+    {% else %}Revisão da IA: {{ r.alteracoes|length }} {{ "troca" if r.alteracoes|length == 1 else "trocas" }}{% if r.incertos %} · {{ r.incertos|length }} {{ "trecho incerto" if r.incertos|length == 1 else "trechos incertos" }}{% endif %}{% endif %}
+    {% if r.incertos %}<span class="status status-parcial">confira</span>{% endif %}
+    <span class="discreto abrir">ver antes e depois</span>
+  </summary>
+  {% if r.descartada %}<p class="discreto">{{ r.descartada|capitalize }}. O texto acima é o da leitura automática.</p>{% endif %}
+  {% if r.antes is defined and not r.descartada %}
+  <div class="antes-depois">
+    <div><span class="rotulo-ad">Antes, como o OCR leu</span><p>{{ trechos(r.antes, "del") }}</p></div>
+    <div><span class="rotulo-ad">Depois da revisão</span><p>{{ trechos(r.depois, "ins") }}</p></div>
+  </div>
+  {% endif %}
+  {% if r.alteracoes %}<p class="rotulo-ad">Cada troca, com o motivo dado pela IA</p>
   <ul>{% for a in r.alteracoes %}<li><s>{{ a.lido }}</s> por <b>{{ a.corrigido }}</b><span class="discreto"> ({{ a.motivo }})</span></li>{% endfor %}</ul>{% endif %}
   {% if r.incertos %}<p><strong>Trechos incertos:</strong> {{ r.incertos|join("; ") }}</p>{% endif %}
-  {% if r.descartada %}<p class="discreto">Revisão não aplicada: {{ r.descartada }}. O texto é o da leitura automática.</p>{% endif %}
-</div>{% endif %}{% endmacro %}
+  <p class="discreto">Confira com a imagem: a IA corrige erros de leitura, e um erro do aluno deve ficar como ele escreveu.</p>
+</details>
+{% else %}<p class="discreto revisao-ia-vazia">A revisão da IA não trocou nada nesta resposta.</p>{% endif %}
+{% endif %}{% endmacro %}
 {% block titulo %}Folha {{ folha.numero }}: {{ atividade.titulo }}{% endblock %}
 {% block conteudo %}
 <a class="voltar" href="/atividades/{{ atividade.id }}/resultados">&larr; Voltar para os resultados</a>
@@ -22,7 +39,13 @@
 </div>
 
 {% if aviso %}<div class="aviso aviso-info" role="status">{{ aviso }}</div>{% endif %}
-{% if leitura_pendente %}<div class="aviso aviso-info leitura-pendente"><strong>Respostas lidas automaticamente da folha digitalizada.</strong> Elas já estão preenchidas abaixo, mas ainda não foram gravadas: confira cada uma com a imagem, corrija o que precisar e clique em Salvar. As marcadas com "confira" tiveram leitura duvidosa.</div>{% endif %}
+{% if leitura_pendente %}<div class="aviso aviso-info leitura-pendente">
+  {% if sem_texto %}<strong>Conferência sem o texto lido.</strong> As respostas escritas estão vazias: digite cada uma olhando só a imagem, letra por letra, mantendo os erros do aluno. Assim o texto salvo serve de referência sem a influência da leitura automática, para medir o OCR e a revisão da IA. As objetivas continuam preenchidas.
+  <a href="/atividades/{{ atividade.id }}/folhas/{{ folha.id }}">Voltar a conferir com o texto lido</a>
+  {% else %}<strong>Respostas lidas automaticamente da folha digitalizada.</strong> Elas já estão preenchidas abaixo, mas ainda não foram gravadas: confira cada uma com a imagem, corrija o que precisar e clique em Salvar. As marcadas com "confira" tiveram leitura duvidosa.
+  {% if tem_texto_lido %}<a href="/atividades/{{ atividade.id }}/folhas/{{ folha.id }}?sem_texto=1#discursivas">Conferir sem o texto lido</a> <span class="discreto">(para montar a referência da medida)</span>{% endif %}
+  {% endif %}
+</div>{% endif %}
 {% for a in avisos_leitura %}<div class="aviso aviso-erro">{{ a }}</div>{% endfor %}
 
 {% set imagens = folha.digitalizacoes|selectattr("situacao", "equalto", "identificada")|list %}
@@ -41,6 +64,7 @@
 {% set discursivas = resultado.linhas|selectattr("questao.tipo", "equalto", "discursiva")|list %}
 
 <form method="post" action="/atividades/{{ atividade.id }}/folhas/{{ folha.id }}/respostas" class="formulario-folha">
+{% if sem_texto %}<input type="hidden" name="sem_texto" value="1">{% endif %}
 {% if objetivas %}
 <h2>Objetivas <span class="discreto">({{ atividade.valor_objetiva|num }} {{ "ponto" if atividade.valor_objetiva == 1 else "pontos" }} cada)</span></h2>
 <div class="rolagem">
@@ -99,15 +123,15 @@
   {% set campo = "q" ~ q.id ~ "_" ~ item.letra %}
   <label for="{{ campo }}"><span class="letra-item">{{ item.letra }})</span> <span class="discreto">{{ item.enunciado[:140] }}{% if item.enunciado|length > 140 %}…{% endif %}</span></label>
   {% if campo in recortes %}<img class="recorte" src="/atividades/{{ atividade.id }}/folhas/{{ folha.id }}/recorte/{{ campo }}" alt="Resposta escrita na folha, item {{ item.letra }}" loading="lazy">{% endif %}
-  <textarea id="{{ campo }}" name="{{ campo }}" rows="4"{% if travada %} readonly{% endif %}>{{ s.resposta_do_item(item.letra) if s else lidos.get(campo, "") }}</textarea>
-  {% if not s %}{{ revisao_ia(campo) }}{% endif %}
+  <textarea id="{{ campo }}" name="{{ campo }}" rows="4"{% if travada %} readonly{% endif %}>{{ s.resposta_do_item(item.letra) if s else ("" if sem_texto else lidos.get(campo, "")) }}</textarea>
+  {% if not s and not sem_texto %}{{ revisao_ia(campo) }}{% endif %}
   {% endfor %}
   {% else %}
   {% set campo = "q" ~ q.id %}
   <label for="{{ campo }}" class="so-leitor">Resposta da questão {{ l.numero }}</label>
   {% if campo in recortes %}<img class="recorte" src="/atividades/{{ atividade.id }}/folhas/{{ folha.id }}/recorte/{{ campo }}" alt="Resposta escrita na folha, questão {{ l.numero }}" loading="lazy">{% endif %}
-  <textarea id="{{ campo }}" name="{{ campo }}" rows="5"{% if travada %} readonly{% endif %}>{{ s.resposta_aluno if s else lidos.get(campo, "") }}</textarea>
-  {% if not s %}{{ revisao_ia(campo) }}{% endif %}
+  <textarea id="{{ campo }}" name="{{ campo }}" rows="5"{% if travada %} readonly{% endif %}>{{ s.resposta_aluno if s else ("" if sem_texto else lidos.get(campo, "")) }}</textarea>
+  {% if not s and not sem_texto %}{{ revisao_ia(campo) }}{% endif %}
   {% endif %}
 </section>
 {% endfor %}

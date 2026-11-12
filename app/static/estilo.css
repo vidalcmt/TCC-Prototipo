@@ -361,8 +361,18 @@ td.origem { white-space: nowrap; }
   .folha-com-imagem { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
   .imagens-folha { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; }
 }
-.resposta-folha .revisao-ia { font-size: 0.9rem; border-left: 3px solid var(--pauta); padding: 4px 10px; margin: 4px 0 8px; }
-.resposta-folha .revisao-ia p, .resposta-folha .revisao-ia ul { margin: 2px 0; }
+.resposta-folha .revisao-ia { font-size: 0.9rem; border: 1px solid var(--pauta); border-radius: 6px; padding: 6px 10px; margin: 4px 0 8px; }
+.resposta-folha .revisao-ia summary { cursor: pointer; font-weight: 600; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.resposta-folha .revisao-ia summary .abrir { font-weight: 400; margin-left: auto; }
+.resposta-folha .revisao-ia[open] summary .abrir { display: none; }
+.resposta-folha .revisao-ia[open] summary { margin-bottom: 8px; }
+.resposta-folha .revisao-ia p, .resposta-folha .revisao-ia ul { margin: 4px 0; }
+.resposta-folha .antes-depois { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-bottom: 6px; }
+.resposta-folha .antes-depois > div { min-width: 0; overflow-wrap: anywhere; }
+.resposta-folha .rotulo-ad { display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.75; margin-top: 4px; }
+.resposta-folha .antes-depois del { text-decoration: line-through; background: rgba(214, 90, 49, 0.18); border-radius: 3px; padding: 0 2px; }
+.resposta-folha .antes-depois ins { text-decoration: none; background: rgba(46, 140, 87, 0.22); border-radius: 3px; padding: 0 2px; font-weight: 600; }
+.resposta-folha .revisao-ia-vazia { font-size: 0.85rem; margin: 2px 0 8px; }
 .resposta-folha img.recorte { display: block; width: 100%; height: auto; border: 1px solid var(--pauta); border-radius: 6px; background: #fff; margin: 4px 0 6px; }
 .status.lida { background: var(--caneta-azul-fundo); color: var(--caneta-azul); border-color: var(--caneta-azul); }
 

@@ -263,6 +263,17 @@ que ainda não têm resposta salva).
 A linha "Revisão da IA" mostra a taxa de erro do OCR sozinho e com a revisão,
 e em quantas respostas a revisão piorou o texto (trocas que você desfez).
 
+**Referência sem influência (para o artigo):** em algumas folhas ainda não
+salvas, clique em "Conferir sem o texto lido", no aviso do alto da página. As
+respostas escritas aparecem vazias: digite cada uma olhando só a imagem,
+letra por letra, mantendo os erros do aluno. Depois de umas 20 a 30
+respostas assim, rode
+
+`cd /opt/devolutiva && sudo -u devolutiva .venv/bin/python -m scripts.comparar_ocr --revisao --sem-texto --csv /tmp/comparacao.csv`
+
+O resultado traz o Vision, o Document AI e os dois com a revisão da IA,
+contra a mesma referência. Cada resposta é uma chamada ao modelo.
+
 ## 7. Monitoramento
 
 Há dois lugares para acompanhar o sistema, e eles se completam:

@@ -3,12 +3,23 @@
 Uso:
     python -m scripts.comparar_ocr
     python -m scripts.comparar_ocr --csv comparacao.csv
+    python -m scripts.comparar_ocr --revisao --sem-texto --csv comparacao.csv
 
 Para cada página digitalizada cuja leitura já foi conferida e salva pelo
 professor, alinha a imagem de novo, envia a mesma página aos dois serviços e
 compara o texto de cada caixa com a resposta salva, que é a referência. Como a
 letra, a imagem e o alinhamento são os mesmos, a diferença entre as taxas de
 erro (CER e WER) é efeito só do serviço.
+
+Com --revisao, o texto de cada serviço também passa pela revisão da IA
+(app/leitura/revisor.py), e o resultado entra como uma terceira e uma quarta
+condição ("vision+revisao", "documentai+revisao"), sempre contra a mesma
+referência. Cada caixa com texto é uma chamada ao modelo, registrada nas
+métricas.
+
+Com --sem-texto, entram só as páginas conferidas sem o texto lido, em que o
+professor digitou as respostas a partir da imagem. É a referência sem a
+influência de nenhum dos serviços, e a que deve ir para o artigo.
 
 Não altera nenhuma leitura nem resposta. Gasta uma página de cada serviço por
 página digitalizada (as primeiras 1.000 por mês são gratuitas nos dois).
@@ -26,7 +37,7 @@ from sqlalchemy import select
 from app.digitalizacao.servico import IDENTIFICADA, caminho
 from app.leitura import ocr
 from app.leitura.alinhamento import AlinhamentoFalhou, alinhar
-from app.leitura.servico import paginas_do_layout
+from app.leitura.servico import _revisar, paginas_do_layout
 from app.models import LeituraPagina, PaginaDigitalizada
 from scripts.medir_leitura import taxa_de_erro
 
@@ -42,11 +53,15 @@ def referencia(folha, campo: str) -> str | None:
     return submissao.resposta_do_item(partes[1]) if len(partes) > 1 else (submissao.resposta_aluno or "")
 
 
-def comparar(sessao, servicos=SERVICOS) -> tuple[dict, list[dict]]:
-    somas = {s: {"campos": 0, "cer": 0.0, "wer": 0.0, "falhas": 0} for s in servicos}
+def comparar(sessao, servicos=SERVICOS, revisao: bool = False, sem_texto: bool = False,
+             cliente=None) -> tuple[dict, list[dict]]:
+    condicoes = list(servicos) + ([f"{s}+revisao" for s in servicos] if revisao else [])
+    somas = {c: {"campos": 0, "cer": 0.0, "wer": 0.0, "falhas": 0} for c in condicoes}
     linhas = []
-    paginas = sessao.scalars(select(PaginaDigitalizada).join(LeituraPagina).where(
-        PaginaDigitalizada.situacao == IDENTIFICADA, LeituraPagina.conferida_em.is_not(None)))
+    filtro = [PaginaDigitalizada.situacao == IDENTIFICADA, LeituraPagina.conferida_em.is_not(None)]
+    if sem_texto:
+        filtro.append(LeituraPagina.conferida_sem_texto.is_(True))
+    paginas = sessao.scalars(select(PaginaDigitalizada).join(LeituraPagina).where(*filtro))
     for pagina in paginas:
         folha = pagina.folha
         layout = paginas_do_layout(folha.atividade)
@@ -69,17 +84,22 @@ def comparar(sessao, servicos=SERVICOS) -> tuple[dict, list[dict]]:
                 somas[servico]["falhas"] += 1
                 print(f"{servico}, folha {folha.codigo}, página {pagina.pagina}: {erro}", file=sys.stderr)
                 continue
-            for campo, lido in textos.items():
-                certo = referencia(folha, campo)
-                if certo is None:
-                    continue
-                cer, wer = taxa_de_erro(lido, certo), taxa_de_erro(lido, certo, por_palavra=True)
-                somas[servico]["campos"] += 1
-                somas[servico]["cer"] += cer
-                somas[servico]["wer"] += wer
-                linhas.append({"servico": servico, "folha": folha.codigo, "pagina": pagina.pagina, "campo": campo,
-                               "cer": round(cer, 4), "wer": round(wer, 4), "latencia_ms": round(latencia),
-                               "lido": lido, "conferido": certo})
+            resultados = [(servico, textos)]
+            if revisao:
+                revisados, _ = _revisar(sessao, imagem_ocr, ocr.ESCALA_OCR, pagina_layout.caixas, textos, cliente, None)
+                resultados.append((f"{servico}+revisao", revisados))
+            for condicao, textos_condicao in resultados:
+                for campo, lido in textos_condicao.items():
+                    certo = referencia(folha, campo)
+                    if certo is None:
+                        continue
+                    cer, wer = taxa_de_erro(lido, certo), taxa_de_erro(lido, certo, por_palavra=True)
+                    somas[condicao]["campos"] += 1
+                    somas[condicao]["cer"] += cer
+                    somas[condicao]["wer"] += wer
+                    linhas.append({"servico": condicao, "folha": folha.codigo, "pagina": pagina.pagina,
+                                   "campo": campo, "cer": round(cer, 4), "wer": round(wer, 4),
+                                   "latencia_ms": round(latencia), "lido": lido, "conferido": certo})
     return somas, linhas
 
 
@@ -100,9 +120,14 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--csv", help="grava uma linha por campo e serviço neste arquivo")
+    parser.add_argument("--revisao", action="store_true", help="mede também cada serviço com a revisão da IA")
+    parser.add_argument("--sem-texto", action="store_true",
+                        help="só as páginas conferidas sem o texto lido (referência sem influência)")
     args = parser.parse_args()
     with SessionLocal() as sessao:
-        somas, linhas = comparar(sessao)
+        somas, linhas = comparar(sessao, revisao=args.revisao, sem_texto=args.sem_texto)
+    if args.sem_texto and not linhas:
+        print("Nenhuma página foi conferida sem o texto lido ainda.")
     print(resumo(somas))
     if args.csv:
         with open(args.csv, "w", newline="", encoding="utf-8") as arquivo:

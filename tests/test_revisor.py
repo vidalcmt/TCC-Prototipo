@@ -104,7 +104,11 @@ def test_leitura_com_revisao_mostra_as_trocas_e_mede(fabrica_sessao, cliente_web
     cliente_web.post(f"/atividades/{p['atividade']}/digitalizacoes/ler")
     pagina = cliente_web.get(_url(p)).text
     assert ">Houve êxodo rural.</textarea>" in pagina
-    assert "A revisão da IA trocou" in pagina and "<s>exodo</s> por <b>êxodo</b>" in pagina
+    # a revisão fica recolhida, com o resumo à vista e o texto inteiro antes e depois dentro
+    assert f'<details class="revisao-ia" id="revisao-q{p['d']}">' in pagina
+    assert "Revisão da IA: 1 troca · 1 trecho incerto" in pagina and ">confira</span>" in pagina
+    assert "<p>Houve <del>exodo</del> rural.</p>" in pagina and "<p>Houve <ins>êxodo</ins> rural.</p>" in pagina
+    assert "<s>exodo</s> por <b>êxodo</b>" in pagina
     assert "Trechos incertos:</strong> rural" in pagina
     with fabrica_sessao() as s:
         resultado = json.loads(s.query(LeituraPagina).one().resultado_json)
@@ -131,3 +135,56 @@ def test_revisao_desligada_nao_chama_o_modelo(fabrica_sessao, cliente_web, prova
     _enviar_folha(fabrica_sessao, cliente_web, p, {}, monkeypatch=monkeypatch)
     cliente_web.post(f"{_url(p)}/ler")
     assert cliente.chamadas == [] and "A revisão da IA" not in cliente_web.get(_url(p)).text
+
+
+def test_antes_e_depois_palavra_por_palavra():
+    from app.leitura.servico import antes_e_depois
+    antes, depois = antes_e_depois("A MELOSE forma QUATRE celulas", "A MEIOSE forma QUATRO celulas")
+    assert antes == [("A", False), ("MELOSE", True), ("forma", False), ("QUATRE", True), ("celulas", False)]
+    assert depois == [("A", False), ("MEIOSE", True), ("forma", False), ("QUATRO", True), ("celulas", False)]
+    antes, depois = antes_e_depois("ORNA leva", "O RNA leva")  # uma palavra virou duas
+    assert antes == [("ORNA", True), ("leva", False)] and depois == [("O RNA", True), ("leva", False)]
+
+
+def test_revisao_sem_trocas_aparece_numa_linha(fabrica_sessao, cliente_web, prova, monkeypatch):
+    p = prova
+    monkeypatch.setattr(config, "leitura_revisao_ia", True)
+    app.dependency_overrides[obter_cliente_llm] = lambda: ClienteFalso(resposta_falsa(_saida("Houve êxodo rural.")))
+    _enviar_folha(fabrica_sessao, cliente_web, p, {}, monkeypatch=monkeypatch)
+    pagina = cliente_web.post(f"{_url(p)}/ler").text
+    assert "A revisão da IA não trocou nada nesta resposta." in pagina and "<details" not in pagina
+
+
+def test_conferencia_sem_o_texto_lido(fabrica_sessao, cliente_web, prova, monkeypatch):
+    p = prova
+    monkeypatch.setattr(config, "leitura_revisao_ia", True)
+    app.dependency_overrides[obter_cliente_llm] = lambda: ClienteFalso(resposta_falsa(_saida(
+        "Houve êxodo rural.", [("Houve", "Houve", "igual")])))
+    _enviar_folha(fabrica_sessao, cliente_web, p, {p["o1"]: "B"}, monkeypatch=monkeypatch)
+    cliente_web.post(f"{_url(p)}/ler")
+    assert "Conferir sem o texto lido" in cliente_web.get(_url(p)).text
+
+    pagina = cliente_web.get(f"{_url(p)}?sem_texto=1").text
+    assert "Conferência sem o texto lido." in pagina and '<input type="hidden" name="sem_texto" value="1">' in pagina
+    assert f'name="q{p["d"]}" rows="5"></textarea>' in pagina      # a escrita vem vazia
+    assert f'name="q{p["o1"]}" value="B" checked' in pagina       # as objetivas, não
+    assert "revisao-ia" not in pagina.split("</style>")[-1].split("<footer")[0].replace("revisao-ia-vazia", "")
+
+    # o professor digita a partir da imagem, com um erro do aluno que o OCR não tinha
+    cliente_web.post(f"{_url(p)}/respostas", data={"sem_texto": "1", f"q{p['o1']}": "B", f"q{p['o2']}": "branco",
+                                                     f"q{p['d']}": "Houve exodo rural."})
+    with fabrica_sessao() as s:
+        assert s.query(LeituraPagina).one().conferida_sem_texto is True
+        todas, cegas = medir(s), medir(s, sem_texto=True)
+    assert todas.textos == cegas.textos == 1 and cegas.soma_cer > 0
+
+
+def test_conferencia_normal_nao_conta_como_sem_texto(fabrica_sessao, cliente_web, prova, monkeypatch):
+    p = prova
+    monkeypatch.setattr(config, "leitura_revisao_ia", False)
+    _enviar_folha(fabrica_sessao, cliente_web, p, {}, monkeypatch=monkeypatch)
+    cliente_web.post(f"{_url(p)}/ler")
+    cliente_web.post(f"{_url(p)}/respostas", data={f"q{p['d']}": "Houve êxodo rural."})
+    with fabrica_sessao() as s:
+        assert s.query(LeituraPagina).one().conferida_sem_texto is False
+        assert medir(s).textos == 1 and medir(s, sem_texto=True).textos == 0

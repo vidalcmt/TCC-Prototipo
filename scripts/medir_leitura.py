@@ -17,6 +17,10 @@ conferiu e salvou. Só entram as páginas cuja leitura já foi conferida.
   cantos, QR code e caixas, ou aproximado pelas bordas), o erro médio medido
   nas caixas, em milímetros, e os resultados acima separados por método. É a
   comparação entre folhas com e sem as marcas dos cantos.
+- Referência sem influência: as folhas conferidas sem o texto lido, em que
+  o professor digitou a escrita a partir da imagem, são medidas também à
+  parte. Nas outras, a referência foi corrigida sobre o texto lido e tende a
+  ficar parecida com ele, o que deixa a taxa de erro otimista.
 - Revisão da IA: nos campos em que a revisão foi aplicada, o CER do texto do
   OCR sozinho e o do texto revisado, contra o mesmo texto conferido, e em
   quantos campos a revisão melhorou ou piorou. Piorar quer dizer que o
@@ -97,10 +101,13 @@ def _marcacao_final(submissao: Submissao) -> str:
     return "multipla" if submissao.alternativa_escolhida == MARCACAO_MULTIPLA else submissao.alternativa_escolhida
 
 
-def medir(sessao: Session) -> Medida:
+def medir(sessao: Session, sem_texto: bool = False) -> Medida:
+    """Com sem_texto, só as leituras conferidas com os campos da escrita vazios."""
     medida = Medida()
-    leituras = sessao.scalars(select(LeituraPagina).where(LeituraPagina.conferida_em.is_not(None),
-                                                         LeituraPagina.situacao == "lida"))
+    filtro = [LeituraPagina.conferida_em.is_not(None), LeituraPagina.situacao == "lida"]
+    if sem_texto:
+        filtro.append(LeituraPagina.conferida_sem_texto.is_(True))
+    leituras = sessao.scalars(select(LeituraPagina).where(*filtro))
     for leitura in leituras:
         folha = leitura.pagina_digitalizada.folha
         if folha is None:
@@ -167,7 +174,11 @@ def main() -> None:
     args = parser.parse_args()
     with SessionLocal() as sessao:
         medida = medir(sessao)
+        sem_texto = medir(sessao, sem_texto=True)
     print(medida.resumo())
+    if sem_texto.textos:
+        print("\nSó as folhas conferidas sem o texto lido (referência sem a influência da leitura):")
+        print(sem_texto.resumo())
     if args.csv:
         with open(args.csv, "w", newline="", encoding="utf-8") as arquivo:
             escritor = csv.DictWriter(arquivo, fieldnames=["folha", "alinhamento", "campo", "tipo", "lido", "conferido", "duvida",

@@ -8,6 +8,7 @@ e salva. Só então as respostas existem.
 """
 
 import json
+from difflib import SequenceMatcher
 from pathlib import Path
 
 import cv2
@@ -119,12 +120,36 @@ def _revisar(sessao, imagem_ocr, escala, caixas, textos: dict, cliente, usuario_
 
 
 def revisoes_da_folha(folha: Folha) -> dict[str, dict]:
-    """O que a revisão da IA mudou em cada campo, para mostrar ao professor na conferência."""
+    """O que a revisão da IA mudou em cada campo, para mostrar ao professor na conferência.
+
+    Além das trocas listadas pelo modelo, cada campo leva o texto inteiro antes
+    e depois da revisão, dividido em trechos iguais e trechos mudados.
+    """
     revisoes = {}
     for leitura in leituras_da_folha(folha):
-        if leitura.situacao == LIDA:
-            revisoes.update(json.loads(leitura.resultado_json).get("revisoes", {}))
+        if leitura.situacao != LIDA:
+            continue
+        resultado = json.loads(leitura.resultado_json)
+        for campo, revisao in resultado.get("revisoes", {}).items():
+            antes = resultado.get("textos_ocr", {}).get(campo)
+            depois = resultado.get("textos", {}).get(campo)
+            if antes is not None and depois is not None:
+                revisao = {**revisao, **dict(zip(("antes", "depois"), antes_e_depois(antes, depois)))}
+            revisoes[campo] = revisao
     return revisoes
+
+
+def antes_e_depois(antes: str, depois: str) -> tuple[list[tuple[str, bool]], list[tuple[str, bool]]]:
+    """Os dois textos em trechos (texto, mudou), comparados palavra por palavra."""
+    a, b = antes.split(), depois.split()
+    trechos_a, trechos_b = [], []
+    for operacao, i1, i2, j1, j2 in SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
+        mudou = operacao != "equal"
+        if i2 > i1:
+            trechos_a.append((" ".join(a[i1:i2]), mudou))
+        if j2 > j1:
+            trechos_b.append((" ".join(b[j1:j2]), mudou))
+    return trechos_a, trechos_b
 
 
 def _apagar_alinhada(leitura: LeituraPagina) -> None:
@@ -174,11 +199,16 @@ def valores_lidos(folha: Folha) -> tuple[dict[str, str], set[str], list[str], bo
     return valores, duvidas, avisos, pendente
 
 
-def marcar_conferidas(sessao: Session, folha: Folha) -> None:
-    """Chamado quando o professor salva o formulário da folha."""
+def marcar_conferidas(sessao: Session, folha: Folha, sem_texto: bool = False) -> None:
+    """Chamado quando o professor salva o formulário da folha.
+
+    sem_texto indica que a escrita foi digitada com os campos vazios, a partir
+    da imagem, e não corrigida sobre o texto lido.
+    """
     for leitura in leituras_da_folha(folha):
         if leitura.situacao == LIDA and leitura.conferida_em is None:
             leitura.conferida_em = agora()
+            leitura.conferida_sem_texto = sem_texto
     sessao.commit()
 
 

@@ -44,9 +44,10 @@ def _painel(atividade: Atividade, aviso: str = "") -> RedirectResponse:
     return RedirectResponse(f"{destino}?aviso={quote(aviso)}" if aviso else destino, status_code=303)
 
 
-def _pagina_da_folha(folha: Folha, aviso: str = "", ancora: str = "") -> RedirectResponse:
+def _pagina_da_folha(folha: Folha, aviso: str = "", ancora: str = "", sem_texto: bool = False) -> RedirectResponse:
     destino = f"/atividades/{folha.atividade_id}/folhas/{folha.id}"
-    return RedirectResponse(f"{destino}?aviso={quote(aviso)}{ancora}" if aviso else destino + ancora, status_code=303)
+    parametros = "&".join(([f"aviso={quote(aviso)}"] if aviso else []) + (["sem_texto=1"] if sem_texto else []))
+    return RedirectResponse(destino + (f"?{parametros}" if parametros else "") + ancora, status_code=303)
 
 
 # ---------------------------------------------------------------------------
@@ -130,15 +131,18 @@ async def valor_das_objetivas(request: Request, atividade_id: int, sessao: Sessi
 
 @router.get("/{atividade_id}/folhas/{folha_id:int}", response_class=HTMLResponse)
 def pagina_da_folha(request: Request, atividade_id: int, folha_id: int, aviso: str | None = None,
-                    sessao: Session = Depends(obter_sessao)):
+                    sem_texto: bool = False, sessao: Session = Depends(obter_sessao)):
     atividade = _atividade(sessao, atividade_id)
     folha = _folha(sessao, atividade, folha_id)
     folhas = atividade.folhas
     posicao = folhas.index(folha)
     lidos, duvidas, avisos_leitura, leitura_pendente = valores_lidos(folha)
+    recortes = campos_com_recorte(folha)
     return templates.TemplateResponse(request, "folha_respostas.html", {
         "lidos": lidos, "duvidas": duvidas, "avisos_leitura": avisos_leitura, "leitura_pendente": leitura_pendente,
-        "recortes": campos_com_recorte(folha), "revisoes": revisoes_da_folha(folha),
+        "recortes": recortes, "revisoes": revisoes_da_folha(folha),
+        "sem_texto": sem_texto and leitura_pendente,
+        "tem_texto_lido": any(lidos.get(c) for c in recortes),
         "atividade": atividade, "folha": folha, "resultado": resultado_da_folha(sessao, folha),
         "anterior": folhas[posicao - 1] if posicao > 0 else None,
         "proxima": folhas[posicao + 1] if posicao + 1 < len(folhas) else None,
@@ -157,12 +161,14 @@ async def salvar_respostas(request: Request, atividade_id: int, folha_id: int,
     except RespostasInvalidas as erro:
         sessao.rollback()
         return _pagina_da_folha(folha, str(erro))
-    marcar_conferidas(sessao, folha)
+    sem_texto = dados.get("sem_texto") == "1"
+    marcar_conferidas(sessao, folha, sem_texto)
     mensagem = " ".join(["Respostas salvas."] + avisos)
     if dados.get("depois") == "proxima":
         posicao = atividade.folhas.index(folha)
         if posicao + 1 < len(atividade.folhas):
-            return _pagina_da_folha(atividade.folhas[posicao + 1], f"Folha {folha.numero}: {mensagem}")
+            return _pagina_da_folha(atividade.folhas[posicao + 1], f"Folha {folha.numero}: {mensagem}",
+                                    sem_texto=sem_texto)
     return _pagina_da_folha(folha, mensagem)
 
 
